@@ -5,6 +5,9 @@
 globalThis.RR_REVIEWED_TRANSLATIONS = {
   "text": {
     "ja": {
+      "This project's runtime ({project}) is newer than this editor's ({editor}). Replace it with the editor's older runtime?": "このプロジェクトのランタイム（{project}）は、このエディターのランタイム（{editor}）より新しいです。エディターの古いランタイムで置き換えますか？",
+      "Replace with Older Runtime": "古いランタイムで置き換え",
+      "Keep Project Runtime": "プロジェクトのランタイムを維持",
       "Loop points: {start} s to {end} s": "ループ位置: {start} 秒 ～ {end} 秒",
       "No loop points in this file.": "このファイルにはループ位置がありません。",
       "Tools run code from this project.": "ツールはこのプロジェクトのコードを実行します。",
@@ -602,6 +605,9 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "検証を通過し、元より小さくなった結果だけがステージング済みのアセットを置き換えます。OGG、MP3、M4Aはその場で再エンコードし、WAVとFLACはOGGに変換します。ループ位置は引き継がれます。"
     },
     "zh-Hant": {
+      "This project's runtime ({project}) is newer than this editor's ({editor}). Replace it with the editor's older runtime?": "此專案的執行環境（{project}）比此編輯器的執行環境（{editor}）更新。要以編輯器較舊的執行環境取代它嗎？",
+      "Replace with Older Runtime": "以較舊的執行環境取代",
+      "Keep Project Runtime": "保留專案的執行環境",
       "Loop points: {start} s to {end} s": "循環點：{start} 秒至 {end} 秒",
       "No loop points in this file.": "此檔案沒有循環點。",
       "Tools run code from this project.": "工具會執行此專案中的程式碼。",
@@ -1203,6 +1209,9 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "只有更小且通過驗證的結果才會取代暫存資源。OGG、MP3 和 M4A 會原地重新編碼；WAV 和 FLAC 會轉換為 OGG；循環點會保留。"
     },
     "zh-Hans": {
+      "This project's runtime ({project}) is newer than this editor's ({editor}). Replace it with the editor's older runtime?": "此项目的运行时（{project}）比此编辑器的运行时（{editor}）更新。要用编辑器较旧的运行时替换它吗？",
+      "Replace with Older Runtime": "用较旧的运行时替换",
+      "Keep Project Runtime": "保留项目的运行时",
       "Loop points: {start} s to {end} s": "循环点：{start} 秒至 {end} 秒",
       "No loop points in this file.": "此文件没有循环点。",
       "Tools run code from this project.": "工具会运行此项目中的代码。",
@@ -1757,6 +1766,9 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "只有更小且通过验证的结果才会替换暂存资源。OGG、MP3 和 M4A 原地重新编码；WAV 和 FLAC 转换为 OGG；循环点会保留。"
     },
     "ko": {
+      "This project's runtime ({project}) is newer than this editor's ({editor}). Replace it with the editor's older runtime?": "이 프로젝트의 런타임({project})이 이 에디터의 런타임({editor})보다 최신입니다. 에디터의 이전 런타임으로 바꾸시겠습니까?",
+      "Replace with Older Runtime": "이전 런타임으로 바꾸기",
+      "Keep Project Runtime": "프로젝트 런타임 유지",
       "Loop points: {start} s to {end} s": "루프 지점: {start}초 ~ {end}초",
       "No loop points in this file.": "이 파일에는 루프 지점이 없습니다.",
       "Tools run code from this project.": "도구는 이 프로젝트의 코드를 실행합니다.",
@@ -2359,6 +2371,9 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "더 작고 검증을 통과한 결과만 스테이징된 에셋을 대체합니다. OGG, MP3, M4A는 그 자리에서 다시 인코딩하고, WAV와 FLAC은 OGG로 변환합니다. 루프 지점은 유지됩니다."
     },
     "es": {
+      "This project's runtime ({project}) is newer than this editor's ({editor}). Replace it with the editor's older runtime?": "El runtime de este proyecto ({project}) es más reciente que el de este editor ({editor}). ¿Reemplazarlo por el runtime más antiguo del editor?",
+      "Replace with Older Runtime": "Reemplazar por el runtime antiguo",
+      "Keep Project Runtime": "Conservar el runtime del proyecto",
       "Loop points: {start} s to {end} s": "Puntos de bucle: de {start} s a {end} s",
       "No loop points in this file.": "Este archivo no tiene puntos de bucle.",
       "Tools run code from this project.": "Las herramientas ejecutan código de este proyecto.",
@@ -2994,6 +3009,9 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "Solo los resultados validados que son más pequeños sustituyen a los recursos preparados. OGG, MP3 y M4A se recodifican en su lugar; WAV y FLAC se convierten a OGG; los puntos de bucle se conservan."
     },
     "pt": {
+      "This project's runtime ({project}) is newer than this editor's ({editor}). Replace it with the editor's older runtime?": "O runtime deste projeto ({project}) é mais recente que o deste editor ({editor}). Substituí-lo pelo runtime mais antigo do editor?",
+      "Replace with Older Runtime": "Substituir pelo runtime antigo",
+      "Keep Project Runtime": "Manter o runtime do projeto",
       "Loop points: {start} s to {end} s": "Pontos de loop: de {start} s a {end} s",
       "No loop points in this file.": "Este arquivo não tem pontos de loop.",
       "Tools run code from this project.": "As ferramentas executam código deste projeto.",
@@ -3626,6 +3644,9 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "Somente resultados validados e menores substituem os recursos preparados. OGG, MP3 e M4A são recodificados no próprio lugar; WAV e FLAC são convertidos para OGG; os pontos de loop são mantidos."
     },
     "fr": {
+      "This project's runtime ({project}) is newer than this editor's ({editor}). Replace it with the editor's older runtime?": "Le runtime de ce projet ({project}) est plus récent que celui de cet éditeur ({editor}). Le remplacer par le runtime plus ancien de l’éditeur ?",
+      "Replace with Older Runtime": "Remplacer par l’ancien runtime",
+      "Keep Project Runtime": "Garder le runtime du projet",
       "Loop points: {start} s to {end} s": "Points de boucle : de {start} s à {end} s",
       "No loop points in this file.": "Ce fichier n’a pas de points de boucle.",
       "Tools run code from this project.": "Les outils exécutent du code provenant de ce projet.",
@@ -4256,6 +4277,9 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "Seuls les résultats validés plus légers remplacent les ressources préparées. OGG, MP3 et M4A sont réencodés sur place ; WAV et FLAC sont convertis en OGG ; les points de boucle sont conservés."
     },
     "it": {
+      "This project's runtime ({project}) is newer than this editor's ({editor}). Replace it with the editor's older runtime?": "Il runtime di questo progetto ({project}) è più recente di quello di questo editor ({editor}). Sostituirlo con il runtime più vecchio dell’editor?",
+      "Replace with Older Runtime": "Sostituisci con il runtime più vecchio",
+      "Keep Project Runtime": "Mantieni il runtime del progetto",
       "Loop points: {start} s to {end} s": "Punti di loop: da {start} s a {end} s",
       "No loop points in this file.": "Questo file non ha punti di loop.",
       "Tools run code from this project.": "Gli strumenti eseguono codice di questo progetto.",
@@ -4896,6 +4920,9 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "Solo i risultati convalidati più piccoli sostituiscono le risorse preparate. OGG, MP3 e M4A vengono ricodificati sul posto; WAV e FLAC vengono convertiti in OGG; i punti di loop vengono mantenuti."
     },
     "de": {
+      "This project's runtime ({project}) is newer than this editor's ({editor}). Replace it with the editor's older runtime?": "Die Laufzeit dieses Projekts ({project}) ist neuer als die dieses Editors ({editor}). Durch die ältere Laufzeit des Editors ersetzen?",
+      "Replace with Older Runtime": "Durch ältere Laufzeit ersetzen",
+      "Keep Project Runtime": "Projektlaufzeit behalten",
       "Loop points: {start} s to {end} s": "Schleifenpunkte: {start} s bis {end} s",
       "No loop points in this file.": "Diese Datei hat keine Schleifenpunkte.",
       "Tools run code from this project.": "Werkzeuge führen Code aus diesem Projekt aus.",
@@ -5504,6 +5531,9 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "Nur kleinere, geprüfte Ergebnisse ersetzen die bereitgestellten Assets. OGG, MP3 und M4A werden direkt neu kodiert; WAV und FLAC werden in OGG umgewandelt; Schleifenpunkte bleiben erhalten."
     },
     "ru": {
+      "This project's runtime ({project}) is newer than this editor's ({editor}). Replace it with the editor's older runtime?": "Среда Reactor этого проекта ({project}) новее, чем у этого редактора ({editor}). Заменить её более старой средой редактора?",
+      "Replace with Older Runtime": "Заменить более старой средой",
+      "Keep Project Runtime": "Оставить среду проекта",
       "Loop points: {start} s to {end} s": "Точки цикла: с {start} с до {end} с",
       "No loop points in this file.": "В этом файле нет точек цикла.",
       "Tools run code from this project.": "Инструменты выполняют код из этого проекта.",
@@ -6119,6 +6149,9 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "Подготовленные ресурсы заменяются только результатами меньшего размера, прошедшими проверку. OGG, MP3 и M4A перекодируются на месте; WAV и FLAC преобразуются в OGG; точки зацикливания сохраняются."
     },
     "pl": {
+      "This project's runtime ({project}) is newer than this editor's ({editor}). Replace it with the editor's older runtime?": "Środowisko tego projektu ({project}) jest nowsze niż środowisko tego edytora ({editor}). Zastąpić je starszym środowiskiem edytora?",
+      "Replace with Older Runtime": "Zastąp starszym środowiskiem",
+      "Keep Project Runtime": "Zachowaj środowisko projektu",
       "Loop points: {start} s to {end} s": "Punkty pętli: od {start} s do {end} s",
       "No loop points in this file.": "Ten plik nie ma punktów pętli.",
       "Tools run code from this project.": "Narzędzia uruchamiają kod z tego projektu.",
@@ -6733,6 +6766,9 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "Przygotowane zasoby są zastępowane tylko mniejszymi wynikami, które przeszły weryfikację. OGG, MP3 i M4A są ponownie kodowane w miejscu; WAV i FLAC są konwertowane do OGG; punkty pętli zostają zachowane."
     },
     "el": {
+      "This project's runtime ({project}) is newer than this editor's ({editor}). Replace it with the editor's older runtime?": "Το runtime αυτού του έργου ({project}) είναι νεότερο από αυτό του επεξεργαστή ({editor}). Να αντικατασταθεί με το παλαιότερο runtime του επεξεργαστή;",
+      "Replace with Older Runtime": "Αντικατάσταση με παλαιότερο runtime",
+      "Keep Project Runtime": "Διατήρηση του runtime του έργου",
       "Loop points: {start} s to {end} s": "Σημεία επανάληψης: από {start} s έως {end} s",
       "No loop points in this file.": "Αυτό το αρχείο δεν έχει σημεία επανάληψης.",
       "Tools run code from this project.": "Τα εργαλεία εκτελούν κώδικα από αυτό το έργο.",
@@ -7347,6 +7383,9 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "Μόνο μικρότερα αποτελέσματα που περνούν τον έλεγχο αντικαθιστούν τα προετοιμασμένα αρχεία. Τα OGG, MP3 και M4A επανακωδικοποιούνται επί τόπου· τα WAV και FLAC μετατρέπονται σε OGG· τα σημεία επανάληψης διατηρούνται."
     },
     "ar": {
+      "This project's runtime ({project}) is newer than this editor's ({editor}). Replace it with the editor's older runtime?": "بيئة تشغيل هذا المشروع ({project}) أحدث من بيئة تشغيل هذا المحرر ({editor}). هل تريد استبدالها ببيئة التشغيل الأقدم الخاصة بالمحرر؟",
+      "Replace with Older Runtime": "استبدال ببيئة التشغيل الأقدم",
+      "Keep Project Runtime": "الاحتفاظ ببيئة تشغيل المشروع",
       "Loop points: {start} s to {end} s": "نقاط التكرار: من {start} ث إلى {end} ث",
       "No loop points in this file.": "لا يحتوي هذا الملف على نقاط تكرار.",
       "Tools run code from this project.": "تُشغّل الأدوات تعليمات برمجية من هذا المشروع.",
@@ -8041,6 +8080,9 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "لا تحلّ محلّ الأصول المجهّزة إلا النتائج الأصغر حجمًا التي اجتازت التحقق. يُعاد ترميز OGG وMP3 وM4A في مكانها؛ ويُحوَّل WAV وFLAC إلى OGG؛ وتُحفظ نقاط التكرار."
     },
     "tr": {
+      "This project's runtime ({project}) is newer than this editor's ({editor}). Replace it with the editor's older runtime?": "Bu projenin çalışma zamanı ({project}) bu düzenleyicininkinden ({editor}) daha yeni. Düzenleyicinin daha eski çalışma zamanıyla değiştirilsin mi?",
+      "Replace with Older Runtime": "Eski çalışma zamanıyla değiştir",
+      "Keep Project Runtime": "Projenin çalışma zamanını koru",
       "Loop points: {start} s to {end} s": "Döngü noktaları: {start} sn - {end} sn",
       "No loop points in this file.": "Bu dosyada döngü noktası yok.",
       "Tools run code from this project.": "Araçlar bu projedeki kodu çalıştırır.",
@@ -8751,6 +8793,9 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "Yalnızca daha küçük ve doğrulanmış sonuçlar hazırlanan varlıkların yerini alır. OGG, MP3 ve M4A yerinde yeniden kodlanır; WAV ve FLAC, OGG'ye dönüştürülür; döngü noktaları korunur."
     },
     "id": {
+      "This project's runtime ({project}) is newer than this editor's ({editor}). Replace it with the editor's older runtime?": "Runtime proyek ini ({project}) lebih baru daripada runtime editor ini ({editor}). Ganti dengan runtime editor yang lebih lama?",
+      "Replace with Older Runtime": "Ganti dengan runtime lama",
+      "Keep Project Runtime": "Pertahankan runtime proyek",
       "Loop points: {start} s to {end} s": "Titik loop: {start} d sampai {end} d",
       "No loop points in this file.": "Berkas ini tidak memiliki titik loop.",
       "Tools run code from this project.": "Alat menjalankan kode dari proyek ini.",
@@ -9391,6 +9436,9 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "Hanya hasil tervalidasi yang lebih kecil yang menggantikan aset yang disiapkan. OGG, MP3, dan M4A dienkode ulang di tempat; WAV dan FLAC dikonversi ke OGG; titik loop tetap dipertahankan."
     },
     "vi": {
+      "This project's runtime ({project}) is newer than this editor's ({editor}). Replace it with the editor's older runtime?": "Runtime của dự án này ({project}) mới hơn runtime của trình chỉnh sửa này ({editor}). Thay bằng runtime cũ hơn của trình chỉnh sửa?",
+      "Replace with Older Runtime": "Thay bằng runtime cũ hơn",
+      "Keep Project Runtime": "Giữ runtime của dự án",
       "Loop points: {start} s to {end} s": "Điểm lặp: từ {start} giây đến {end} giây",
       "No loop points in this file.": "Tệp này không có điểm lặp.",
       "Tools run code from this project.": "Công cụ chạy mã từ dự án này.",
@@ -10055,6 +10103,9 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Only smaller validated results replace staged assets. OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.": "Chỉ những kết quả nhỏ hơn đã được kiểm định mới thay thế tài nguyên đã chuẩn bị. OGG, MP3 và M4A được mã hóa lại tại chỗ; WAV và FLAC được chuyển sang OGG; điểm lặp được giữ nguyên."
     },
     "th": {
+      "This project's runtime ({project}) is newer than this editor's ({editor}). Replace it with the editor's older runtime?": "รันไทม์ของโปรเจกต์นี้ ({project}) ใหม่กว่ารันไทม์ของตัวแก้ไขนี้ ({editor}) ต้องการแทนที่ด้วยรันไทม์ที่เก่ากว่าของตัวแก้ไขหรือไม่?",
+      "Replace with Older Runtime": "แทนที่ด้วยรันไทม์ที่เก่ากว่า",
+      "Keep Project Runtime": "เก็บรันไทม์ของโปรเจกต์",
       "Loop points: {start} s to {end} s": "จุดวนซ้ำ: {start} วินาที ถึง {end} วินาที",
       "No loop points in this file.": "ไฟล์นี้ไม่มีจุดวนซ้ำ",
       "Tools run code from this project.": "เครื่องมือจะรันโค้ดจากโปรเจกต์นี้",

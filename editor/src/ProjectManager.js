@@ -524,7 +524,34 @@ class ProjectManager {
         }
     }
 
-    async refreshReactorRuntime(projectPath, projectData) {
+    /** -1, 0 or 1 for two dotted numbers ("0.99.6", "20261117.1"); null when either is not one. */
+    compareDottedNumbers(a, b) {
+        const parse = value => /^\d+(\.\d+)*$/.test(String(value || '')) ? String(value).split('.').map(Number) : null;
+        const left = parse(a), right = parse(b);
+        if (!left || !right) return null;
+        for (let i = 0; i < Math.max(left.length, right.length); i++) {
+            const difference = (left[i] || 0) - (right[i] || 0);
+            if (difference) return Math.sign(difference);
+        }
+        return 0;
+    }
+
+    /**
+     * Whether a project's runtime is newer than the editor's: a later version, or the same
+     * version and a later revision. False when either side cannot be read as numbers.
+     */
+    isProjectRuntimeNewer(project, editor) {
+        const version = this.compareDottedNumbers(project.version, editor.version);
+        if (version !== 0) return version === 1;
+        return this.compareDottedNumbers(project.revision, editor.revision) === 1;
+    }
+
+    /**
+     * Brings the project's js/ to this editor's runtime when the two differ. A project whose
+     * runtime is newer than the editor's keeps it unless `options.confirmDowngrade` answers
+     * true: otherwise an older editor opening the project would put its older runtime in place.
+     */
+    async refreshReactorRuntime(projectPath, projectData, options = {}) {
         if (!this.fs || !this.path || !projectPath || !projectData) {
             return { ok: true, updated: false };
         }
@@ -570,6 +597,13 @@ class ProjectManager {
             if (targetVersion === engineVersion && projectData.engineVersion === engineVersion
                     && currentRevision) {
                 return { ok: true, updated: false };
+            }
+
+            const project = { version: targetVersion, revision: targetRevision };
+            const editor = { version: engineVersion, revision: sourceRevision };
+            if (this.isProjectRuntimeNewer(project, editor)
+                    && !(typeof options.confirmDowngrade === 'function' && await options.confirmDowngrade({ project, editor }))) {
+                return { ok: true, updated: false, keptNewer: true, project, editor };
             }
 
             await this.copyRuntimeIntoProject(runtimePath, this.path.join(projectPath, 'js'), true);
