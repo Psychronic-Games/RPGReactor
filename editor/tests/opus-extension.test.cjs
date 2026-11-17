@@ -16,6 +16,7 @@ const read = relative => fs.readFileSync(path.join(editorRoot, relative), 'utf8'
 const AssetFiles = require(path.join(editorRoot, 'src', 'utils', 'AssetFiles.js'));
 const EncryptedAssets = require(path.join(editorRoot, 'src', 'utils', 'EncryptedAssets.js'));
 const ResourceManager = require(path.join(editorRoot, 'src', 'ResourceManager.js'));
+const writeAtomic = require(path.join(editorRoot, 'src', 'utils', 'FsAtomic.js'));
 const SequencePreview = require(path.join(editorRoot, 'src', 'utils', 'SequencePreview.js'));
 const AudioCommandEditor = require(path.join(editorRoot, 'src', 'event', 'commands', 'AudioCommandEditor.js'));
 const assetEncryption = require(path.join(editorRoot, 'build-scripts', 'asset-encryption.js'));
@@ -133,6 +134,30 @@ test('the editor lists .opus tracks, plain and encrypted, and previews the encry
         assert.equal(records.find(record => record.relativePath === 'Choir.opus').encrypted, false);
     } finally {
         fs.rmSync(root, { recursive: true, force: true });
+    }
+});
+
+test('the Resource Manager imports .opus, as .opus_ when the project encrypts its audio', async () => {
+    for (const hasEncryptedAudio of [false, true]) {
+        const root = tempDir('rr-opus-import-');
+        try {
+            fs.mkdirSync(path.join(root, 'data'), { recursive: true });
+            fs.writeFileSync(path.join(root, 'data', 'System.json'), JSON.stringify({
+                gameTitle: 'Opus Fixture', hasEncryptedAudio, encryptionKey: KEY_HEX
+            }));
+            const folder = ResourceManager.folderDefinitions(AssetFiles.AUDIO_EXTENSIONS).find(item => item.path === 'audio/bgm');
+            const bytes = Buffer.from('OggS opus stand-in');
+            const result = ResourceManager.importBytes({
+                fs, path, assetFiles: AssetFiles, encryptedAssets: EncryptedAssets,
+                projectRoot: root, folder, sourceName: 'Choir.opus', sourceBytes: bytes, subfolder: '',
+                system: { hasEncryptedAudio }, writeAtomic
+            });
+            assert.equal(path.basename(result.destination), hasEncryptedAudio ? 'Choir.opus_' : 'Choir.opus');
+            const back = await EncryptedAssets.readAssetBytesAsync(path.join(root, 'audio', 'bgm', 'Choir.opus'));
+            assert.deepEqual(Buffer.from(back), bytes);
+        } finally {
+            fs.rmSync(root, { recursive: true, force: true });
+        }
     }
 });
 
