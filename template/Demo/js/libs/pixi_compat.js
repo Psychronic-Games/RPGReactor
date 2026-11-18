@@ -1708,6 +1708,31 @@
     // container and rebuilt only when the committed list no longer matches it,
     // so repeated reads don't allocate.
     // -------------------------------------------------------------------------
+    // -------------------------------------------------------------------------
+    // Filters and masks on a destroyed object. PIXI 8's destroy() sets
+    // `effects` to null, and the filters and mask setters then call
+    // addEffect/removeEffect, which read `this.effects.indexOf`: "Cannot read
+    // properties of null (reading 'indexOf')", and the game stops. Under
+    // MZ's PIXI 5 `filters` was a plain field and setting it on a destroyed
+    // sprite did nothing. Hendrix 3D Light and Shadow's rim light keeps the
+    // sprites it lit in a map and sets their filters again on its next pass,
+    // so one destroyed between passes stopped players' games (2026-11-17).
+    // A destroyed object keeps doing nothing with them, as before.
+    // -------------------------------------------------------------------------
+    if (_isV8Pixi && PIXI.Container && PIXI.Container.prototype &&
+        typeof PIXI.Container.prototype.addEffect === "function" &&
+        !PIXI.Container.prototype.addEffect.__reactorDestroyedSafe) {
+        for (const name of ["addEffect", "removeEffect"]) {
+            const native = PIXI.Container.prototype[name];
+            const safe = function(effect) {
+                if (!this.effects) return;
+                return native.call(this, effect);
+            };
+            safe.__reactorDestroyedSafe = true;
+            PIXI.Container.prototype[name] = safe;
+        }
+    }
+
     if (_isV8Pixi && PIXI.Container && PIXI.Container.prototype &&
         typeof Proxy === "function") {
         const filtersDesc = Object.getOwnPropertyDescriptor(

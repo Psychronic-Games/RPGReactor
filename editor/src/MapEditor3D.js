@@ -3418,7 +3418,7 @@ class MapEditor3D {
     _videoEffectPlane(effect, project, extent) {
         if (!project?.path || typeof THREE === 'undefined') return null;
         const path = require('path');
-        const isImage = /\.(?:png|jpe?g|webp)$/i.test(effect.video.file);
+        const isImage = /\.(?:png|jpe?g|webp|jxl)$/i.test(effect.video.file);
         const file = path.join(project.path,
             isImage ? path.join('img', 'pictures') : 'movies', effect.video.file);
         const url = typeof RRAssetFiles !== 'undefined' && RRAssetFiles.toUrl ? RRAssetFiles.toUrl(file) : 'file://' + file;

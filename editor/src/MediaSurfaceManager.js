@@ -77,7 +77,7 @@ class MediaSurfaceManager {
             const meta = document.createElement('span'); meta.className = 'media-surface-meta';
             const id = document.createElement('span'); id.className = 'media-surface-id'; id.textContent = `#${row.id}`; id.setAttribute('data-rr-i18n-skip','');
             const kind = document.createElement('span'); kind.className = 'media-surface-kind';
-            const label = /\.(?:png|jpe?g|webp)$/i.test(file) ? 'Image' : 'Video';
+            const label = /\.(?:png|jpe?g|webp|jxl)$/i.test(file) ? 'Image' : 'Video';
             kind.setAttribute('data-i18n-text-source',label); kind.textContent = this.t(label);
             meta.append(id, kind);
             const position = document.createElement('span'); position.className = 'media-surface-position'; position.setAttribute('data-rr-i18n-skip','');
@@ -110,7 +110,7 @@ class MediaSurfaceManager {
 
     _thumbnail(file) {
         const holder = document.createElement('span'); holder.className = 'media-surface-thumbnail'; holder.setAttribute('aria-hidden','true');
-        const image = /\.(?:png|jpe?g|webp)$/i.test(file);
+        const image = /\.(?:png|jpe?g|webp|jxl)$/i.test(file);
         holder.innerHTML = image
             ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8" cy="9" r="1.5"/><path d="m4 18 5-5 3 3 4-6 5 8"/></svg>'
             : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m10 8 6 4-6 4z"/></svg>';

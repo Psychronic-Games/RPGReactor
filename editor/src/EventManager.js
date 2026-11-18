@@ -4089,24 +4089,20 @@ class EventManager {
             }
         }
 
-        // Add event name text at the bottom of the tile
-        const text = new PIXI.Text({
-            text: event.name,
-            resolution: this.labelResolution(),
-            style: {
-                fontSize: 8,
-                fill: 0xffffff,
-                align: 'center',
-                stroke: { color: 0x000000, width: 2 }
-            }
-        });
+        // The event's name along the bottom of its tile, fitted to it (eventNameText).
+        const text = this.eventNameText(event.name);
         text.x = this.tilemapManager.TILE_WIDTH / 2;
-        text.y = this.tilemapManager.TILE_HEIGHT - 6; // Position near bottom
-        text.anchor.set(0.5);
+        text.y = this.tilemapManager.TILE_HEIGHT - EventManager.NAME_BOTTOM;
         marker.addChild(text);
 
         return container;
     }
+
+    /** An event name's largest size as a share of the tile's width, its smallest as a share of that, the room left at each side and below. */
+    static NAME_SIZE = 0.23;
+    static NAME_SMALLEST = 0.4;
+    static NAME_MARGIN = 2;
+    static NAME_BOTTOM = 1;
 
     /** The colour an event is drawn in: the theme's accent when it is the selected one, white otherwise. */
     _eventTone(isSelected) {
@@ -4150,7 +4146,7 @@ class EventManager {
         area.rect(0, 0, fw, fh);
         area.fill({ color: tone, alpha: 0.12 });
         area.rect(0.5, 0.5, fw - 1, fh - 1);
-        area.stroke({ width: 1, color: tone, alpha: 0.7 });
+        area.stroke({ width: 1, color: tone, alpha: 0.7, pixelLine: true });
     }
 
     /** An event's own square: dark behind its graphic, bordered in its tone. */
@@ -4159,8 +4155,10 @@ class EventManager {
         graphics.clear();
         graphics.rect(0, 0, tileWidth, tileHeight);
         graphics.fill({ color: 0x000000, alpha });
-        graphics.rect(0, 0, tileWidth, tileHeight);
-        graphics.stroke({ width: 1, color: this._eventTone(isSelected) });
+        // One screen pixel at every zoom (pixelLine), as the grid: a width-1 line in map space went under a pixel
+        // zoomed out, and which of its sides still drew depended on where they fell between pixels.
+        graphics.rect(0.5, 0.5, tileWidth - 1, tileHeight - 1);
+        graphics.stroke({ width: 1, color: this._eventTone(isSelected), pixelLine: true });
     }
 
     /**
@@ -4180,7 +4178,7 @@ class EventManager {
             outline.rect(x + 0.5, y + 0.5, width - 1, height - 1);
             outline.stroke({ width: 3, color: 0x000000, alpha: 0.55 });
             outline.rect(x + 0.5, y + 0.5, width - 1, height - 1);
-            outline.stroke({ width: 1, color: tone, alpha: 1 });
+            outline.stroke({ width: 1, color: tone, alpha: 1, pixelLine: true });
         };
         const [firstX, firstY] = this._eventRect(event);
         if (w > 1 || h > 1) edge((firstX - event.x) * tw, (firstY - event.y) * th, w * tw, h * th);
@@ -4240,18 +4238,66 @@ class EventManager {
         }
     }
 
+    /**
+     * An event's name as a label fitted to the width of its tile, centred, its foot `NAME_BOTTOM` above the tile's
+     * lower edge. It is drawn as large as reads well on the tile (NAME_SIZE of its width, a 48-pixel tile's 11),
+     * smaller for a longer name down to NAME_SMALLEST of that, and only past that shortened with an ellipsis.
+     * Map space, like the tile: it grows and shrinks with the zoom, so a name that fits fits at every zoom.
+     * (It was 8 units whatever the name: short ones sat small in an empty strip and long ones were cut off by
+     * the tile's edge however far the view was zoomed in. Owner, 2026-11-17.)
+     */
+    eventNameText(name) {
+        const tw = this.tilemapManager.TILE_WIDTH;
+        // Measured as PIXI lays text out; where it cannot (a stand-in PIXI), estimated from the characters.
+        const exact = typeof PIXI.TextStyle === 'function' && PIXI.CanvasTextMetrics && typeof PIXI.CanvasTextMetrics.measureText === 'function';
+        const layout = EventManager.fitName(String(name ?? ''), tw, (text, size) => exact
+            ? PIXI.CanvasTextMetrics.measureText(text, new PIXI.TextStyle(EventManager.nameStyle(size))).width
+            : Array.from(text).length * size * 0.55 + size * 0.25);
+        const text = new PIXI.Text({ text: layout.text, resolution: this.labelResolution(), style: EventManager.nameStyle(layout.size) });
+        text.anchor.set(0.5, 1);
+        text.eventMode = 'none';
+        return text;
+    }
+
+    /** The style of an event's name at `size`. */
+    static nameStyle(size) {
+        // The dark edge round the letters goes with their size (2 at the old 8): a fixed 2 took a small name's room.
+        return { fontSize: size, fill: 0xffffff, align: 'center', stroke: { color: 0x000000, width: Math.max(1, Math.round(size * 2.5) / 10) } };
+    }
+
+    /**
+     * The size and text an event's name is drawn at on a tile `tileWidth` wide; `measure(text, size)` its width.
+     * Leaves NAME_MARGIN on each side; the stroke is part of what is measured.
+     */
+    static fitName(name, tileWidth, measure) {
+        const room = Math.max(4, tileWidth - EventManager.NAME_MARGIN * 2);
+        const largest = Math.max(5, Math.min(14, Math.round(tileWidth * EventManager.NAME_SIZE)));
+        const smallest = Math.max(4, Math.round(largest * EventManager.NAME_SMALLEST * 10) / 10);
+        if (!name) return { text: '', size: largest };
+        const wide = measure(name, largest);
+        if (wide <= room) return { text: name, size: largest };
+        // Text width goes nearly with its size (the outline round the letters does not), so the size that fits is
+        // first guessed from the width and then stepped down a little at a time until it does.
+        for (let size = Math.max(smallest, Math.floor(largest * room / wide * 10) / 10); size >= smallest; size = Math.round((size - 0.2) * 10) / 10) {
+            if (measure(name, size) <= room) return { text: name, size };
+        }
+        // Too long even at the smallest size: as many characters as fit, then an ellipsis.
+        const chars = Array.from(name);
+        let low = 0, high = chars.length;
+        while (low < high) {
+            const mid = Math.ceil((low + high) / 2);
+            if (measure(chars.slice(0, mid).join('').trimEnd() + '…', smallest) <= room) low = mid; else high = mid - 1;
+        }
+        return { text: chars.slice(0, low).join('').trimEnd() + '…', size: smallest };
+    }
+
     /** An event's name where and as its square writes it (`createEventSprite`: the middle of the lower edge of its own tile), for the layer over what stands on the event. */
     createEventName(event) {
         const tw = this.tilemapManager.TILE_WIDTH, th = this.tilemapManager.TILE_HEIGHT;
         const [offsetX, offsetY] = this._eventMarkerOffset(event.id);
-        const text = new PIXI.Text({
-            text: event.name,
-            resolution: this.labelResolution(),
-            style: { fontSize: 8, fill: 0xffffff, align: 'center', stroke: { color: 0x000000, width: 2 } }
-        });
-        text.anchor.set(0.5);
+        const text = this.eventNameText(event.name);
         text.x = (event.x + offsetX) * tw + tw / 2;
-        text.y = (event.y + offsetY) * th + th - 6;
+        text.y = (event.y + offsetY) * th + th - EventManager.NAME_BOTTOM;
         text.eventMode = 'none';
         return text;
     }

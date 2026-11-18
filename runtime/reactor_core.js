@@ -5204,6 +5204,7 @@ Bitmap._mimeType = function(url) {
     const clean = String(url || "").replace(/[?#].*$/, "").replace(/_$/, "").toLowerCase();
     if (clean.endsWith(".jpg") || clean.endsWith(".jpeg")) return "image/jpeg";
     if (clean.endsWith(".webp")) return "image/webp";
+    if (clean.endsWith(".jxl")) return "image/jxl";
     if (clean.endsWith(".svg")) return "image/svg+xml";
     if (clean.endsWith(".gif")) return "image/gif";
     if (clean.endsWith(".apng")) return "image/apng";

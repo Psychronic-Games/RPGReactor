@@ -21,8 +21,8 @@ const WORKER_NAME = 'reactor_pack_worker.js';
 // Under the 200 MB a storefront allows one file, with room to spare.
 const MAX_PACK_BYTES = 150 * 1048576;
 // Already compressed: deflating these again saves nothing and costs the browser its byte ranges.
-const STORED = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'apng', 'ogg', 'm4a', 'mp3', 'flac', 'opus', 'mp4', 'webm', 'mkv',
-    'woff', 'woff2', 'zip', 'gz', 'br', 'ktx2', 'basis', 'png_', 'ogg_', 'm4a_', 'mp3_', 'webp_', 'jpg_']);
+const STORED = new Set(['png', 'jpg', 'jpeg', 'webp', 'jxl', 'gif', 'apng', 'ogg', 'm4a', 'mp3', 'flac', 'opus', 'mp4', 'webm', 'mkv',
+    'woff', 'woff2', 'zip', 'gz', 'br', 'ktx2', 'basis', 'png_', 'ogg_', 'm4a_', 'mp3_', 'webp_', 'jxl_', 'jpg_']);
 // A deflated copy is used only when it is this much smaller than the file.
 const WORTH = 0.9;
 const SOURCE_DIR = path.join(__dirname, '..', 'src', 'web');

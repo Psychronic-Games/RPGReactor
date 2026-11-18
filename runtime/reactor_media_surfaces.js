@@ -217,7 +217,7 @@
             || /^[a-z]:[\\/]/i.test(path) || path.indexOf("\\") >= 0) return null;
         const parts = path.split("/");
         if (!parts.length || parts.some(part => !part || part === "." || part === "..")) return null;
-        if (!/\.(?:webm|mp4|png|jpe?g|webp)$/i.test(parts[parts.length - 1])) return null;
+        if (!/\.(?:webm|mp4|png|jpe?g|webp|jxl)$/i.test(parts[parts.length - 1])) return null;
         return parts.join("/");
     }
 
@@ -229,7 +229,7 @@
     // images come from img/pictures/ — a sticker on a model, a billboard,
     // a poster on a wall, through the exact same placement machinery.
     function isImageFile(path) {
-        return typeof path === "string" && /\.(?:png|jpe?g|webp)$/i.test(path);
+        return typeof path === "string" && /\.(?:png|jpe?g|webp|jxl)$/i.test(path);
     }
 
     function pictureUrl(path) {

@@ -34,6 +34,7 @@ const { relativePath, contentType, listeners } = loadWorker(APP_SCOPE);
 test('the virtual project serves every Reactor image format with the correct MIME type', () => {
     assert.equal(contentType('image.jpg'), 'image/jpeg');
     assert.equal(contentType('image.webp'), 'image/webp');
+    assert.equal(contentType('image.jxl'), 'image/jxl');
     assert.equal(contentType('image.svg'), 'image/svg+xml');
     assert.equal(contentType('image.gif'), 'image/gif');
 });

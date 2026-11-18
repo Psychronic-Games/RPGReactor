@@ -12,7 +12,7 @@ test('audio command steps use the audio picker and hide their level rows', () =>
     assert.match(source, /if\(\['bgm','bgs','se'\]\.includes\(step\.type\)&&\['volume','pitch','pan'\]\.includes\(field\.key\)\)continue;/);
     assert.match(source, /if\(folder&&folder\.startsWith\('audio'\)\)\{[\s\S]*?U\.button\('Choose Sound…',\(\)=>this\.pickCommandAudio\(step\)\)/);
     // The remaining dropdown branch serves pictures and movies only.
-    assert.match(source, /if\(folder\)\{const path=require\('path'\),extensions=folder==='movies'\?\['\.webm','\.mp4'\]:\['\.png','\.webp'\];/);
+    assert.match(source, /if\(folder\)\{const path=require\('path'\),extensions=folder==='movies'\?\['\.webm','\.mp4'\]:\['\.png','\.webp','\.jxl'\];/);
     const picker = source.slice(source.indexOf('pickCommandAudio(step){'), source.indexOf('pickSound(step){'));
     assert.match(picker, /title:kind==='se'\?'Select Sound Effect':kind==='bgm'\?'Select BGM':'Select BGS'/);
     assert.match(picker, /levels:\{volume:current\.volume,pitch:current\.pitch,pan:current\.pan\},loopDefault:kind!=='se'/);

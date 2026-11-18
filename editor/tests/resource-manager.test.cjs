@@ -16,6 +16,9 @@ const TINY_PNG = Buffer.from(
     'base64');
 const TINY_JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0xff, 0xd9]);
 const TINY_WEBP = Buffer.from('524946460400000057454250', 'hex');
+// JPEG XL: a bare codestream (FF 0A) and the ISO box container (its signature box, then the file type box).
+const TINY_JXL = Buffer.from('ff0afa', 'hex');
+const TINY_JXL_BOX = Buffer.from('0000000c4a584c200d0a870a00000014667479706a786c20', 'hex');
 const TINY_GIF = Buffer.from('GIF89a\u0001\u0000\u0001\u0000', 'binary');
 const SAFE_SVG = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><path d="M0 0h1v1z"/></svg>');
 const TINY_OBJ = Buffer.from('v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n');
@@ -61,7 +64,7 @@ test('resource categories cover RPG Maker, Reactor, and read-only 3D roots', () 
     assert.equal(models.allowImport, true);
     assert.equal(models.preview, 'model');
     assert.deepEqual(folders.find(item => item.path === 'img/pictures').extensions,
-        ['.png', '.jpg', '.jpeg', '.webp', '.svg', '.gif', '.apng']);
+        ['.png', '.jpg', '.jpeg', '.webp', '.jxl', '.svg', '.gif', '.apng']);
     const sorted = ResourceManager.sortedFolders(folders).map(item => item.label);
     assert.deepEqual(sorted, sorted.slice().sort((a, b) =>
         a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true })));
@@ -239,14 +242,18 @@ test('image imports validate modern formats and keep same-stem references distin
         };
         for (const [sourceName, sourceBytes] of [
             ['Poster.png', TINY_PNG], ['Poster.jpg', TINY_JPEG], ['Card.jpeg', TINY_JPEG],
-            ['Panel.webp', TINY_WEBP], ['Badge.svg', SAFE_SVG], ['Spark.gif', TINY_GIF]
+            ['Panel.webp', TINY_WEBP], ['Badge.svg', SAFE_SVG], ['Spark.gif', TINY_GIF],
+            ['Banner.jxl', TINY_JXL], ['Frame.jxl', TINY_JXL_BOX]
         ]) {
             const result = ResourceManager.importBytes({ ...base, sourceName, sourceBytes });
             assert.equal(result.collision, false, sourceName);
         }
         const records = ResourceManager.listRecords(fs, path, AssetFiles, root, pictures);
         assert.deepEqual(records.map(record => record.logicalKey),
-            ['Badge.svg', 'Card.jpeg', 'Panel.webp', 'Poster', 'Poster.jpg', 'Spark.gif']);
+            ['Badge.svg', 'Banner.jxl', 'Card.jpeg', 'Frame.jxl', 'Panel.webp', 'Poster', 'Poster.jpg', 'Spark.gif']);
+        assert.throws(() => ResourceManager.importBytes({
+            ...base, sourceName: 'Wrong.jxl', sourceBytes: TINY_PNG
+        }), /not a valid JXL/);
         assert.throws(() => ResourceManager.importBytes({
             ...base, sourceName: 'Wrong.webp', sourceBytes: TINY_PNG
         }), /not a valid WEBP/);

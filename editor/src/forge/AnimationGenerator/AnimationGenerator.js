@@ -1802,7 +1802,7 @@ class AnimationGenerator {
     _pickTexture(key) {
         const input = document.createElement('input');
         input.type = 'file';
-        input.accept = 'image/png,image/jpeg,image/gif,image/webp,image/bmp,'
+        input.accept = 'image/png,image/jpeg,image/gif,image/webp,image/jxl,.jxl,image/bmp,'
                      + 'video/mp4,video/webm,video/quicktime,video/ogg';
         input.addEventListener('change', (e) => {
             const file = e.target.files && e.target.files[0];

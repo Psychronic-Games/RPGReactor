@@ -401,13 +401,13 @@ class ProjectTools {
 
         const candidates = /\.[a-z0-9]+$/i.test(raw)
             ? [raw]
-            : ['.png', '.jpg', '.jpeg', '.webp', '.gif'].map(ext => raw + ext);
+            : ['.png', '.jpg', '.jpeg', '.webp', '.jxl', '.gif'].map(ext => raw + ext);
 
         for (const rel of candidates) {
             try {
                 this._verifyProject();
                 const ext = path.extname(rel).toLowerCase();
-                const mime = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif' }[ext];
+                const mime = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.jxl': 'image/jxl', '.gif': 'image/gif' }[ext];
                 if (!mime) continue;
                 const b64 = Buffer.from(this._readFile(`img/${rel}`)).toString('base64');
                 return reply(true, { dataUrl: `data:${mime};base64,${b64}` });

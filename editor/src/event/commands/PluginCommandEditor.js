@@ -1206,7 +1206,7 @@ class PluginCommandEditor {
 PluginCommandEditor.extensionsForDir = function(dir) {
     const folder = String(dir || '').trim().replace(/^\.?[\\/]+/, '').replace(/[\\/]+$/, '').toLowerCase();
     const root = folder.split(/[\\/]/)[0];
-    const images = RRAssetFiles.IMAGE_EXTENSIONS || ['.png', '.jpg', '.jpeg', '.webp'];
+    const images = RRAssetFiles.IMAGE_EXTENSIONS || ['.png', '.jpg', '.jpeg', '.webp', '.jxl'];
     const audio = RRAssetFiles.AUDIO_EXTENSIONS || ['.ogg', '.mp3', '.wav', '.flac', '.m4a'];
     if (root === 'img') return images.slice();
     if (root === 'audio') return audio.slice();

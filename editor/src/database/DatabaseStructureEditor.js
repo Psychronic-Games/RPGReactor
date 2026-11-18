@@ -1946,7 +1946,7 @@ class DatabaseStructureEditor {
             const stat = node.fs.statSync(file);
             if (stat.size > 40 * 1024 * 1024) return null;
             const ext = name.split('.').pop().toLowerCase();
-            const mime = { webm: 'video/webm', mp4: 'video/mp4', ogv: 'video/ogg', m4v: 'video/mp4', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' }[ext] || 'application/octet-stream';
+            const mime = { webm: 'video/webm', mp4: 'video/mp4', ogv: 'video/ogg', m4v: 'video/mp4', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', jxl: 'image/jxl' }[ext] || 'application/octet-stream';
             return 'data:' + mime + ';base64,' + node.fs.readFileSync(file).toString('base64');
         } catch (error) { return null; }
     }

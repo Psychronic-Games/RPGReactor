@@ -1370,7 +1370,7 @@ class PluginManager {
             const project = this.projectController.getCurrentProject();
             const dirPath = this.path.join(project.path, dir);
             if (this.fs.existsSync(dirPath)) {
-                const imageExts = ['.png', '.jpg', '.jpeg', '.webp', '.bmp', '.apng'];
+                const imageExts = ['.png', '.jpg', '.jpeg', '.webp', '.jxl', '.bmp', '.apng'];
                 // A folder other than img/ or audio/ (movies, effects, fonts, data) lists its own files: every one.
                 const validExts = String(dir).includes('img') ? imageExts : String(dir).includes('audio') ? RRAssetFiles.AUDIO_EXTENSIONS : [];
                 for (const fileName of RRAssetFiles.listNames(dirPath, validExts)) {

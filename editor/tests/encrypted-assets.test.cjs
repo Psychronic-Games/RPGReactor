@@ -194,6 +194,25 @@ test('alternate encrypted images retain their logical extension and MIME type', 
     }
 });
 
+test('an encrypted JPEG XL keeps its extension and MIME type', () => {
+    const root = makeProject({ withKey: true });
+    const jxl = Buffer.from('ff0afa', 'hex');
+    try {
+        const directory = path.join(root, 'img', 'pictures');
+        fs.mkdirSync(directory, { recursive: true });
+        fs.writeFileSync(path.join(directory, 'Sky.jxl_'), encrypt(jxl, KEY_HEX));
+        const url = EncryptedAssets.resolveAssetUrl(path.join(directory, 'Sky.jxl'));
+        assert.match(url, /^data:image\/jxl;base64,/);
+        assert.deepEqual(dataUrlBytes(url), jxl);
+        const record = AssetFiles.findImage(directory, 'Sky.jxl');
+        assert.equal(record.relativePath, 'Sky.jxl');
+        assert.equal(record.sourceExtension, '.jxl_');
+        assert.equal(record.imageReference, 'Sky.jxl', 'a JPEG XL is named with its extension, as the runtime loads it');
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
+
 test('encryption helpers round-trip bytes and identify the physical encrypted file', async () => {
     const root = makeProject({ withKey: true });
     try {

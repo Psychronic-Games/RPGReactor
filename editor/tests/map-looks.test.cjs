@@ -1081,7 +1081,7 @@ test('2D: a dragged event\'s picture or model, its name and its ring go with it 
     assert.equal(m._previewSprites.get(4).sprite, figure, 'the same picture, moved, not drawn again');
     assert.equal(figure.parent, m.unitLookLayer);
     assert.deepEqual([figure.x, figure.y], [7.5 * 48, 6 * 48 - 6], 'its picture, feet on the new tile');
-    assert.deepEqual([name.x, name.y], [7 * 48 + 24, 5 * 48 + 42], 'its name');
+    assert.deepEqual([name.x, name.y], [7 * 48 + 24, 5 * 48 + 47], 'its name (its foot a unit above the tile\'s lower edge, event-marker-lines)');
     assert.ok(has(ringsAt(), 7.5, 5.5) && !has(ringsAt(), 7.5, 3.5), 'its ring');
     assert.equal(modelDraws, drawnBefore, 'the placed models\' layer is not drawn again for a picture');
     // A unit that stands as a model (the Raider): the models' layer draws it on the new tile.
@@ -1090,7 +1090,7 @@ test('2D: a dragged event\'s picture or model, its name and its ring go with it 
     assert.equal(modelDraws, drawnBefore + 1, 'once for the tile it crossed');
     assert.deepEqual(props.asked.filter(entry => entry.id === -2).map(entry => [entry.x, entry.y]), [[3, 4]]);
     assert.ok(has(ringsAt(), 3.5, 4.5) && !has(ringsAt(), 3.5, 3.5));
-    assert.deepEqual([m.eventNames.get(2).sprite.x, m.eventNames.get(2).sprite.y], [3 * 48 + 24, 4 * 48 + 42]);
+    assert.deepEqual([m.eventNames.get(2).sprite.x, m.eventNames.get(2).sprite.y], [3 * 48 + 24, 4 * 48 + 47]);
     // A unit drawn from its record's sheet.
     const katie = eventOf(map, 6), sheet = m._previewSprites.get(6).sprite;
     drag(katie, 5, 7);
@@ -1131,8 +1131,8 @@ test('2D: an outlined event\'s name is written over what stands on it, and stays
     const names = () => m.eventNameLayer.children;
     assert.deepEqual(names().map(name => name.text).sort(), map.events.filter(event => event && ![1, 10].includes(event.id)).map(event => event.name).sort(), 'each of the ten units');
     const nameOf = id => m.eventNames.get(id).sprite;
-    assert.deepEqual([nameOf(4).text, nameOf(4).x, nameOf(4).y, nameOf(4).resolution], ['Nobody', 7 * 48 + 24, 3 * 48 + 42, 2], 'where its square writes it: the middle of its lower edge');
-    assert.deepEqual([nameOf(7).x, nameOf(7).y], [7.5 * 48 + 24, 6.5 * 48 + 42], 'a two by two unit: in the square in the middle of its tiles');
+    assert.deepEqual([nameOf(4).text, nameOf(4).x, nameOf(4).y, nameOf(4).resolution], ['Nobody', 7 * 48 + 24, 3 * 48 + 47, 2], 'where its square writes it: the middle of its lower edge');
+    assert.deepEqual([nameOf(7).x, nameOf(7).y], [7.5 * 48 + 24, 6.5 * 48 + 47], 'a two by two unit: in the square in the middle of its tiles');
     assert.equal(m.eventNames.has(10), false, 'an event with nothing drawn on it has its name in its square alone');
     // The zoom changes: the names are drawn again at the pixels it needs, with the squares' own.
     m.labelResolution = () => 5;

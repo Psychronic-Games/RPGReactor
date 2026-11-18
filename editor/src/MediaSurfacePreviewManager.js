@@ -247,7 +247,7 @@ class MediaSurfacePreviewManager {
     }
 
     static _isImage(file) {
-        return /\.(?:png|jpe?g|webp)$/i.test(String(file || ''));
+        return /\.(?:png|jpe?g|webp|jxl)$/i.test(String(file || ''));
     }
 
     _createMedia(state) {

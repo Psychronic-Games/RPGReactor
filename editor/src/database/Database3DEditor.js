@@ -6366,7 +6366,7 @@ class Database3DEditor {
         const path = require('path');
         const urlFor = name => {
             const file = files.find(entry => entry.relativePath === name);
-            const isImage = /\.(?:png|jpe?g|webp)$/i.test(String(name || ''));
+            const isImage = /\.(?:png|jpe?g|webp|jxl)$/i.test(String(name || ''));
             const absolute = file ? file.absolutePath
                 : path.join(this._project().path, isImage ? path.join('img', 'pictures') : 'movies', name);
             return typeof RRAssetFiles !== 'undefined' && RRAssetFiles.toUrl ? RRAssetFiles.toUrl(absolute) : 'file://' + absolute;
@@ -6395,7 +6395,7 @@ class Database3DEditor {
             const path = require('path');
             const urlFor = name => {
                 const file = files.find(entry => entry.relativePath === name);
-                const isImage = /\.(?:png|jpe?g|webp)$/i.test(String(name || ''));
+                const isImage = /\.(?:png|jpe?g|webp|jxl)$/i.test(String(name || ''));
                 const absolute = file ? file.absolutePath
                     : path.join(this._project().path,
                         isImage ? path.join('img', 'pictures') : 'movies', name);
@@ -6438,7 +6438,7 @@ class Database3DEditor {
         const path = require('path');
         // A variant in view shows its own picture on the surface.
         const shown = this.variantsPanel ? this.variantsPanel.mediaFileFor(raw) || raw.video.file : raw.video.file;
-        const isImage = /\.(?:png|jpe?g|webp)$/i.test(shown);
+        const isImage = /\.(?:png|jpe?g|webp|jxl)$/i.test(shown);
         const mediaPath = path.join(this._project().path,
             isImage ? path.join('img', 'pictures') : 'movies', shown);
         const url = typeof RRAssetFiles !== 'undefined' && RRAssetFiles.toUrl

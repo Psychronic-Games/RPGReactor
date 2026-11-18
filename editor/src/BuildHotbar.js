@@ -2524,7 +2524,7 @@ class BuildHotbar {
             const project = this.projectController?.getCurrentProject?.() || this.projectController?.currentProject;
             if (!project?.path || typeof require !== 'function') return [];
             const fs = require('fs'), path = require('path'), dir = path.join(project.path, 'img', 'parallaxes');
-            const names = fs.readdirSync(dir).filter(file => /\.(png|png_|jpg|webp)$/i.test(file)).map(file => file.replace(/\.[^.]+$/, ''));
+            const names = fs.readdirSync(dir).filter(file => /\.(png|png_|jpg|webp|jxl)$/i.test(file)).map(file => file.replace(/\.[^.]+$/, ''));
             const rank = name => (/grass/i.test(name) ? 0 : 2) + (name.startsWith('!') ? 0 : 1);
             return names.filter(name => name.startsWith('!') || /grass|ground|floor/i.test(name)).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
         } catch (error) { return []; }

@@ -422,7 +422,7 @@ class BattlePresentationEditor {
         return {
             tileSize:this.db.getSystem()?.tileSize||48,screenHeight:this.db.getSystem()?.advanced?.screenHeight||624,
             materials:map=>pc.mapEditor3D.loadMaterials(map),materialSettings:name=>pc.mapEditor3D.materialSettings?.[name]||null,
-            muteMedia:true,mediaUrl:file=>{const image=/\.(png|jpe?g|webp)$/i.test(file),absolute=path.join(project.path,image?'img/pictures':'movies',file);return fs.existsSync(absolute)?RRAssetFiles.toUrl(absolute):'';},
+            muteMedia:true,mediaUrl:file=>{const image=/\.(png|jpe?g|webp|jxl)$/i.test(file),absolute=path.join(project.path,image?'img/pictures':'movies',file);return fs.existsSync(absolute)?RRAssetFiles.toUrl(absolute):'';},
             animation:id=>this.db.data.animations[id],effectUrl:name=>'file://'+path.join(project.path,'effects',name+'.efkefc'),
             image:(kind,name)=>new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve({image:img,width:img.naturalWidth,height:img.naturalHeight,isReady:()=>true,addLoadListener:fn=>fn()});img.onerror=()=>reject(Error('Missing '+kind+'/'+name));img.src=RRAssetFiles.imageUrlFor(path.join(project.path,'img',kind),name);}),
             model:async spec=>{

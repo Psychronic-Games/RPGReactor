@@ -1522,7 +1522,7 @@
             const effects=rows.flatMap(raw=>{
                 if(!raw||typeof raw!=='object')return [];
                 const file=String(raw.movie||raw.file||'');
-                if(!file||file.startsWith('/')||file.includes('\\')||file.split('/').includes('..')||!/\.(png|jpe?g|webp|mp4|webm|ogv)$/i.test(file))return [];
+                if(!file||file.startsWith('/')||file.includes('\\')||file.split('/').includes('..')||!/\.(png|jpe?g|webp|jxl|mp4|webm|ogv)$/i.test(file))return [];
                 const number=(key,fallback)=>Number.isFinite(Number(raw[key]))?Number(raw[key]):fallback;
                 const bool=(key,fallback)=>raw[key]==null?fallback:raw[key]===true||raw[key]==='true';
                 let worldCorners=raw.worldCorners;
@@ -1570,7 +1570,7 @@
                 const active=this.effectActive(record,effect);let media=record.media.get(index);
                 if(!active){if(media){this.stopMedia(media);record.media.delete(index);}continue;}
                 if(!media){
-                    const image=/\.(png|jpe?g|webp)$/i.test(effect.video.file);
+                    const image=/\.(png|jpe?g|webp|jxl)$/i.test(effect.video.file);
                     // A picture goes through the game's own image loader where there is one (assets.loadImage), so an
                     // encrypted deployment's .png_ is read as Show Picture reads it; a movie, and the editor, by its URL.
                     const loaded=image&&this.assets.loadImage?this.assets.loadImage(effect.video.file):null,url=loaded?'':this.assets.mediaUrl?.(effect.video.file);

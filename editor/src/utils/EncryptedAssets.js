@@ -53,6 +53,7 @@
         '.jpg': ['.jpg_'],
         '.jpeg': ['.jpeg_'],
         '.webp': ['.webp_'],
+        '.jxl': ['.jxl_'],
         '.svg': ['.svg_'],
         '.gif': ['.gif_'],
         '.apng': ['.apng_'],
@@ -65,7 +66,7 @@
     const MIME = {
         '.png': 'image/png', '.ogg': 'audio/ogg', '.m4a': 'audio/mp4',
         '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.flac': 'audio/flac',
-        '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp',
+        '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.jxl': 'image/jxl',
         '.svg': 'image/svg+xml', '.gif': 'image/gif', '.apng': 'image/apng',
         '.webm': 'video/webm', '.mp4': 'video/mp4', '.woff': 'font/woff',
         '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.otf': 'font/otf',

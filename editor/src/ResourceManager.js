@@ -5,7 +5,7 @@ class ResourceManager {
     static folderDefinitions(audioExtensions = null) {
         const audio = audioExtensions || ['.ogg', '.mp3', '.wav', '.flac', '.m4a'];
         const images = typeof RRAssetFiles !== 'undefined' && RRAssetFiles.IMAGE_EXTENSIONS
-            ? RRAssetFiles.IMAGE_EXTENSIONS : ['.png', '.jpg', '.jpeg', '.webp', '.svg', '.gif', '.apng'];
+            ? RRAssetFiles.IMAGE_EXTENSIONS : ['.png', '.jpg', '.jpeg', '.webp', '.jxl', '.svg', '.gif', '.apng'];
         const image = (id, label, path) => ({ id, label, path, extensions: images, preview: 'image', encryption: 'image' });
         return [
             image('animations', 'Animations', 'img/animations'),
@@ -110,7 +110,7 @@ class ResourceManager {
             : value;
         const physicalAbsolutePath = replaceExtension(record.absolutePath);
         const physicalRelativePath = replaceExtension(record.relativePath);
-        const encrypted = /^(?:\.png_|\.jpg_|\.jpeg_|\.webp_|\.svg_|\.gif_|\.rpgmvp|\.ogg_|\.rpgmvo|\.m4a_|\.rpgmvm|\.mp3_|\.wav_|\.flac_)$/i
+        const encrypted = /^(?:\.png_|\.jpg_|\.jpeg_|\.webp_|\.jxl_|\.svg_|\.gif_|\.rpgmvp|\.ogg_|\.rpgmvo|\.m4a_|\.rpgmvm|\.mp3_|\.wav_|\.flac_)$/i
             .test(sourceExtension);
         return {
             ...record,
@@ -209,6 +209,9 @@ class ResourceManager {
                     ? bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8 || bytes[2] !== 0xff
                     : extension === '.webp'
                         ? bytes.length < 12 || ascii(0, 4) !== 'RIFF' || ascii(8, 4) !== 'WEBP'
+                        : extension === '.jxl'
+                            // A bare codestream (FF 0A) or the ISO box container ("JXL " box first).
+                            ? !(bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0x0a) && !(bytes.length >= 12 && ascii(4, 4) === 'JXL ' && bytes[8] === 0x0d && bytes[9] === 0x0a && bytes[10] === 0x87 && bytes[11] === 0x0a)
                         : extension === '.gif'
                             ? bytes.length < 10 || !['GIF87a', 'GIF89a'].includes(ascii(0, 6))
                             : false;
@@ -1582,7 +1585,7 @@ class ResourceManager {
         return new Promise((resolve, reject) => {
             const input = document.createElement('input');
             input.type = 'file';
-            input.accept = ['.png', '.jpg', '.jpeg', '.webp'].join(',');
+            input.accept = ['.png', '.jpg', '.jpeg', '.webp', '.jxl'].join(',');
             input.style.display = 'none';
             let settled = false;
             const done = (value, error) => { if (settled) return; settled = true; input.remove(); if (error) reject(error); else resolve(value); };
@@ -1607,7 +1610,7 @@ class ResourceManager {
                     // Its maps, named after it, when they sit beside the picture.
                     const directory = path.dirname(file.path);
                     for (const suffix of ['_normal', '_rough']) {
-                        const companion = ['.png', '.jpg', '.jpeg', '.webp'].map(ext => path.join(directory, path.basename(file.name, extension) + suffix + ext)).find(candidate => fs.existsSync(candidate));
+                        const companion = ['.png', '.jpg', '.jpeg', '.webp', '.jxl'].map(ext => path.join(directory, path.basename(file.name, extension) + suffix + ext)).find(candidate => fs.existsSync(candidate));
                         if (!companion) continue;
                         try { ResourceManager.importBytes(Object.assign({}, base, { sourceName: name + suffix + path.extname(companion).toLowerCase(), sourceBytes: this.readImportFile(companion) })); }
                         catch (error) { console.warn('A material map could not be copied.', error); }

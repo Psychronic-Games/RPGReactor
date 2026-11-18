@@ -6,7 +6,7 @@ Changes belong in the editor changelog; behavior goes in the commit message and 
 
 ## Where things stand (2026-11-17)
 
-- **Development:** 0.99.7 is open since 2026-11-16 (runtime **20261117.8**, synced into all 17 bundled projects on 2026-11-17; NW.js **0.120.0** pinned and in `nwjs-win`, the desktop's `nwjs-linux` still 0.107), locally: not committed. 0.99.6 was released on 2026-11-16. CI is green on GitHub since 2026-11-16. What 0.99.6 still needs seen: [OPEN-ITEMS](OPEN-ITEMS.md) items 22, 24, 26 and 27. The Demo in the tree is single player with the creator off, its backend Auto (the owner's): say so before a deploy.
+- **Development:** 0.99.7 is open since 2026-11-16 (runtime **20261117.10**, synced into all 17 bundled projects on 2026-11-17; NW.js **0.120.0** pinned and in `nwjs-win` and `nwjs-linux`; `nwjs-mac` still 0.107), committed on 2026-11-17 (`ff1a7339`), not pushed. 0.99.6 was released on 2026-11-16. CI is green on GitHub since 2026-11-16. What 0.99.6 still needs seen: [OPEN-ITEMS](OPEN-ITEMS.md) items 22, 24, 26 and 27. The Demo in the tree is single player with the creator off, its backend Auto (the owner's): say so before a deploy.
 - **Windows machines:** two laptops work in this folder: the Iris Xe one (i5-1145G7) and an MSI with an RTX 3060 Laptop beside an Intel UHD (i5-10500H). Both now hold all 17 bundled projects, so the sync can run on either. The Iris Xe's games start on OpenGL by its own record (11-10); Vulkan shows there since 11-16, and on the RTX 3060 since 11-17.
 - **Published:** [0.99.6](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.6) is the Latest source release, with six pictures. Its itch.io devlog is drafted ([Markdown](posts/itch-devlog-0.99.6.md), [plain text](posts/itch-devlog-0.99.6-plain.txt)) and not posted: posting it is the owner's. Signed native binaries remain a separate pipeline.
 - **Verification:** the whole suite on the desktop on 2026-11-13, before the day's second commit: 9,793 of 9,804 passed, 11 skipped, none failed (5.8 minutes). Substantial checks go through `codex-check`.
@@ -14,6 +14,24 @@ Changes belong in the editor changelog; behavior goes in the commit message and 
 - **Forge:** Character Preview **98**, Props **62**, clothing Preview 61. Appearance remains under review. [Face handoff](HUMAN-FACE-HANDOFF.md#current-candidate--preview-98).
 - **Faces:** the owner works on them in a separate session with another model, which may edit this tree. Leave face code alone unless asked, and check `git status` before scripted edits.
 - **Resume:** use [OPEN-ITEMS.md](OPEN-ITEMS.md) and [STATUS.md](STATUS.md#open-work). Preserve fixed gameplay timing. V-Sync is on by default since 2026-11-17, a project setting; F2 still shows what the machine could draw.
+
+## 2026-11-17 (desktop) — Event borders and names at every zoom
+
+Editor only, not committed. Names are fitted to their square too (`eventNameText`): as large as the tile allows, smaller for long names, an ellipsis only past the smallest size; seen on the Demo's map 7 (`event-zoom.cjs --names`). The owner's report: zoomed out, event borders drew on some sides only. They are one screen pixel at any zoom now (`pixelLine`, as the grid). Measured before and after in the editor (`event-zoom.cjs`, `--old`). [Changelog](../editor/changelog/0.99.7.md).
+
+## 2026-11-17 (desktop) — Hendrix lighting stops the game
+
+Runtime **20261117.10**, synced into all 17, not committed. [Changelog](../editor/changelog/0.99.7.md).
+
+- **Players' report:** `Cannot read properties of null (reading 'indexOf')` from Hendrix 3D Light and Shadow's `_syncRim`. PIXI 8 throws when filters or a mask are set on a destroyed object; PIXI 5 did nothing. `pixi_compat.js` now does nothing too. Seen on a destroyed sprite in the game; not reproduced through the plugin (its rim light needs light shafts nearby).
+
+## 2026-11-17 (desktop) — JPEG XL pictures
+
+Runtime **20261117.9**, synced into all 17, not committed. [Changelog](../editor/changelog/0.99.7.md).
+
+- **The owner's request:** `.jxl` usable now that NW.js decodes it, for the future (old plugins do not matter). Taken wherever `.webp` is, in the runtime, the editor and the builds; not for 3D model textures (GLB), materials or Effekseer.
+- **Seen:** a `.jxl` shown by Show Picture in a copy of the Demo, the same as its PNG. Lossless JXL is exact; Chromium rounds semi-transparent pixels by at most one level.
+- **Harness, new:** `~/.cache/rr-tests/jxl-game.cjs` (under `nw-hidden.cjs`, `RR_RUNTIME=1`).
 
 ## 2026-11-17 (desktop) — Rebellion's Moletown: drift, stray tiles, a slow map
 
@@ -55,7 +73,9 @@ Runtime **20261117.4**, synced into all 17, not committed. Detail in the [change
 The owner's request: the editor and games on the newest NW.js with its proprietary codecs. Pins, provenance and what was seen: [changelog](../editor/changelog/0.99.7.md). Not committed.
 
 - **Done:** every pin moved to 0.120.0 (Chromium 157, Node 26.12.1), the codec provenance recorded, `nwjs-win` here replaced (0.107.0 kept at `%LOCALAPPDATA%\rr-tests\nw120\backup-nwjs-win-0.107.0`). Seen: the editor's welcome page, the Demo on Vulkan, video as before, no frame-rate change past the spread.
-- **Desktop, next:** install `nwjs-linux` (and `nwjs-mac`, the Apple silicon build) there; Windows would break their execute bits and the Mac bundle's links. Download `https://dl.nwjs.io/v0.120.0/nwjs-sdk-v0.120.0-linux-x64.tar.gz` (sha256 `97baefb1795dc17a3b8e45ebc0361767ddd52aa339a015c627a4381d6945fe9f`) and `https://github.com/nwjs-ffmpeg-prebuilt/nwjs-ffmpeg-prebuilt/releases/download/0.120.0/0.120.0-linux-x64.zip` (`58e16d3c4f7d43c87b62e1a139bb40382cba47c8cd09983a1c7a6d0917309141`), check both with `sha256sum -c`, unpack, put the zip's `libffmpeg.so` in the SDK's `lib/`, move the old `nwjs-linux` out of Dropbox and the new folder in. Mac: `nwjs-sdk-v0.120.0-osx-arm64.zip` (`09f1ff602fd0ba4aa5e8d48818f56096713787ef0210cfefbdc446ce16255364`) and `0.120.0-osx-arm64.zip` (`3b6d0a6bc6789f1128426d8a3047810ae6056620d11fbd638620762f99d41ac5`), unzipped with a tool that keeps links (`unzip` or `ditto`), the dylib where `nw-codec-utils` puts it. Then the whole suite there (CI downloads 0.120.0 itself).
+- **Linux, done on the desktop (2026-11-17):** `nwjs-linux` is the 0.120.0 SDK with the codec build's `libffmpeg.so`, both downloads hash-checked. Seen on the hidden display: a real H.264 and AAC file plays to its end (60 frames, sound decoded) where the stock library stops with a decode error; Rebellion boots and walks. The old folder is at `/mnt/sda1/rr-nw-backup/nwjs-linux-0.107.0` (outside Dropbox). The editor runs from the same folder: `nw-editor-save` and `nw-keyboard-menus` pass on it (hidden display, Chromium 157). The owner's editor profile as 0.107 left it is at `/mnt/sda1/rr-nw-backup/rpg-reactor-profile-0.107`. Not done: the whole suite on it; the owner's editor seen on the real desktop.
+- **Mac, still to do:** `nwjs-mac` is 0.107 (Chromium 144). `nwjs-sdk-v0.120.0-osx-arm64.zip` (sha256 `09f1ff602fd0ba4aa5e8d48818f56096713787ef0210cfefbdc446ce16255364`) and `0.120.0-osx-arm64.zip` (`3b6d0a6bc6789f1128426d8a3047810ae6056620d11fbd638620762f99d41ac5`), unzipped with a tool that keeps links (`unzip` or `ditto`), the dylib where `nw-codec-utils` puts it.
+- **Harness (desktop), new:** `~/.cache/rr-tests/nw120/` holds the downloads and `app/` (plays `test.mp4` and writes what was decoded).
 - **For the owner:** the editor from the folder keeps one profile (`%LOCALAPPDATA%\rpg-reactor`); after its first start on 0.120, 0.107 cannot open it. Pointer lock in the 3D camera and action battles: Escape may no longer release the mouse (NW.js 0.112).
 - **Harness:** `%LOCALAPPDATA%\rr-tests\nw120\`: `fetch.sh` (downloads, hash-checked), `editor-smoke.cjs`; `vk3060\vbench.cjs` takes `RR_NW` to run another NW.js. A run's browser profile needs `--user-data-dir`: `LOCALAPPDATA` in the environment reaches Node only.
 

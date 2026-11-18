@@ -146,9 +146,9 @@ function RR_loadEffekseerEffectFromFile(context, effectPath, scale, onLoad, onEr
         try {
             const rel = String(resPath).replace(/\\/g, '/');
             const data = fs.readFileSync(path.join(baseDir, rel));
-            if (/\.(png|jpe?g|webp)$/i.test(rel)) {
+            if (/\.(png|jpe?g|webp|jxl)$/i.test(rel)) {
                 const mime = /\.png$/i.test(rel) ? 'image/png'
-                    : /\.webp$/i.test(rel) ? 'image/webp' : 'image/jpeg';
+                    : /\.webp$/i.test(rel) ? 'image/webp' : /\.jxl$/i.test(rel) ? 'image/jxl' : 'image/jpeg';
                 return `data:${mime};base64,${toBase64(data)}#.png`;
             }
             return `data:application/octet-stream;base64,${toBase64(data)}`;

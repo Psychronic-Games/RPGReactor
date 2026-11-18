@@ -348,12 +348,12 @@ class MediaSurfaceEditor {
             || /^[a-z]:[\\/]/i.test(path) || path.includes('\\')) return false;
         const parts = path.split('/');
         return parts.length > 0 && parts.every(part => part && part !== '.' && part !== '..')
-            && /\.(?:webm|mp4|png|jpe?g|webp)$/i.test(parts.at(-1));
+            && /\.(?:webm|mp4|png|jpe?g|webp|jxl)$/i.test(parts.at(-1));
     }
 
     /** Movies play from movies/; a still image comes from img/pictures/. */
     static isImageFile(value) {
-        return /\.(?:png|jpe?g|webp)$/i.test(String(value || ''));
+        return /\.(?:png|jpe?g|webp|jxl)$/i.test(String(value || ''));
     }
 
     static validate(operation, data, context = {}, changedFields = null) {
@@ -379,7 +379,7 @@ class MediaSurfaceEditor {
             errors.push('Event target requires a positive event ID.');
         }
         if (operation === 'ShowVideoSurface' && !this.safeMoviePath(data.movie)) {
-            errors.push('Select a safe WebM, MP4, PNG, JPG, or WEBP file.');
+            errors.push('Select a safe WebM, MP4, PNG, JPG, WEBP or JXL file.');
         }
         for (const [key, min, max, label] of [
             ['x', -1000000, 1000000, 'X'], ['y', -1000000, 1000000, 'Y'],
@@ -466,7 +466,7 @@ class MediaSurfaceEditor {
             try { assets = require('../../utils/AssetFiles.js'); } catch (_) {}
         }
         if (!assets?.list) return [];
-        return assets.list(root, ['.png', '.jpg', '.jpeg', '.webp'], { anyCase: true })
+        return assets.list(root, ['.png', '.jpg', '.jpeg', '.webp', '.jxl'], { anyCase: true })
             .filter(file => MediaSurfaceEditor.safeMoviePath(file.relativePath))
             .map(file => ({ relativePath: file.relativePath, absolutePath: file.absolutePath }));
     }
