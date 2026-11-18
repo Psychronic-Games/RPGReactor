@@ -1299,6 +1299,7 @@ Graphics.FramePacing = {
     _display: new Float64Array(2), _camera: new Float64Array(8), _cameraValid: false,
     _poses: [], _poseRoots: [], _poseEnds: [], _poseMoved: [], _posePrev: new Float64Array(2560), _poseLive: new Float64Array(2560), _poseCache: new WeakMap(), _poseApplied: false, _poseTick: -1, _poseSpan: 1,
     _applied: false, _objects: [], _objectCount: 0, _sprites: [], _spriteCount: 0, _spriteAt: new Float64Array(64),
+    _posed: [], _posedAt: new Float64Array(128), _posedCount: 0, _posedTick: -1, _posedSet: null,
     _cameraSaved: new Float64Array(8), _cameraObject: null, _origin: null,
 
     /** Frames per update at the frames' own interval; 0 until it is known. */
@@ -1395,6 +1396,7 @@ Graphics.FramePacing = {
         if (!allowed) {
             this._poses.length = 0; this._poseRoots.length = 0; this._chars.length = 0;
             this._prevCount = 0; this._capturedAt = -1; this._cameraValid = false; this._poseTick = -1;
+            this._posedTick = -1; this._posedSet = null;
         }
         if (this._active) {
             this._index++;
@@ -1658,7 +1660,12 @@ Graphics.FramePacing = {
             spriteset.drawReactor3D(state);
             return;
         }
-        if (!between) {
+        // A flat map's sprites were placed by its spriteset during the update, and by the stock order of a map
+        // scene (its children, then the game) that is before the game moved: they and the tilemap's origin stand
+        // an update behind the game. `posed` kept where each character was on the screen at that moment, so a
+        // sprite is moved from where it was put, whichever order a plugin's scene runs them in.
+        const posed = this._posedSet === spriteset && this._posedTick === Graphics.frameCount - 1 && this._capturedAt === this._posedTick && this._prevCount > 0;
+        if (!between && !posed) {
             // The preceding refresh may have left the layers at an intermediate
             // scroll position. Publish the tick's origin before this composite.
             spriteset._tilemap?._prepareV8Frame?.();
@@ -1667,7 +1674,7 @@ Graphics.FramePacing = {
         // A flat map: the scroll and the sprites.
         const map = $gameMap, sprites = spriteset._characterSprites || [];
         const screenOf = sprite => { const c = sprite._character, p = this._point || (this._point = {}); p.x = c.screenX(); p.y = c.screenY(); return p; };
-        this.noteSprites(sprites, screenOf, false);
+        if (posed) this.notePosed(); else this.noteSprites(sprites, screenOf, false);
         const dx = map._displayX, dy = map._displayY;
         const jump = Math.abs(dx - this._display[0]) > this.JUMP || Math.abs(dy - this._display[1]) > this.JUMP;
         if (!jump) { map._displayX = this._display[0] + (dx - this._display[0]) * alpha; map._displayY = this._display[1] + (dy - this._display[1]) * alpha; }
@@ -1691,6 +1698,45 @@ Graphics.FramePacing = {
         tilemap?._prepareV8Frame?.();
         this.swapCharacters(alpha, false);
         map._displayX = dx; map._displayY = dy;
+    },
+    /**
+     * A flat map's spriteset has placed its character sprites (the end of Spriteset_Map.update): where each
+     * character is on the screen at this moment of the update, for `draw` to move its sprite from.
+     *
+     * Measured in Star Shift Rebellion's Moletown at 180 frames a second (2026-11-17): with the sprites taken to
+     * stand where the game stood after the update, every standing event trailed its tile by an update's scroll,
+     * 3 pixels walking and 6 to 7 dashing, and stepped back onto it once every few frames: burn barrels' tops off
+     * their barrels, doors and signs off their buildings.
+     */
+    posed(spriteset) {
+        // (The count of updates goes up between the capture at the update's start and the scene's own update.)
+        if (!this._active || !spriteset || spriteset._reactor3d || (this._capturedAt !== Graphics.frameCount - 1 && this._capturedAt !== Graphics.frameCount)) return;
+        const sprites = spriteset._characterSprites || [], list = this._posed;
+        if (this._posedAt.length < sprites.length * 2) this._posedAt = new Float64Array(sprites.length * 4);
+        const at = this._posedAt;
+        let n = 0;
+        for (let i = 0; i < sprites.length; i++) {
+            const sprite = sprites[i], c = sprite && sprite._character;
+            if (!c || !sprite.visible || typeof c.screenX !== "function") continue;
+            list[n] = sprite; at[n * 2] = c.screenX(); at[n * 2 + 1] = c.screenY();
+            n++;
+        }
+        for (let i = n; i < this._posedCount; i++) list[i] = null;
+        this._posedCount = n; this._posedTick = this._capturedAt; this._posedSet = spriteset;
+    },
+    /** `noteSprites` from what `posed` kept: each sprite's point when it was placed, and where the sprite is now. */
+    notePosed() {
+        const posed = this._posed, from = this._posedAt, list = this._sprites;
+        if (this._spriteAt.length < this._posedCount * 4) this._spriteAt = new Float64Array(this._posedCount * 8);
+        const at = this._spriteAt;
+        let n = 0;
+        for (let i = 0; i < this._posedCount; i++) {
+            const sprite = posed[i];
+            if (!sprite || sprite.destroyed || !sprite._character) continue;
+            list[n] = sprite; at[n * 4] = from[i * 2]; at[n * 4 + 1] = from[i * 2 + 1]; at[n * 4 + 2] = sprite.x; at[n * 4 + 3] = sprite.y;
+            n++;
+        }
+        this._spriteCount = n;
     },
     /** The visible character sprites and where `pointOf` puts them now, to be moved by the difference. */
     noteSprites(sprites, pointOf) {
@@ -1942,6 +1988,11 @@ Graphics.FrameGovernor = {
  * second the frame's own work would allow (`capable`: the main thread's time to draw a frame with the updates'
  * time taken off the second, or the graphics card's time for a frame, whichever allows fewer); as soon as fewer
  * frames come than the monitor shows, the frames that came.
+ *
+ * A project with V-Sync on (Database > System 2 > Advanced Settings, on by default since 2026-11-17; its manifest
+ * then carries no `--disable-gpu-vsync`) is held to the monitor by the browser itself, each frame shown whole (no tearing). The
+ * limit's own clock then stands aside (`vsync()`): two clocks for one monitor would drop the frames that fall
+ * between them. The rate, and what F2 shows, stay as above; Options offers no Frame Rate there.
  */
 Graphics.FrameLimit = {
     enabled: true,
@@ -1954,7 +2005,18 @@ Graphics.FrameLimit = {
     /** The frames a second the frame's own work would allow (0: not measured yet). */
     capable: 0,
     _next: 0, _looked: 0, _asked: 0, _place: "", _from: 0, _update: 0, _draw: 0, _draws: 0,
-    on() { return this.enabled && !(typeof ConfigManager !== "undefined" && ConfigManager.frameLimit === false); },
+    on() { return this.enabled && (this.vsync() || !(typeof ConfigManager !== "undefined" && ConfigManager.frameLimit === false)); },
+    /** Whether the browser itself holds frames to the monitor: NW.js started without the no-vsync switch. */
+    vsync() {
+        if (this._vsync === undefined) {
+            let on = false;
+            try {
+                if (typeof nw === "object" && nw && nw.App) on = !/--disable-gpu-vsync\b/.test(String((nw.App.manifest || {})["chromium-args"] || "") + " " + (nw.App.fullArgv || []).join(" "));
+            } catch (error) { on = false; }
+            this._vsync = on;
+        }
+        return this._vsync;
+    },
     /** The monitor's refresh a second where the system said, else 0. */
     hz() { const hz = Number(globalThis.RPG_REACTOR_SCREEN_HZ); return hz >= 24 && hz <= 1000 ? hz : 0; },
     /** The frames a second the game is held to now; 0 unlimited. */
@@ -1962,14 +2024,14 @@ Graphics.FrameLimit = {
     /** Whether this tick's frame is not due yet. Nothing is spent: a tick that is due and then not begun (GpuPace) is due still. */
     wait(now) {
         this.look(now);
-        if (!(this.rate() > 0)) { this._next = 0; return false; }
+        if (!(this.rate() > 0) || this.vsync()) { this._next = 0; return false; }
         if (this._next > 0 && now < this._next) { this.skipped++; this.arm(); return true; }
         return false;
     },
     /** A frame is begun now: when the next is due. */
     begun(now) {
         const rate = this.rate();
-        if (!(rate > 0)) return;
+        if (!(rate > 0) || this.vsync()) return;
         const period = 1000 / rate;
         // The first frame, or one long overdue (a stop, the window away): the schedule starts from here.
         if (!(this._next > 0) || now - this._next > period * 4) this._next = now + period;
@@ -3731,8 +3793,9 @@ Graphics.FPSCounter.prototype._createElements = function() {
     // canvas (z-index 1) and Effekseer overlay (z-index 2).
     //
     // Laid out with flex so the box sizes to its content and every line
-    // shares one right edge: the number and its unit sit on a common
-    // baseline ("144 FPS"), the renderer mode on its own line beneath.
+    // is centred in it, as the rows beneath are (owner, 2026-11-17: the
+    // number sat crammed to the right): the number and its unit share a
+    // baseline ("144 FPS"), the renderer mode on its own lines beneath.
     const reset =
         "position:static; top:auto; left:auto; right:auto; bottom:auto;" +
         "width:auto; height:auto; margin:0; padding:0; opacity:1;" +
@@ -3742,7 +3805,7 @@ Graphics.FPSCounter.prototype._createElements = function() {
         reset +
         "position:absolute; top:8px; left:8px; box-sizing:border-box;" +
         "min-width:90px; padding:6px 10px;" +
-        "display:none; flex-direction:column; align-items:flex-end;" +
+        "display:none; flex-direction:column; align-items:center;" +
         "background:rgba(16,16,24,0.72); border-radius:8px;" +
         "box-shadow:0 1px 4px rgba(0,0,0,0.4); z-index:2147483647;" +
         "pointer-events:none;";
@@ -3789,6 +3852,7 @@ Graphics.FPSCounter.prototype._update = function() {
     if (this._modeDiv.textContent !== mode) this._modeDiv.textContent = mode;
 };
 
+
 /** The graphics device's name, short ("RTX 5070", "SwiftShader"), read once; "" when it will not say. */
 Graphics.graphicsDeviceName = function(renderer) {
     if (this._deviceName !== undefined) return this._deviceName;
@@ -3830,6 +3894,87 @@ Graphics.graphicsBackendName = function() {
     if (/OpenGL/i.test(s)) return "OpenGL";
     return "";
 };
+
+/**
+ * On Vulkan an array texture is filled a layer at a call.
+ *
+ * One `texSubImage3D` that fills many layers of a wide 32-bit float array texture, made between two draws of a
+ * frame, loses the graphics device on ANGLE's Vulkan backend under Windows (Intel Iris Xe, driver 32.0.101.7088,
+ * NW.js 0.107, 2026-11-16): "The logical or physical device has been lost" at the next submit, the browser starts
+ * its graphics process again and the game's canvas stays white. That is how three.js sends a mesh's morph targets
+ * (`WebGLMorphtargets`: one float array texture, a layer a target, made at the mesh's first draw), so the Demo died a
+ * second or two into its first 3D map, at the first character with a morphed face. Measured on a bare WebGL page,
+ * nothing of the engine in it: 11289 x 1 x 24 and 16384 x 2 x 28 RGBA32F lose the device; the same sent a layer at
+ * a call does not, nor do 8192 x 1 x 24, 4096 x 4 x 24, 11289 x 1 x 2, half floats, or the same texture made before
+ * the frame's first draw. Where the edge lies between those is not known, so every such upload is split: the
+ * same pixels, `depth` calls for one. Other backends are left as they are.
+ *
+ * Left alone: an upload from a pixel buffer or an image, one whose rows are padded or whose pixel store skips or
+ * strides (the layers would not start where this reckons), and packed pixel types.
+ */
+Graphics.LayerUploads = {
+    enabled: true,
+    /** Uploads sent a layer at a call so far. */
+    split: 0,
+    _vulkan: typeof WeakMap !== "undefined" ? new WeakMap() : null,
+
+    /** Whether `gl` draws through ANGLE's Vulkan backend; asked once a context. */
+    vulkan(gl) {
+        const known = this._vulkan;
+        if (!known) return false;
+        let is = known.get(gl);
+        if (is === undefined) {
+            is = false;
+            try {
+                const info = gl.getExtension("WEBGL_debug_renderer_info");
+                is = /Vulkan/i.test(String((info && gl.getParameter(info.UNMASKED_RENDERER_WEBGL)) || gl.getParameter(gl.RENDERER) || ""));
+            } catch (error) { is = false; }
+            known.set(gl, is);
+        }
+        return is;
+    },
+
+    /**
+     * How many of `source`'s elements one layer of `width` by `height` takes, or 0 where the upload must go as it
+     * came: a source that is no plain typed array of the pixel type, padded rows, a pixel store that skips or strides.
+     */
+    layerLength(gl, width, height, format, type, source) {
+        if (!source || !ArrayBuffer.isView(source) || source instanceof DataView) return 0;
+        const size = source.BYTES_PER_ELEMENT;
+        // FLOAT, UNSIGNED_INT, INT: four bytes; HALF_FLOAT, UNSIGNED_SHORT, SHORT: two; UNSIGNED_BYTE, BYTE: one.
+        const wanted = type === 0x1406 || type === 0x1405 || type === 0x1404 ? 4 : type === 0x140B || type === 0x1403 || type === 0x1402 ? 2 : type === 0x1401 || type === 0x1400 ? 1 : 0;
+        if (!wanted || wanted !== size) return 0;
+        // RGBA, RGBA_INTEGER; RGB, RGB_INTEGER; RG, RG_INTEGER, LUMINANCE_ALPHA; RED, RED_INTEGER, ALPHA, LUMINANCE, DEPTH_COMPONENT.
+        const parts = format === 0x1908 || format === 0x8D99 ? 4 : format === 0x1907 || format === 0x8D98 ? 3 : format === 0x8227 || format === 0x8228 || format === 0x190A ? 2
+            : format === 0x1903 || format === 0x8D94 || format === 0x1906 || format === 0x1909 || format === 0x1902 ? 1 : 0;
+        if (!parts) return 0;
+        const row = width * parts;
+        // UNPACK_ALIGNMENT; UNPACK_ROW_LENGTH, UNPACK_IMAGE_HEIGHT, UNPACK_SKIP_PIXELS, UNPACK_SKIP_ROWS, UNPACK_SKIP_IMAGES.
+        if ((row * size) % (gl.getParameter(0x0CF5) || 4)) return 0;
+        if (gl.getParameter(0x0CF2) || gl.getParameter(0x806E) || gl.getParameter(0x0CF4) || gl.getParameter(0x0CF3) || gl.getParameter(0x806D)) return 0;
+        return row * height;
+    },
+
+    install() {
+        if (typeof WebGL2RenderingContext === "undefined" || this._installed) return;
+        const proto = WebGL2RenderingContext.prototype, real = proto.texSubImage3D, uploads = this;
+        if (typeof real !== "function") return;
+        this._installed = true;
+        proto.texSubImage3D = function(target, level, x, y, z, width, height, depth, format, type, source, offset) {
+            // (TEXTURE_2D_ARRAY, from a typed array, more than one layer.)
+            if (uploads.enabled && target === 0x8C1A && depth > 1 && arguments.length >= 11 && uploads.vulkan(this)) {
+                const from = offset > 0 ? offset : 0, each = uploads.layerLength(this, width, height, format, type, source);
+                if (each > 0 && source.length - from >= each * depth) {
+                    for (let layer = 0; layer < depth; layer++) real.call(this, target, level, x, y, z + layer, width, height, 1, format, type, source, from + layer * each);
+                    uploads.split++;
+                    return;
+                }
+            }
+            return real.apply(this, arguments);
+        };
+    }
+};
+Graphics.LayerUploads.install();
 
 /**
  * "WebGL", "WebGPU", or "Canvas" for a PIXI renderer, or "" when it cannot

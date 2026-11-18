@@ -2,7 +2,7 @@
 
 This checklist is ordered. Do not publish artifacts from a dirty checkout,
 from a different commit than the release tag, or from an unsigned candidate
-run. Public editor releases use NW.js 0.107.0 exactly.
+run. Public editor releases use NW.js 0.120.0 exactly.
 
 **Never upload a locally built (unsigned) Windows or macOS editor package to
 itch or GitHub.** Unsigned or unrecognized downloads can trigger native OS
@@ -20,10 +20,10 @@ migrates its user profile forward only; a downgrade dies on a fatal
 profile-schema CHECK with exit code 0 and no window — on every machine that
 ran the newer build, and on none of your clean test machines. Shipped
 editor manifests are profile-scoped per release and runtime
-(`rpg-reactor-<version>-nw0107`, a fresh profile every release; games are
+(`rpg-reactor-<version>-nw0120`, a fresh profile every release; games are
 scoped per runtime) so builds never share a profile, and the build refuses a downgrade below
 `editor/build-scripts/shipped-runtime.json` (raise that version in the same
-commit that upgrades NW.js 0.107.0 to anything newer).
+commit that upgrades NW.js 0.120.0 to anything newer).
 
 ## Owner-directed source publication
 
@@ -33,7 +33,7 @@ When the owner asks to publish the current release, use a regular Latest source 
 
 ## Development source previews
 
-A development preview can make current work visible in GitHub Releases while a stable cut is still pending. Give it a separate tag such as `v0.99.6-preview.20261112`, mark the GitHub release **Pre-release**, and leave **Latest** on the last stable version. Keep the package version, stable release links and changelog development markers unchanged. Do not attach unvalidated native binaries or claim a green CI run.
+A development preview can make current work visible in GitHub Releases while a stable cut is still pending. Give it a separate tag such as `v0.99.7-preview.20261112`, mark the GitHub release **Pre-release**, and leave **Latest** on the last stable version. Keep the package version, stable release links and changelog development markers unchanged. Do not attach unvalidated native binaries or claim a green CI run.
 
 Prepare the current README gallery, versioned captions and public release notes first. Link images and repository pages to the exact preview tag, not `main` or the future stable tag. Record the source commit, validation scope and remaining CI failures. Commit and push the prepared documentation, create an annotated preview tag at that commit, then publish with `gh release create <tag> --verify-tag --prerelease --latest=false --notes-file <prepared-notes>`. Verify the published prerelease flag, target commit, body and image URLs. This publishes source only; stable versions still use the ordered checklist and `cut-release.cjs` below.
 
@@ -85,34 +85,34 @@ on `PATH` unless `WINDOWS_SIGNTOOL` names its full path.
 
 ## 2. NW.js Hash Verification
 
-The release CLI hard-codes NW.js `0.107.0`, passes `nwVersionPolicy=exact` and
+The release CLI hard-codes NW.js `0.120.0`, passes `nwVersionPolicy=exact` and
 `releaseBuild=true`, and reads `editor/build-scripts/release-hashes.json`.
 It disables bundled-runtime reuse, so release jobs can use only an archive
 cache entry or upstream download that matches the trusted manifest digest.
 The six populated SHA-256 values were copied from the upstream
-<https://dl.nwjs.io/v0.107.0/SHASUMS256.txt>, not calculated from downloads
+<https://dl.nwjs.io/v0.120.0/SHASUMS256.txt>, not calculated from downloads
 made by the release build:
 
 ```text
-588e8bf6a64e8a63d95a77c9af77c0df68a2cd464efe0ee5317954e10f6f68c3  nwjs-v0.107.0-linux-x64.tar.gz
-6492d21a1d38bc012de1f194712ab3a46c7d844b0943bb85e051682de7323253  nwjs-v0.107.0-osx-x64.zip
-0db62fa39d4ccd1a6e4490539952426eb59baaa301dea56b25e730c4535bf123  nwjs-v0.107.0-win-x64.zip
-454c1257445ed834dc126848aea5e72a72dfc2a910fd3eafed376bb4b8fbe9b7  nwjs-sdk-v0.107.0-linux-x64.tar.gz
-e1344a94d52cdc5bcba9344dae6c57e7032b926dd806694962dd1c6efa966e9b  nwjs-sdk-v0.107.0-osx-x64.zip
-926c5529a2714a05a3d2f5b9e1f66de64e8375f80a50fa7cbbeb620fcb77234e  nwjs-sdk-v0.107.0-win-x64.zip
+a7502c2489da5731d020f32e0f8cdc4f96b92012de53aa20da05ad82ab8fdbf5  nwjs-v0.120.0-linux-x64.tar.gz
+13d9ce81f9de4bfc49df5abb3a947a5d3e275b17f0a43cd1a8271575f3266da5  nwjs-v0.120.0-osx-x64.zip
+6778d4e32d099a8760fe2c3e07a2bbdf2ff79f2c0d28bcda62e1329b0965a282  nwjs-v0.120.0-win-x64.zip
+97baefb1795dc17a3b8e45ebc0361767ddd52aa339a015c627a4381d6945fe9f  nwjs-sdk-v0.120.0-linux-x64.tar.gz
+fb7301462dd33c5be28405cc51c1d79174c4f099ca4102709196156c067ff8e3  nwjs-sdk-v0.120.0-osx-x64.zip
+fbf6b6267445fcd634335ccbdf7cd21723bf5c83a744f0fcd8bdaeca33ccde66  nwjs-sdk-v0.120.0-win-x64.zip
 ```
 
 Compare the file without modifying it:
 
 ```bash
 git diff -- editor/build-scripts/release-hashes.json
-curl --fail --location https://dl.nwjs.io/v0.107.0/SHASUMS256.txt
+curl --fail --location https://dl.nwjs.io/v0.120.0/SHASUMS256.txt
 ```
 
 ## 3. Clean-Checkout Validation
 
 Validate the commit intended for `vX.Y.Z` from a clean checkout. Replace
-`0.99.6` below with the exact `editor/package.json` version. This validation
+`0.99.7` below with the exact `editor/package.json` version. This validation
 does not create the tag; the source-release command in section 5 owns the
 release commit and tag.
 
@@ -132,7 +132,7 @@ cd ..
 git diff --check
 git diff --exit-code
 test -z "$(git status --porcelain=v1 --untracked-files=all)"
-node -e "const p=require('./editor/package.json'); if(p.version!=='0.99.6') process.exit(1)"
+node -e "const p=require('./editor/package.json'); if(p.version!=='0.99.7') process.exit(1)"
 ```
 
 The test suite statically rejects hard dependencies on ignored local projects.
@@ -157,9 +157,9 @@ the UI-layout smoke remains a local release gate:
 ```bash
 cd editor
 npm run smoke:web
-npm run smoke:nw -- --nw-root="/path/to/nwjs-sdk-v0.107.0"
-npm run smoke:nw-interactions -- --nw-root="/path/to/nwjs-sdk-v0.107.0"
-npm run smoke:nw-ui -- --nw-root="/path/to/nwjs-sdk-v0.107.0"
+npm run smoke:nw -- --nw-root="/path/to/nwjs-sdk-v0.120.0"
+npm run smoke:nw-interactions -- --nw-root="/path/to/nwjs-sdk-v0.120.0"
+npm run smoke:nw-ui -- --nw-root="/path/to/nwjs-sdk-v0.120.0"
 ```
 
 The Web smoke proves Save waits for IndexedDB and survives reload. The NW.js
@@ -184,7 +184,7 @@ depend on ignored project files being available.
 
 Before that smoke test, open Haven through the candidate editor and confirm its
 `project.rpgreactor` `engineVersion` and the version marker at the top of
-`js/reactor_main.js` both advance to `0.99.6`, while `js/reactor_plugins.js`
+`js/reactor_main.js` both advance to `0.99.7`, while `js/reactor_plugins.js`
 remains unchanged. Also compare `RPG_REACTOR_RUNTIME_REVISION` in the running
 game with the candidate entry point; a matching version alone does not detect
 a stale copy from earlier in the same development cycle.
@@ -203,7 +203,7 @@ verification:
 
 ```bash
 gh workflow run release-candidate.yml \
-  -f version=0.99.6 \
+  -f version=0.99.7 \
   -f publishable=false
 gh run list --workflow release-candidate.yml --limit 5
 ```
@@ -212,7 +212,7 @@ The equivalent local command may only build the host platform:
 
 ```bash
 node editor/build-scripts/release-editor.cjs \
-  --target linux --mode candidate --version 0.99.6 \
+  --target linux --mode candidate --version 0.99.7 \
   --output-root "$PWD/dist-editor/releases"
 ```
 
@@ -221,7 +221,7 @@ on non-matching hosts. Add `--pack-web true` to the `web` target to ship the
 bundled project inside pack archives (fewer files, smaller extracted size). The bundled
 project leaves out the files its game never uses in the `web` target; `--unused-files off`
 ships them all and `--unused-files all` trims the desktop packages too. Each target gets a fresh
-`dist-editor/releases/v0.99.6/<target>/` directory and an
+`dist-editor/releases/v0.99.7/<target>/` directory and an
 `artifact-manifest-<target>.json` containing byte sizes and SHA-256 hashes.
 
 ## 5. Source Release And Publishable Candidate
@@ -242,15 +242,15 @@ after finalizing both changelogs and the other version surfaces.
 git switch main
 git pull --ff-only origin main
 git status --short
-node editor/build-scripts/cut-release.cjs 0.99.6 --dry-run
-node editor/build-scripts/cut-release.cjs 0.99.6
+node editor/build-scripts/cut-release.cjs 0.99.7 --dry-run
+node editor/build-scripts/cut-release.cjs 0.99.7
 ```
 
 The second command stops if GitHub's `main` has commits the checkout lacks,
 runs CI's syntax check and the full test suite again, dates both changelog
 files for the version and their index lines, updates the package version and root README release link/count
 sentence, moves the cycle's dated handoff entries to `docs/archive/handoff/<version>.md`,
-creates a release commit when needed, creates `v0.99.6`, and pushes
+creates a release commit when needed, creates `v0.99.7`, and pushes
 the branch and tag. The editor README, status page, other version prose, and
 validation dates are not automatically refreshed; review those before cutting
 the release. The tag starts **Publish Release**, which publishes
@@ -262,16 +262,16 @@ and verify the tag before starting signed builds:
 ```bash
 gh run list --workflow publish-release.yml --limit 5
 gh run watch SOURCE_RELEASE_RUN_ID
-gh release view v0.99.6
-test "$(git rev-parse v0.99.6^{commit})" = "$(git rev-parse origin/main)"
+gh release view v0.99.7
+test "$(git rev-parse v0.99.7^{commit})" = "$(git rev-parse origin/main)"
 ```
 
 Run the signed candidate from that immutable tag:
 
 ```bash
 gh workflow run release-candidate.yml \
-  --ref v0.99.6 \
-  -f version=0.99.6 \
+  --ref v0.99.7 \
+  -f version=0.99.7 \
   -f publishable=true
 gh run list --workflow release-candidate.yml --limit 5
 gh run watch RUN_ID
@@ -298,7 +298,7 @@ sha256sum /tmp/rpg-reactor-candidate/*/*
 
 Inspect every `artifact-manifest-*.json` and confirm:
 
-- `version` is `0.99.6`, `nwjsVersion` is `0.107.0`, and `sourceCommit` is the tag commit.
+- `version` is `0.99.7`, `nwjsVersion` is `0.120.0`, and `sourceCommit` is the tag commit.
 - `mode` is `publish`; Windows/macOS have `signed: true`.
 - `releaseBuild` is true and `starter` is `bundled-demo`.
 - Every listed size and SHA-256 matches the adjacent file.
@@ -325,7 +325,7 @@ xcrun stapler validate "RPG Reactor.app"
 On each actual target OS, extract into a new directory and perform these tests:
 
 1. Launch the editor without a console error or signing warning.
-2. Confirm About/package version is `0.99.6`.
+2. Confirm About/package version is `0.99.7`.
 3. Open the bundled Reactor One Demo and verify its maps, database, plugins, music, images, and effects are present.
 4. On Reactor One, check 3D, orbit the rendered map, uncheck 3D, confirm the 2D map is intact, then check 3D again. Repeat this on physical Windows and the other desktop targets; the process must remain alive throughout.
 5. Create and save a new project outside the extracted application directory.
@@ -353,12 +353,12 @@ is absent, it recovers with `gh release create --verify-tag`. It does not run
 the build worker.
 
 If recovery creates the release because **Publish Release** did not run, rerun
-**Publish Release** with version `0.99.6` before announcing the release. That
+**Publish Release** with version `0.99.7` before announcing the release. That
 replaces generated fallback notes with the authoritative changelog file.
 
 ```bash
 gh workflow run release.yml \
-  -f version=0.99.6 \
+  -f version=0.99.7 \
   -f candidate_run_id=RUN_ID \
   -f publish_itch=false
 gh run watch RELEASE_RUN_ID
@@ -389,15 +389,15 @@ Release as a draft or delete it and use the itch dashboard to select the prior
 build on each channel. Do not reuse the version or silently replace assets.
 
 ```bash
-gh release delete v0.99.6 --yes
+gh release delete v0.99.7 --yes
 ```
 
 If the tag points to the wrong commit, delete the remote tag only after the
 Release is removed and before announcing the version:
 
 ```bash
-git push origin :refs/tags/v0.99.6
-git tag -d v0.99.6
+git push origin :refs/tags/v0.99.7
+git tag -d v0.99.7
 ```
 
 Correct the source, increment the version, rerun the complete checklist, and

@@ -101,6 +101,11 @@ test('pinned codec provenance is immutable and included in notices', () => {
     assert.match(notice, /GNU Lesser General Public License v2\.1 or later/);
     assert.match(notice, new RegExp(record.buildCommit));
     assert.match(notice, new RegExp(record.ffmpegCommit));
+    // NW.js 0.120.0 (2026-11-17): the release tag's commit, and the ffmpeg_revision in Chromium 157.0.8103.39's DEPS.
+    const current = codec.provenance('0.120.0');
+    assert.equal(current.buildCommit, 'b73b2a97a3eafeaffd5207590784c325504c469b');
+    assert.equal(current.ffmpegCommit, '5c85ff666b3434d9323b83437f910ad8431ab7c9');
+    assert.ok(codec.provenance(require('../build-scripts/release-config.cjs').NW_VERSION || '0.120.0'), 'the pinned NW.js version has a codec record');
 });
 
 test('corrupt cached and downloaded codec archives are rejected', async () => {

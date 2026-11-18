@@ -2540,7 +2540,7 @@
 
         if (typeof Game_Interpreter !== "undefined" && !Game_Interpreter.prototype.updateWaitMode.__rrVehicles) {
             const selfSwitch = Game_Interpreter.prototype.command123;
-            Game_Interpreter.prototype.command123 = function(params) {
+            Game_Interpreter.prototype.command123 = function(params) { params = params || this._params || [];
                 const event = $gameMap && this._mapId === $gameMap._mapId ? $gameMap.event(this._eventId) : null;
                 if (!event || !event._rrIdentity) return selfSwitch.call(this, params);
                 const home = event._rrIdentity.split(":").map(Number);
@@ -2548,7 +2548,7 @@
                 return true;
             };
             const branch = Game_Interpreter.prototype.command111;
-            Game_Interpreter.prototype.command111 = function(params) {
+            Game_Interpreter.prototype.command111 = function(params) { params = params || this._params || [];
                 // (A Battle Room's events keep self switches of their own.)
                 const event = params[0] === 2 && !this._reactorRoom && $gameMap && this._mapId === $gameMap._mapId ? $gameMap.event(this._eventId) : null;
                 if (!event || !event._rrIdentity) return branch.call(this, params);

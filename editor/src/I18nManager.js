@@ -37,7 +37,7 @@ function normalizeI18nLanguage(language) {
     return RR_LANGUAGES.find(candidate => candidate.id.toLowerCase() === normalized)?.id || 'en';
 }
 
-const RR_APP_VERSION = '0.99.6';
+const RR_APP_VERSION = '0.99.7';
 
 const RR_DB_TYPE_KEYS = {
     actors: 'menu.actors', classes: 'menu.classes', skills: 'menu.skills', items: 'menu.items',
@@ -381,6 +381,7 @@ const RR_I18N_STRINGS = {
         'about.compatibility': 'Create amazing RPG games with a professional editor that runs on Windows, Mac, and Linux. Compatible with RPG Maker MZ and MV projects in most cases; runtime compatibility depends primarily on the project\'s corescripts and plugins.',
         'about.linksTitle': 'Psychronic Links',
         'about.catalyst': 'RPG Catalyst Forums',
+        'about.website': 'RPGReactor.org - Engine, Assets And Documentation',
         'about.itch': 'Itch.io - Plugins And Tools',
         'about.steam': 'Steam - Psychronic Games',
         'about.github': 'GitHub - Other Projects',

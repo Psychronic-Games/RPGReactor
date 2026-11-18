@@ -28,11 +28,16 @@ REM
 REM The graphics backend for this machine: a note the editor left on an earlier
 REM run, from what the game found by playing (PlaytestManager.editorBackend).
 REM The browser reads its backend from its command line before the editor
-REM runs, so it has to be said here. Only the two names below are taken.
+REM runs, so it has to be said here. Only the names below are taken.
+REM Vulkan goes without DirectComposition, or its window shows nothing
+REM (ProjectManager.WINDOW_PRESENT_ARG), and without pipeline libraries, or
+REM what is blended shows its triangles, and without the swapchain's maintenance
+REM extension, or a resize crashes the graphics process on NVIDIA
+REM (ProjectManager.PIPELINE_LIBRARY_ARG).
 set "RR_ANGLE="
 set "RR_ANGLE_ARGS="
 if exist "%LOCALAPPDATA%\RPGReactor\editor-angle.txt" set /p RR_ANGLE=<"%LOCALAPPDATA%\RPGReactor\editor-angle.txt"
 if /i "%RR_ANGLE%"=="gl" set "RR_ANGLE_ARGS=--use-angle=gl --rr-editor-angle=gl"
 if /i "%RR_ANGLE%"=="d3d11on12" set "RR_ANGLE_ARGS=--use-angle=d3d11on12 --rr-editor-angle=d3d11on12"
-if /i "%RR_ANGLE%"=="vulkan" set "RR_ANGLE_ARGS=--use-angle=vulkan --rr-editor-angle=vulkan"
+if /i "%RR_ANGLE%"=="vulkan" set "RR_ANGLE_ARGS=--use-angle=vulkan --disable-direct-composition --disable-angle-features=supportsGraphicsPipelineLibrary,supportsSwapchainMaintenance1 --rr-editor-angle=vulkan"
 start "" "%NW_BINARY%" . %RR_ANGLE_ARGS%

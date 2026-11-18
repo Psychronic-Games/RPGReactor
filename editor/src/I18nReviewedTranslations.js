@@ -16992,6 +16992,30 @@ globalThis.RR_REVIEWED_TRANSLATIONS.sections.pl.Vehicles = 'Pojazdy';
  for(const [locale,values] of Object.entries(rows))keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);
 }
 
+// V-Sync, a setting of the project (Database > System 2 > Advanced Settings), 2026-11-17. A machine-assisted first pass, flagged for review.
+{
+ const rows={
+ "ja":"垂直同期",
+ "zh-Hant":"垂直同步",
+ "zh-Hans":"垂直同步",
+ "ko":"수직 동기화",
+ "es":"Sincronización vertical",
+ "pt":"Sincronização vertical",
+ "fr":"Synchronisation verticale",
+ "it":"Sincronizzazione verticale",
+ "de":"Vertikale Synchronisation",
+ "ru":"Вертикальная синхронизация",
+ "pl":"Synchronizacja pionowa",
+ "el":"Κάθετος συγχρονισμός",
+ "ar":"المزامنة العمودية",
+ "tr":"Dikey eşitleme",
+ "id":"Sinkronisasi vertikal",
+ "vi":"Đồng bộ dọc",
+ "th":"ซิงค์แนวตั้ง"
+ };
+ for(const [locale,value] of Object.entries(rows))globalThis.RR_REVIEWED_TRANSLATIONS.text[locale]["V-Sync"]=value;
+}
+
 // Build › Web › Play from a server.
 {
  const keys=["Play from a server", "The build is one small page that shows the game from the address below. For store pages with size limits, such as itch.io: the game itself stays on your server.", "Game address", "Enter the address the game is played at. It starts with https://"];
@@ -17015,4 +17039,36 @@ globalThis.RR_REVIEWED_TRANSLATIONS.sections.pl.Vehicles = 'Pojazdy';
  "th":["เล่นจากเซิร์ฟเวอร์", "บิลด์นี้เป็นหน้าเล็ก ๆ เพียงหน้าเดียวที่แสดงเกมจากที่อยู่ด้านล่าง สำหรับหน้าร้านค้าที่จำกัดขนาด เช่น itch.io: ตัวเกมยังคงอยู่บนเซิร์ฟเวอร์ของคุณ", "ที่อยู่ของเกม", "ป้อนที่อยู่ที่ใช้เล่นเกม ขึ้นต้นด้วย https://"]
  };
  for(const [locale,values] of Object.entries(rows))keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);
+}
+
+// Deploy Editor › Web › Play from a server.
+{
+ const keys=["The package is one small page that shows the editor from the address below. For store pages with size limits: the editor itself stays on your server.", "Editor address", "Enter the address the editor is opened at. It starts with https://"];
+ const rows={
+ "ja":["パッケージは、下のアドレスからエディターを表示する小さなページ1枚だけになります。サイズ制限のあるストアページ向けです。エディター本体はあなたのサーバーに置いたままです。", "エディターのアドレス", "エディターを開くアドレスを入力してください。https:// で始まります。"],
+ "zh-Hant":["套件只有一個小頁面,會從下方位址顯示編輯器。適用於有大小限制的商店頁面:編輯器本身仍留在您的伺服器上。", "編輯器位址", "請輸入開啟編輯器的位址。以 https:// 開頭。"],
+ "zh-Hans":["软件包只有一个小页面,会从下方地址显示编辑器。适用于有大小限制的商店页面:编辑器本身仍留在您的服务器上。", "编辑器地址", "请输入打开编辑器的地址。以 https:// 开头。"],
+ "ko":["패키지는 아래 주소의 에디터를 보여 주는 작은 페이지 하나뿐입니다. 용량 제한이 있는 스토어 페이지용이며, 에디터 자체는 사용자의 서버에 그대로 있습니다.", "에디터 주소", "에디터를 여는 주소를 입력하세요. https:// 로 시작합니다."],
+ "es":["El paquete es una sola página pequeña que muestra el editor desde la dirección de abajo. Para páginas de tienda con límites de tamaño: el editor en sí se queda en tu servidor.", "Dirección del editor", "Introduce la dirección en la que se abre el editor. Empieza por https://"],
+ "pt":["O pacote é uma única página pequena que mostra o editor a partir do endereço abaixo. Para páginas de loja com limite de tamanho: o editor em si fica no seu servidor.", "Endereço do editor", "Digite o endereço em que o editor é aberto. Ele começa com https://"],
+ "fr":["Le paquet est une seule petite page qui affiche l'éditeur depuis l'adresse ci-dessous. Pour les pages de boutique limitées en taille : l'éditeur lui-même reste sur votre serveur.", "Adresse de l'éditeur", "Saisissez l'adresse à laquelle l'éditeur s'ouvre. Elle commence par https://"],
+ "de":["Das Paket ist eine einzige kleine Seite, die den Editor von der unten stehenden Adresse anzeigt. Für Shop-Seiten mit Größenbeschränkung: Der Editor selbst bleibt auf Ihrem Server.", "Editor-Adresse", "Geben Sie die Adresse ein, unter der der Editor geöffnet wird. Sie beginnt mit https://"],
+ "it":["Il pacchetto è una sola piccola pagina che mostra l'editor dall'indirizzo qui sotto. Per le pagine dei negozi con limiti di dimensione: l'editor vero e proprio resta sul tuo server.", "Indirizzo dell'editor", "Inserisci l'indirizzo a cui si apre l'editor. Inizia con https://"],
+ "ru":["Пакет состоит из одной небольшой страницы, которая показывает редактор по адресу ниже. Для страниц магазинов с ограничением размера: сам редактор остаётся на вашем сервере.", "Адрес редактора", "Введите адрес, по которому открывается редактор. Он начинается с https://"],
+ "pl":["Pakiet to jedna mała strona, która pokazuje edytor spod adresu poniżej. Dla stron sklepów z limitem rozmiaru: sam edytor zostaje na Twoim serwerze.", "Adres edytora", "Wpisz adres, pod którym otwiera się edytor. Zaczyna się od https://"],
+ "el":["Το πακέτο είναι μία μικρή σελίδα που δείχνει τον επεξεργαστή από την παρακάτω διεύθυνση. Για σελίδες καταστημάτων με όρια μεγέθους: ο ίδιος ο επεξεργαστής μένει στον διακομιστή σας.", "Διεύθυνση επεξεργαστή", "Εισαγάγετε τη διεύθυνση στην οποία ανοίγει ο επεξεργαστής. Ξεκινά με https://"],
+ "ar":["الحزمة صفحة صغيرة واحدة تعرض المحرّر من العنوان أدناه. لصفحات المتاجر التي تحدّ الحجم: يبقى المحرّر نفسه على خادمك.", "عنوان المحرّر", "أدخل العنوان الذي يُفتح عليه المحرّر. يبدأ بـ https://"],
+ "tr":["Paket, düzenleyiciyi aşağıdaki adresten gösteren tek bir küçük sayfadır. Boyut sınırı olan mağaza sayfaları içindir: düzenleyicinin kendisi sunucunuzda kalır.", "Düzenleyici adresi", "Düzenleyicinin açıldığı adresi girin. https:// ile başlar."],
+ "id":["Paket ini hanya satu halaman kecil yang menampilkan editor dari alamat di bawah. Untuk halaman toko dengan batas ukuran: editor itu sendiri tetap berada di server Anda.", "Alamat editor", "Masukkan alamat tempat editor dibuka. Diawali dengan https://"],
+ "vi":["Gói này chỉ là một trang nhỏ hiển thị trình biên tập từ địa chỉ bên dưới. Dành cho trang cửa hàng có giới hạn dung lượng: bản thân trình biên tập vẫn nằm trên máy chủ của bạn.", "Địa chỉ trình biên tập", "Hãy nhập địa chỉ nơi trình biên tập được mở. Địa chỉ bắt đầu bằng https://"],
+ "th":["แพ็กเกจนี้เป็นหน้าเล็ก ๆ เพียงหน้าเดียวที่แสดงตัวแก้ไขจากที่อยู่ด้านล่าง สำหรับหน้าร้านค้าที่จำกัดขนาด: ตัวแก้ไขเองยังคงอยู่บนเซิร์ฟเวอร์ของคุณ", "ที่อยู่ของตัวแก้ไข", "ป้อนที่อยู่ที่ใช้เปิดตัวแก้ไข ขึ้นต้นด้วย https://"]
+ };
+ for(const [locale,values] of Object.entries(rows))keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);
+}
+
+// Help › About and the welcome page: the engine's own site.
+{
+ const rows={"ja":"RPGReactor.org - エンジン、素材、ドキュメント","zh-Hant":"RPGReactor.org - 引擎、素材與文件","zh-Hans":"RPGReactor.org - 引擎、素材与文档","ko":"RPGReactor.org - 엔진, 에셋, 문서","es":"RPGReactor.org - Motor, recursos y documentación","pt":"RPGReactor.org - Motor, recursos e documentação","fr":"RPGReactor.org - Moteur, ressources et documentation","de":"RPGReactor.org - Engine, Assets und Dokumentation","it":"RPGReactor.org - Motore, risorse e documentazione","ru":"RPGReactor.org - движок, ресурсы и документация","pl":"RPGReactor.org - silnik, zasoby i dokumentacja","el":"RPGReactor.org - Μηχανή, πόροι και τεκμηρίωση","ar":"RPGReactor.org - المحرّك والموارد والتوثيق","tr":"RPGReactor.org - Motor, varlıklar ve belgeler","id":"RPGReactor.org - Mesin, aset, dan dokumentasi","vi":"RPGReactor.org - Engine, tài nguyên và tài liệu","th":"RPGReactor.org - เอนจิน แอสเซ็ต และเอกสาร"};
+ const keyed=globalThis.RR_REVIEWED_TRANSLATIONS.keyed||(globalThis.RR_REVIEWED_TRANSLATIONS.keyed={});
+ for(const [locale,value] of Object.entries(rows))(keyed[locale]||(keyed[locale]={}))['about.website']=value;
 }

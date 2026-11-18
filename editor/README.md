@@ -250,7 +250,7 @@ Package the RPG Reactor editor itself for desktop or web distribution.
 Maintainers can produce the same release worker configuration non-interactively
 with `node build-scripts/release-editor.cjs --target <linux|windows|macos|web>
 --mode <candidate|publish> --version <package-version> --output-root <directory>`.
-The CLI pins NW.js 0.107.0, creates a fresh versioned output directory, and
+The CLI pins NW.js 0.120.0, creates a fresh versioned output directory, and
 writes a hashed artifact manifest. Publish mode additionally requires a clean
 checkout and verified native signing/notarization. See
 [`../docs/RELEASE-CHECKLIST.md`](../docs/RELEASE-CHECKLIST.md).

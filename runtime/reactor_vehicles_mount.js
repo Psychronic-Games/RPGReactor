@@ -112,7 +112,7 @@
     if (typeof Game_Interpreter !== "undefined" && typeof Game_Interpreter.prototype.command314 === "function" && !Game_Interpreter.prototype.command314.__rrMount) {
         // Recover All for the entire party mends its vehicles on this map too.
         const recoverAll = Game_Interpreter.prototype.command314;
-        Game_Interpreter.prototype.command314 = function(params) {
+        Game_Interpreter.prototype.command314 = function(params) { params = params || this._params || [];
             const result = recoverAll.apply(this, arguments);
             if (params && params[0] === 0 && params[1] === 0) M.recover();
             return result;

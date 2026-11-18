@@ -162,9 +162,11 @@ class ProjectManager {
     static GPU_CHROMIUM_ARGS = Object.freeze(['--force-high-performance-gpu', '--ignore-gpu-blocklist']);
 
     /**
-     * No vsync and no frame-rate limit: the game draws as fast as the machine allows (its logic still runs at 60).
-     * Locked to the screen, a frame that missed its refresh waited for the next one, and a 180 Hz screen showed
-     * every slightly slow frame as a drop to 90. `"reactorVsync": true` in the manifest takes them out.
+     * No vsync and no frame-rate limit: the game draws as fast as the machine allows (its logic still runs at 60),
+     * each frame shown the moment it is drawn, which can tear. Only for a project with V-Sync off (Database >
+     * System 2 > Advanced Settings; `"reactorVsync": false` in the manifest). V-Sync is on by default since
+     * 2026-11-17, as in NW.js itself: players reported tearing, and the owner found it more even on a 180 Hz monitor.
+     * (From 2026-11-07 to then every project carried these.)
      */
     static UNCAPPED_CHROMIUM_ARGS = Object.freeze(['--disable-gpu-vsync', '--disable-frame-rate-limit']);
 
@@ -176,7 +178,9 @@ class ProjectManager {
      * `--use-angle=<name>`, with `"reactorAngle": "<name>"` beside it to say the editor wrote it
      * (applyGpuChromiumArgs). The game's own learning stands down for a project that names its backend.
      * Vulkan can be named and is never tried by Auto: on the Iris Xe laptop the game ran on it and the window
-     * stayed white (2026-11-08 and 2026-11-15), so it is for whoever has seen it draw on the machines they ship to.
+     * stayed blank (2026-11-08 and 2026-11-15; two causes, both answered 2026-11-16: WINDOW_PRESENT_ARG here and
+     * Graphics.LayerUploads in the runtime; and PIPELINE_LIBRARY_ARG for the snow it then showed), so it is for
+     * whoever has seen it draw on the machines they ship to.
      */
     static GRAPHICS_BACKENDS = Object.freeze(['d3d11', 'd3d11on12', 'gl', 'vulkan']);
     static SOFTWARE_VIDEO_ARG = '--disable-accelerated-video-decode';
@@ -185,6 +189,28 @@ class ProjectManager {
     // the frame that first draws it (RTX 5070 on Linux, first room of the Demo: the game's thread waited 170 to 515 ms
     // and one frame took 0.9 to 1.15 s; with it 25 to 35 ms and 0.2 s, 2026-11-15).
     static PARALLEL_SHADERS_ARG = '--enable-angle-features=enableParallelCompileAndLink';
+    // Under Windows the browser hands its window's picture to DirectComposition, which takes it from Direct3D. On
+    // Vulkan nothing reaches the screen that way: the game runs and its window is one flat dark grey, title bar and
+    // all (Iris Xe laptop, NW.js 0.107, 2026-11-16: the Demo, and a bare WebGL page of a triangle just the same;
+    // a picture taken through the debugger showed the page drawn, a picture of the screen did not). With this the
+    // browser presents straight to the window, as it does on Linux. Another system does not know the switch.
+    static WINDOW_PRESENT_ARG = '--disable-direct-composition';
+    // Vulkan's pipeline libraries (draw state linked from parts, ANGLE's supportsGraphicsPipelineLibrary) fill a
+    // triangle's edges twice on the Iris Xe under Windows: whatever is blended shows its triangles as a net, and the
+    // lights' glow, drawn small and filtered up, as snow over the lit floor (2026-11-16; the glow's small picture
+    // had 500 texels standing out of its neighbours where OpenGL's had 30, and 30 with the libraries off). Without
+    // them the first room ran no slower (42.0 and 41.5 frames a second against 40.1 and 40.5) with fewer long frames.
+    // Not measured on another card; unless the project names ANGLE features to disable itself.
+    // The same switch turns off the swapchain's maintenance extension (ANGLE's supportsSwapchainMaintenance1): with it
+    // on, the RTX 3060 laptop (NVIDIA 32.0.16.1742, Optimus beside an Intel UHD) crashes the graphics process at the
+    // first resize of a Vulkan window, and the process started again cannot take the window back ("already connected
+    // to a VkSurfaceKHR"): the Demo's window stays black from its title on, since the game sizes its window at start.
+    // A bare WebGL page of a triangle does the same on a resizeTo (not on a maximize); Direct3D 11 and OpenGL do not,
+    // nor Vulkan with this feature off (2026-11-17: the title, the first map and a resize in play all drawn on the
+    // screen). Its surface twin, supportsSurfaceMaintenance1, off alone still crashed.
+    static PIPELINE_LIBRARY_ARG = '--disable-angle-features=supportsGraphicsPipelineLibrary,supportsSwapchainMaintenance1';
+    // Written by the editor of 2026-11-16 into a Vulkan project's manifest: taken for ours, replaced and removed as ours.
+    static OLDER_PIPELINE_LIBRARY_ARGS = Object.freeze(['--disable-angle-features=supportsGraphicsPipelineLibrary']);
     static normalizeGraphicsBackend(value) {
         return ProjectManager.GRAPHICS_BACKENDS.includes(value) ? value : 'auto';
     }
@@ -914,7 +940,7 @@ class ProjectManager {
             name: this.getProjectPackageName(projectName),
             version: engineVersion,
             main: 'index.html',
-            'chromium-args': ['--force-color-profile=srgb', '--window-size=1280,720', ...ProjectManager.GPU_CHROMIUM_ARGS, ...ProjectManager.UNCAPPED_CHROMIUM_ARGS].join(' '),
+            'chromium-args': ['--force-color-profile=srgb', '--window-size=1280,720', ...ProjectManager.GPU_CHROMIUM_ARGS].join(' '),
             window: {
                 title: projectName,
                 width: 1280,
@@ -1168,7 +1194,7 @@ class ProjectManager {
 
     /**
      * Put the GPU switches and the no-vsync switches in a game manifest's chromium-args, after the project's own
-     * arguments; `"reactorHighPerformanceGpu": false` takes the GPU ones out instead, `"reactorVsync": true` the
+     * arguments; `"reactorHighPerformanceGpu": false` takes the GPU ones out instead, `"reactorVsync": false` puts the
      * no-vsync ones. `backend` (the project's Graphics Backend: one of GRAPHICS_BACKENDS, or "auto") puts the
      * project's own backend in as `--use-angle=<name>` and marks it `reactorAngle`; "auto" takes out one the
      * editor put there, and leaves a `--use-angle` someone wrote by hand (no such mark) and `"reactorAngle":
@@ -1182,20 +1208,27 @@ class ProjectManager {
         let next = packageData.reactorHighPerformanceGpu === false
             ? args.filter(arg => !wanted.includes(arg))
             : args.concat(wanted.filter(arg => !args.includes(arg)));
-        next = packageData.reactorVsync === true
-            ? next.filter(arg => !uncapped.includes(arg))
-            : next.concat(uncapped.filter(arg => !next.includes(arg)));
+        next = packageData.reactorVsync === false
+            ? next.concat(uncapped.filter(arg => !next.includes(arg)))
+            : next.filter(arg => !uncapped.includes(arg));
         let marked = false;
         const fixed = ProjectManager.GRAPHICS_BACKENDS, isAngle = arg => /^--use-angle=/.test(arg);
         // Vulkan cannot take a frame from the hardware video decoder (every upload fails and a 3D map's video screens
         // stay dark: the RTX 5070 on Linux, 2026-11-15), so a project on Vulkan decodes its videos in software, which
         // plays. The switch comes and goes with the editor's own Vulkan mark.
         // Its shaders build on the driver's threads (PARALLEL_SHADERS_ARG), unless the project names ANGLE features itself.
-        const software = ProjectManager.SOFTWARE_VIDEO_ARG, parallel = ProjectManager.PARALLEL_SHADERS_ARG;
+        // And its window is presented without DirectComposition (WINDOW_PRESENT_ARG), or nothing shows under Windows.
+        // And its draw state is built whole, not from pipeline libraries (PIPELINE_LIBRARY_ARG), or what is blended shows its triangles;
+        // the same switch keeps the swapchain's maintenance extension off, or a resize crashes the graphics process (NVIDIA).
+        const software = ProjectManager.SOFTWARE_VIDEO_ARG, parallel = ProjectManager.PARALLEL_SHADERS_ARG, present = ProjectManager.WINDOW_PRESENT_ARG, whole = ProjectManager.PIPELINE_LIBRARY_ARG;
+        const older = ProjectManager.OLDER_PIPELINE_LIBRARY_ARGS;
         if (backend === 'vulkan') {
             if (!next.includes(software)) next = next.concat([software]);
             if (!next.some(arg => /^--enable-angle-features=/.test(arg))) next = next.concat([parallel]);
-        } else if ((fixed.includes(backend) || backend === 'auto') && packageData.reactorAngle === 'vulkan') next = next.filter(arg => arg !== software && arg !== parallel);
+            if (!next.includes(present)) next = next.concat([present]);
+            next = next.map(arg => older.includes(arg) ? whole : arg);
+            if (!next.some(arg => /^--disable-angle-features=/.test(arg))) next = next.concat([whole]);
+        } else if ((fixed.includes(backend) || backend === 'auto') && packageData.reactorAngle === 'vulkan') next = next.filter(arg => arg !== software && arg !== parallel && arg !== present && arg !== whole && !older.includes(arg));
         if (fixed.includes(backend)) {
             const wantedAngle = '--use-angle=' + backend, angles = next.filter(isAngle);
             if (!(angles.length === 1 && angles[0] === wantedAngle)) next = next.filter(arg => !isAngle(arg)).concat([wantedAngle]);
@@ -1211,6 +1244,18 @@ class ProjectManager {
         return true;
     }
 
+    /** The project's V-Sync choice (System.json `advanced.vsync`): true or false; undefined where none was made or it cannot be read. */
+    projectVsync(projectPath) {
+        try {
+            if (!this.fs || !this.path || !projectPath) return undefined;
+            const file = this.path.join(projectPath, 'data', 'System.json');
+            if (!this.fs.existsSync(file)) return undefined;
+            const system = RRJson.parse(this.fs.readFileSync(file, 'utf8'));
+            const value = system && system.advanced ? system.advanced.vsync : undefined;
+            return value === true || value === false ? value : undefined;
+        } catch (error) { return undefined; }
+    }
+
     /** The GPU switches in an existing project's package.json; its other text is kept as written. */
     ensureGpuChromiumArgs(projectPath) {
         if (!this.fs || !this.path || !projectPath) return { ok: true, updated: false };
@@ -1222,14 +1267,19 @@ class ProjectManager {
             if (!packageData || typeof packageData !== 'object' || Array.isArray(packageData)) {
                 return { ok: true, updated: false };
             }
-            const before = packageData['chromium-args'], markBefore = packageData.reactorAngle;
-            if (!this.applyGpuChromiumArgs(packageData, this.projectGraphicsBackend(projectPath))) return { ok: true, updated: false };
+            const before = packageData['chromium-args'], markBefore = packageData.reactorAngle, vsyncBefore = packageData.reactorVsync;
+            // The project's V-Sync (Database > System 2) is the manifest's reactorVsync; on unless it says false; a project that never chose keeps what its manifest says.
+            const vsync = this.projectVsync(projectPath);
+            if (vsync === false) packageData.reactorVsync = false;
+            else if (vsync === true && 'reactorVsync' in packageData) delete packageData.reactorVsync;
+            const applied = this.applyGpuChromiumArgs(packageData, this.projectGraphicsBackend(projectPath));
+            if (!applied && packageData.reactorVsync === vsyncBefore) return { ok: true, updated: false };
             const after = packageData['chromium-args'];
             const pattern = /("chromium-args"\s*:\s*)("(?:[^"\\]|\\.)*")/;
             const match = typeof before === 'string' ? text.match(pattern) : null;
             let output;
             // (The whole file is written again where the backend's mark came or went: it is a key of its own.)
-            if (match && JSON.parse(match[2]) === before && packageData.reactorAngle === markBefore) {
+            if (match && JSON.parse(match[2]) === before && packageData.reactorAngle === markBefore && packageData.reactorVsync === vsyncBefore) {
                 output = text.replace(pattern, (_, key) => key + JSON.stringify(after));
             } else {
                 const indent = text.match(/\n([ \t]+)"/)?.[1] || 2;

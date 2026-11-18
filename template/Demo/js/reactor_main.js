@@ -1,10 +1,10 @@
 //=============================================================================
 // reactor_main.js — RPG Reactor runtime entry point
-// RPG Reactor runtime version: 0.99.6
-// RPG Reactor runtime revision: 20261115.12
+// RPG Reactor runtime version: 0.99.7
+// RPG Reactor runtime revision: 20261117.8
 // The same stamp, reachable from the F12 console: which engine is this
 // window actually running? Type RPG_REACTOR_RUNTIME_REVISION to see.
-globalThis.RPG_REACTOR_RUNTIME_REVISION = "20261115.12";
+globalThis.RPG_REACTOR_RUNTIME_REVISION = "20261117.8";
 //=============================================================================
 
 const scriptUrls = [
@@ -112,6 +112,9 @@ const effekseerWasmUrl = "js/libs/effekseer.wasm";
 //     kept, and no other is ever tried: a machine that runs well is left alone.
 //   - Otherwise the next launch tries the next backend (`plan`), a minute and a
 //     half of play each, and the best is kept if it beats the default by `MARGIN`.
+//   - Only where the trying starts goes by the card's name: Intel's integrated
+//     graphics on OpenGL, since a first session on Direct3D 11 is spent building
+//     shaders there (`startOf`).
 //   - A backend that does not start, or shows an empty picture, is marked failed
 //     and not tried again (`pending`, `checkPicture`).
 //
@@ -134,6 +137,19 @@ const ReactorBackend = {
      * (2026-11-10), and 11 on 12 gave 46 to 49 against 41 to 45.
      */
     TRY: ["d3d11", "gl", "d3d11on12"],
+    /**
+     * Where a card with nothing known of it starts. Direct3D 11 builds each lit program in half a second or more on a
+     * weak processor, about thirty of them on a first map, and a first session on it is the worst the machine will
+     * ever see: on the Iris Xe laptop a first start in North Haven drew 10.4 frames a second for more than a minute
+     * where OpenGL drew 37.8, and the first Reactor room ran at 6 to 20 for about 35 s (2026-11-15 and 16). So
+     * Intel's integrated graphics (UHD, HD, Iris: the family measured) is tried on OpenGL first; every other card
+     * starts on the browser's own backend as before. It is only where the trying starts: what the windows of play
+     * say decides as it always did, and an OpenGL that does not start or shows nothing is failed and passed over.
+     */
+    START_GL: /\bIntel\b.*\b(UHD|HD|Iris)\b.*\bGraphics\b/i,
+    startOf(renderer) {
+        return this.START_GL.test(String(renderer || "")) ? "gl" : this.ORDER[0];
+    },
     /** A backend ahead of the first by this much on the same maps is chosen at once. */
     CLEAR_GAP: 0.2,
     /** Windows of one map on each of two backends from which that map is compared; the maps kept for each backend. */
@@ -264,8 +280,10 @@ const ReactorBackend = {
         // One that looks like holding is stayed on until it is judged.
         const promising = known.filter(name => score(name) >= this.HOLDS).sort(byScore);
         if (promising.length) return promising.includes(first) ? first : promising[0];
-        // The next never tried.
-        const fresh = this.TRY.filter(name => usable.includes(name) && windows(name) === 0);
+        // The next never tried: the card's own start first (`startOf`, kept in `entry.start` at each launch).
+        const start = entry.start && entry.start !== this.TRY[0] && this.ORDER.includes(entry.start) ? entry.start : null;
+        const order = start ? [start, ...this.TRY.filter(name => name !== start)] : this.TRY;
+        const fresh = order.filter(name => usable.includes(name) && windows(name) === 0);
         if (fresh.length) return fresh[0];
         // All tried: those not plainly behind are played out, the furthest ahead first.
         const lead = Math.max(...known.map(ahead));
@@ -402,6 +420,7 @@ const ReactorBackend = {
         const key = this.gpuKey(renderer), entry = this.entryOf(store, key);
         this._store = store; this._entry = entry; this._key = key; this._current = current; this._live = true;
         store.last = key;
+        entry.start = this.startOf(renderer);
         // A backend asked for that the browser did not give cannot be had here.
         if (env.marked && env.marked !== current) this.markFailed(entry, env.marked);
         if (env.host === "editor" && env.marked === current) this.expect(entry, current);
@@ -440,7 +459,12 @@ const ReactorBackend = {
             // An unpacked game is started with its folder, which the arguments do not carry; a packed one finds its own.
             const main = process.mainModule && process.mainModule.filename ? env.path.dirname(process.mainModule.filename) : "";
             const temp = String(require("os").tmpdir() || "").toLowerCase();
-            const folder = main && !keep.some(a => !String(a).startsWith("--")) && !(temp && main.toLowerCase().startsWith(temp)) ? [main] : [];
+            // (Carried only by an argument that names a game: a folder with a manifest, or a package. A game started
+            // as `nw . test` has "test" among its arguments and not its folder: taken for the folder, the window
+            // started again opened on "Error Loading Extension", 2026-11-16.)
+            const names = a => { const s = String(a); if (s.startsWith("--")) return false;
+                try { return /\.nw$/i.test(s) || env.fs.existsSync(env.path.resolve(s, "package.json")); } catch (error) { return false; } };
+            const folder = main && !keep.some(names) && !(temp && main.toLowerCase().startsWith(temp)) ? [main] : [];
             const args = [...folder, ...keep, ...(name === this.ORDER[0] ? [] : ["--use-angle=" + name]), "--rr-angle=" + name, "--rr-hop=" + (env.hops + 1)];
             const quote = a => '"' + String(a).replace(/"/g, "") + '"';
             // After a moment: two windows on one profile at once would be taken for a second start of the same game.

@@ -46,6 +46,11 @@ test('the build is that page alone', () => {
     try {
         const made = remote.writeRemoteBuild(path.join(folder, 'game-web'), { url: 'https://demo.example.org', title: 'Game' });
         assert.deepEqual(fs.readdirSync(made.folder), ['index.html']);
+        // And the archive a store takes, the page at its top.
+        const zipped = remote.writeRemoteBuild(path.join(folder, 'game-web'), { url: 'https://demo.example.org', title: 'Game', zip: path.join(folder, 'Game-web.zip') });
+        assert.ok(fs.statSync(zipped.zip).size > 500);
+        const names = require('node:child_process').execFileSync(process.platform === 'win32' ? 'tar' : 'unzip', process.platform === 'win32' ? ['-tf', zipped.zip] : ['-Z1', zipped.zip], { encoding: 'utf8' }).trim().split(/\r?\n/);
+        assert.deepEqual(names, ['index.html']);
         assert.equal(made.address, 'https://demo.example.org/');
         assert.equal(made.bytes, fs.statSync(path.join(made.folder, 'index.html')).size);
         assert.ok(made.bytes < 8192, 'a few kilobytes (' + made.bytes + ')');
@@ -64,7 +69,7 @@ test('Build offers it with Web, asks for the address, remembers both, and the wo
     // The same rule for the address in the dialog as in the build.
     const prefer = new Function(dialog.slice(dialog.indexOf('const WebRemotePreference = {'), dialog.indexOf("if (typeof window !== 'undefined') window.WebRemotePreference")) + '; return WebRemotePreference;')();
     for (const value of ['https://demo.example.org', 'http://example.org/game/', 'javascript:alert(1)', 'example.org', 'https://a:b@example.org/', '']) assert.equal(prefer.address(value), remote.remoteAddress(value), value);
-    assert.match(worker, /if \(platform === 'web' && webRemoteUrl\) \{[\s\S]{0,400}webRemote\.writeRemoteBuild\(platformOutDir, \{ url: webRemoteUrl, title: gameTitle \}\);[\s\S]{0,900}\} else if \(browserGame\) \{/);
+    assert.match(worker, /if \(platform === 'web' && webRemoteUrl\) \{[\s\S]{0,400}webRemote\.writeRemoteBuild\(platformOutDir, \{ url: webRemoteUrl, title: gameTitle, zip: [\s\S]{0,120}\}\);[\s\S]{0,1100}\} else if \(browserGame\) \{/);
     // In every language the editor speaks.
     const reviewed = fs.readFileSync(path.join(__dirname, '..', 'src', 'I18nReviewedTranslations.js'), 'utf8');
     const block = reviewed.slice(reviewed.indexOf('// Build › Web › Play from a server.'));
@@ -73,4 +78,18 @@ test('Build offers it with Web, asks for the address, remembers both, and the wo
         assert.ok(row, id + ' has all four');
         assert.ok(row[0].includes('https://'), id + ' keeps the address form');
     }
+});
+
+test('the editor\'s own Web package has the same choice, under its usual name', () => {
+    const dialog = fs.readFileSync(path.join(__dirname, '..', 'src', 'DistEditorManager.js'), 'utf8');
+    const worker = fs.readFileSync(path.join(__dirname, '..', 'build-scripts', 'dist-editor-worker.js'), 'utf8');
+    const game = fs.readFileSync(path.join(__dirname, '..', 'build-scripts', 'build-worker.js'), 'utf8');
+    for (const id of ['dist-remote-option', 'dist-remote-on', 'dist-remote-address', 'dist-remote-url']) assert.ok(dialog.includes('id="' + id + '"'), id);
+    for (const words of ['Play from a server', 'Editor address', 'Enter the address the editor is opened at. It starts with https://']) assert.ok(dialog.includes("tt('" + words + "')"), words);
+    assert.match(dialog, /KEY: 'rr-dist-web-remote'/, 'its address is kept apart from a game\'s');
+    assert.match(worker, /if \(packageType === 'web' && webRemoteUrl\) \{[\s\S]{0,500}const archiveName = `RPGReactor-v\$\{appVersion\}-web\.zip`;[\s\S]{0,300}writeRemoteBuild\(/);
+    assert.match(game, /zip: path\.join\(outputDir, `\$\{safeFolderName\}-web\.zip`\)/);
+    const reviewed = fs.readFileSync(path.join(__dirname, '..', 'src', 'I18nReviewedTranslations.js'), 'utf8');
+    const block = reviewed.slice(reviewed.indexOf('// Deploy Editor › Web › Play from a server.'));
+    for (const id of ['ja', 'zh-Hant', 'zh-Hans', 'ko', 'es', 'pt', 'fr', 'de', 'it', 'ru', 'pl', 'el', 'ar', 'tr', 'id', 'vi', 'th']) assert.ok(new RegExp('"' + id + '":\\[("(?:[^"\\\\]|\\\\.)*", ){2}"(?:[^"\\\\]|\\\\.)*"\\]').test(block), id + ' has all three');
 });

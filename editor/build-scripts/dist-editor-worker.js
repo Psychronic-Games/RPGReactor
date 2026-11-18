@@ -64,6 +64,7 @@ const {
     includeProprietaryCodecs = false,
     createLinuxAppImage = false,
     packWebFiles = false,   // the Web build's project goes into a few archives (web-pack.cjs)
+    webRemoteUrl = '',      // the Web package is one page showing the editor from this address (web-remote.cjs)
     unusedFiles = 'web',    // the bundled Demo leaves out files its game never uses: 'off', 'web' (the Web build) or 'all'
     appImageToolPath,
     appImageRuntimePath,
@@ -1274,7 +1275,18 @@ function buildWeb(stageRoot, stagingDir) {
             (packageType !== 'platform' || !platforms.includes('linux') || !appImage.supportsHost())) {
             throw new Error('Linux AppImage requires a platform-specific Linux build on a Linux x86_64 host.');
         }
-        if (packageType === 'web') {
+        if (packageType === 'web' && webRemoteUrl) {
+            // One page that shows the editor from where it is hosted, under the Web package's own name.
+            logBlue('--- Building browser editor (played from a server) ---');
+            progress(60, 'Writing the page...');
+            const archiveName = `RPGReactor-v${appVersion}-web.zip`;
+            const made = require('./web-remote.cjs').writeRemoteBuild(path.join(stagingDir, 'web-remote'), { url: webRemoteUrl, title: 'RPG Reactor', zip: path.join(outputDir, archiveName) });
+            createdArtifacts.add(made.zip);
+            logGood(`Created: ${archiveName} (one page, ${made.bytes} bytes: it shows the editor from ${made.address})`);
+            if (/^http:\/\//i.test(made.address)) log('Warning: this address is not https. A store page served over https will refuse to show it.', '#ffcc00');
+            progress(90, 'Web build complete');
+            logInfo('');
+        } else if (packageType === 'web') {
             logBlue('--- Building browser editor ---');
             progress(30, 'Bundling browser editor...');
             buildWeb(stageRoot, stagingDir);
@@ -1523,7 +1535,7 @@ function buildWeb(stageRoot, stagingDir) {
                 + 'if exist "%LOCALAPPDATA%\\RPGReactor\\editor-angle.txt" set /p RR_ANGLE=<"%LOCALAPPDATA%\\RPGReactor\\editor-angle.txt"\r\n'
                 + 'if /i "%RR_ANGLE%"=="gl" set "RR_ANGLE_ARGS=--use-angle=gl --rr-editor-angle=gl"\r\n'
                 + 'if /i "%RR_ANGLE%"=="d3d11on12" set "RR_ANGLE_ARGS=--use-angle=d3d11on12 --rr-editor-angle=d3d11on12"\r\n'
-                + 'if /i "%RR_ANGLE%"=="vulkan" set "RR_ANGLE_ARGS=--use-angle=vulkan --rr-editor-angle=vulkan"\r\n'
+                + 'if /i "%RR_ANGLE%"=="vulkan" set "RR_ANGLE_ARGS=--use-angle=vulkan --disable-direct-composition --disable-angle-features=supportsGraphicsPipelineLibrary,supportsSwapchainMaintenance1 --rr-editor-angle=vulkan"\r\n'
                 + 'start "" "nwjs-win\\nw.exe" . %RR_ANGLE_ARGS%\r\n');
             logInfo('  RPGReactor.bat');
 

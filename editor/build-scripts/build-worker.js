@@ -654,9 +654,10 @@ async function installProprietaryCodec(platform, runtimeRoot, runtimeVersion, pr
             if (platform === 'web' && webRemoteUrl) {
                 // ── Web, played from a server: one page, none of the game's files ─────────
                 progress(Math.round(pCopy), 'Writing the page...');
-                const made = webRemote.writeRemoteBuild(platformOutDir, { url: webRemoteUrl, title: gameTitle });
+                const made = webRemote.writeRemoteBuild(platformOutDir, { url: webRemoteUrl, title: gameTitle, zip: path.join(outputDir, `${safeFolderName}-web.zip`) });
                 logGood(`One page written (${made.bytes} bytes): it shows the game from ${made.address}`);
-                logInfo('Zip this folder for the store page. The game itself is not in it: players get it from that address, so a deploy there is what they see.');
+                logGood(`Created: ${path.basename(made.zip)} (ready to upload to a store page)`);
+                logInfo('The game itself is not in it: players get it from that address, so a deploy there is what they see.');
                 if (/^http:\/\//i.test(made.address)) logWarn('This address is not https. A store page served over https will refuse to show it.');
                 progress(Math.round(pRename), 'Finalizing...');
             } else if (browserGame) {

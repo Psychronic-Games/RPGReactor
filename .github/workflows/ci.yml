@@ -66,8 +66,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      NWJS_VERSION: 0.107.0
-      NWJS_SHA256: 454c1257445ed834dc126848aea5e72a72dfc2a910fd3eafed376bb4b8fbe9b7
+      NWJS_VERSION: 0.120.0
+      NWJS_SHA256: 97baefb1795dc17a3b8e45ebc0361767ddd52aa339a015c627a4381d6945fe9f
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5

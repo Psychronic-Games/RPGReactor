@@ -238,3 +238,25 @@ test('a staged layer is sent with the 2D layer\'s unpack flags cleared, and PIXI
         }
     } finally { Reactor3D.viewport = was.viewport; L.nextFrame = was.next; }
 });
+
+test('while a map loads behind its dark screen a character\'s layers go up several a frame; in view one a frame (runtime 20261117.2)', async () => {
+    const A = Reactor3D.Arrival || (Reactor3D.Arrival = {});
+    const was = { viewport: Reactor3D.viewport, next: L.nextFrame, pacing: A.pacing, ms: L.LOAD_LAYER_MS };
+    try {
+        const view = fakeView({ parallel: true, compile: () => Promise.resolve() });
+        Reactor3D.viewport = () => view.viewport;
+        let frames = 0;
+        L.nextFrame = () => { frames++; return Promise.resolve(); };
+        const array = () => new THREE.DataArrayTexture(new Uint8Array(4 * 4 * 4 * 4), 4, 4, 4);
+        A.pacing = true; L.LOAD_LAYER_MS = 1000;
+        await L.preloadNow([[array()]]);
+        assert.equal(view.calls.filter(c => c[0] === 'initTexture').length, 4, 'every layer sent');
+        assert.equal(frames, 0, 'loading: no frame waited between layers inside the budget');
+        A.pacing = false; frames = 0;
+        await L.preloadNow([[array()]]);
+        assert.equal(frames, 4, 'in view: a layer a frame');
+        A.pacing = true; L.LOAD_LAYER_MS = 0; frames = 0;
+        await L.preloadNow([[array()]]);
+        assert.equal(frames, 4, 'LOAD_LAYER_MS = 0 keeps a layer a frame while loading too');
+    } finally { Reactor3D.viewport = was.viewport; L.nextFrame = was.next; A.pacing = was.pacing; L.LOAD_LAYER_MS = was.ms; }
+});

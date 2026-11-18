@@ -6047,10 +6047,23 @@ Spriteset_Map.prototype._rrWindowDormant = function(child, minX, maxX, minY, max
     // in the client area with their own alpha, which contentsOpacity never
     // touches. Only park on opacity when there is nothing else drawing.
     if (child.opacity !== 0 || child.contentsOpacity !== 0 || child.pause) return false;
-    const innerChildren = child._clientArea ? child._clientArea.children.length : 0;
-    const contentsSprite = child._contentsSprite ? 1 : 0;
-    const contentsBack = child._contentsBackSprite ? 1 : 0;
-    return innerChildren <= contentsSprite + contentsBack;
+    // (Every window's client area also holds its clip mask and its cursor sprite. Counted as something drawing,
+    // they kept every transparent window on the stage: Star Shift Rebellion's Moletown drew 134 textless event
+    // labels, each a colour filter's pass for its window tone, and ran at 100 to 200 frames a second where it runs
+    // at over 700 without them, 2026-11-17. The cursor counts only while it shows a rectangle.)
+    const area = child._clientArea;
+    if (!area) return true;
+    for (let i = 0; i < area.children.length; i++) {
+        const inner = area.children[i];
+        if (inner === child._contentsSprite || inner === child._contentsBackSprite || inner === child._clipMask) continue;
+        if (inner === child._cursorSprite) {
+            const rect = child._cursorRect;
+            if (inner.visible && rect && rect.width > 0 && rect.height > 0) return false;
+            continue;
+        }
+        return false;
+    }
+    return true;
 };
 
 // Culled objects live outside the display tree; fold them back in before
@@ -7516,6 +7529,8 @@ Spriteset_Map.prototype.update = function() {
         if (character && character.isSortedAbovePriority && character.isSortedAbovePriority()) sorted.push(sprites[i]);
     }
     _reactorSpritesetMapStaleUpdate.apply(this, arguments);
+    // Where the sprites were just put, for the frames drawn between updates (Graphics.FramePacing.posed).
+    if (typeof Graphics !== "undefined" && Graphics.FramePacing && Graphics.FramePacing.posed) Graphics.FramePacing.posed(this);
 };
 
 //-----------------------------------------------------------------------------

@@ -126,3 +126,25 @@ test('Options has a Frame Rate row where the monitor\'s refresh is known, and th
     assert.match(managers, /config\.frameLimit = this\.frameLimit;/);
     assert.match(managers, /this\.frameLimit = this\.readFlag\(config, "frameLimit", true\);/);
 });
+
+test('with V-Sync on the browser paces the frames: the limit\'s clock stands aside, and F2 still shows what the machine could do', () => {
+    // Outside NW.js, and in NW.js started with the no-vsync switch, nothing changes.
+    assert.equal(limit().L.vsync(), false);
+    const { L } = limit({ config: { frameLimit: false } });
+    L._vsync = true;
+    assert.equal(L.rate(), 180, 'the frames come at the monitor\'s rate whatever Options last said');
+    // Every tick the browser sends is a frame: none is skipped, and no clock of the limit\'s own is set.
+    for (let now = 1000; now < 1100; now += 1000 / 180) { assert.equal(L.wait(now), false); L.begun(now); }
+    assert.equal(L.skipped, 0);
+    assert.equal(L._next, 0);
+    // 180 frames a second came, each 1.2 ms of drawing: F2 shows what that work would allow, not 180.
+    let now = 0;
+    for (let i = 0; i < 360; i++) { now += 1000 / 180; L.note(now, i % 3 === 0 ? 1 : 0, 1.2, true); }
+    assert.ok(L.shown(180) > 700, 'what the machine could do: ' + L.shown(180).toFixed(0));
+    assert.equal(L.shown(120), 120, 'short of the monitor, the frames that came');
+    // Options offers no Frame Rate there: Unlimited could not be kept.
+    const windows = read('reactor_windows.js');
+    assert.match(windows, /&& !\(typeof Graphics\.FrameLimit\.vsync === "function" && Graphics\.FrameLimit\.vsync\(\)\);/);
+    // The switch is read from the manifest and the command line.
+    assert.match(core, /on = !\/--disable-gpu-vsync\\b\/\.test\(String\(\(nw\.App\.manifest \|\| \{\}\)\["chromium-args"\] \|\| ""\) \+ " " \+ \(nw\.App\.fullArgv \|\| \[\]\)\.join\(" "\)\);/);
+});

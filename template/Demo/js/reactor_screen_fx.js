@@ -854,7 +854,7 @@ void main() {
     // tween. A following Move Picture then replaced it before its first tick.
     // Repair that exact generated sequence when an existing import is played.
     const _Game_Interpreter_command234InitialTone = Game_Interpreter.prototype.command234;
-    Game_Interpreter.prototype.command234 = function(params) {
+    Game_Interpreter.prototype.command234 = function(params) { params = params || this._params || [];
         const previous = this._list?.[this._index - 1];
         if (legacyTone() && params[2] === 1 && !params[3]
             && previous?.code === 231 && previous.parameters[0] === params[0]) {
@@ -873,7 +873,7 @@ void main() {
         return false;
     };
     const _Game_Interpreter_command284 = Game_Interpreter.prototype.command284;
-    Game_Interpreter.prototype.command284 = function(params) {
+    Game_Interpreter.prototype.command284 = function(params) { params = params || this._params || [];
         if (!$dataSystem || !$dataSystem.rrLegacyParallax || !params[0]) {
             this._rrPendingParallax = null;
             return _Game_Interpreter_command284.call(this, params);

@@ -13,6 +13,12 @@ const PROVENANCE = {
         buildCommit: '44c5d44e78c457149c8bee98aeca9a7bb1d5659c',
         ffmpegCommit: 'e18f48eba6b367ac68b9c477ae6cbe224e36b031',
     },
+    // The release's tag commit, and the ffmpeg_revision in Chromium 157.0.8103.39's DEPS, which the
+    // prebuilt's workflow builds from and names in the release notes (checked 2026-11-17).
+    '0.120.0': {
+        buildCommit: 'b73b2a97a3eafeaffd5207590784c325504c469b',
+        ffmpegCommit: '5c85ff666b3434d9323b83437f910ad8431ab7c9',
+    },
 };
 
 function provenance(version) {

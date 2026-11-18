@@ -3076,7 +3076,12 @@ Reactor3D.Reflections = {
         // The mirror pictures: the main draw of the renderer that made them only (a mirror's own
         // draws set their slots themselves; a capture and any other renderer see none).
         const mirrors = Reactor3D.Mirrors;
-        if (mirrors && !mirrors._rendering) mirrors.apply(renderer === mirrors._renderer && !this._capturing);
+        // A capture sees the mirrors at their whole pictures (`applyCapture`): with none, its mirror walls reflected only
+        // the capture itself, so a room of mirrors held nothing but sky, and every edge of a mirror showed it.
+        if (mirrors && !mirrors._rendering) {
+            if (this._capturing && renderer === mirrors._renderer) mirrors.applyCapture(this._probe);
+            else mirrors.apply(renderer === mirrors._renderer && !this._capturing);
+        }
         if (uniforms.rrEnvMap.value === texture) return;
         uniforms.rrEnvMap.value = texture;
         uniforms.rrEnvFlip.value = live ? 1 : -1;
@@ -3200,6 +3205,20 @@ Reactor3D.withSkyAt = function(scene, position, draw) {
 
 /** How many reflections deep two facing mirrors go (each level another, smaller draw of the scene). */
 Reactor3D.MIRROR_DEPTH = 2;
+/**
+ * Past MIRROR_DEPTH, a mirror seen in a mirror shows the last frame's picture of that plane (`Mirrors._last`)
+ * instead of the cube capture: each frame adds a reflection, so two facing mirrors repeat without end, as they
+ * do in life, for no draw more. The capture had stood there: in a room walled with mirrors it holds nothing but
+ * the sky (its walls reflect only the capture itself), and a point capture bends what is near (the Demo's
+ * Mirror Room: sky past the second reflection and the ceiling bent into arches, owner, 2026-11-17). False: the capture.
+ */
+Reactor3D.MIRROR_FEEDBACK = true;
+/**
+ * What a mirror keeps of the light at each reflection inside a reflection (the main view's own mirror keeps all of
+ * its picture): a silvered glass returns about nine parts in ten, and the far reflections of two facing mirrors
+ * fade into the dark as they do in life rather than ending at a seam.
+ */
+Reactor3D.MIRROR_BOUNCE_GAIN = 0.88;
 /** The share of the frame's size water's mirror picture is drawn at (1: the frame's). */
 Reactor3D.MIRROR_WATER_SCALE = 1;
 /** How far off a panel's plane (tiles) a fragment still takes the mirror picture. */
@@ -3253,7 +3272,12 @@ Reactor3D.mirrorLookup = function(target, on, offset, scale) {
             // a lake, growing and snapping back as the view turned; owner, 2026-11-14). Far past it (water just
             // come into sight, no picture yet) the capture still stands in.
             "\t\tvec2 rrMA = clamp(rrMU, rrMirrorArea" + slot + ".xy, rrMirrorArea" + slot + ".zw);",
-            "\t\tif (rrMC.w > 0.0 && rrMirrorArea" + slot + ".z > rrMirrorArea" + slot + ".x && all(lessThan(abs(rrMU - rrMA), vec2(" + Reactor3D.MIRROR_EDGE_REACH.toFixed(3) + ")))) " + target + " = rrSRGBToLinear(textureLod(rrMirrorMap" + slot + ", rrMA, 0.0).rgb) * " + scale + ";");
+            // A slot at 2 holds the last frame's picture (Mirrors.feedback), drawn for another eye: read only where it
+            // was drawn (its edge stretched across the gap read as dark wedges), and dark past it, the far end of a
+            // tunnel of mirrors, rather than the capture's sky.
+            "\t\tfloat rrMR = rrMirrorOn" + slot + " > 1.5 ? 0.0001 : " + Reactor3D.MIRROR_EDGE_REACH.toFixed(3) + ";",
+            "\t\tif (rrMC.w > 0.0 && rrMirrorArea" + slot + ".z > rrMirrorArea" + slot + ".x && all(lessThan(abs(rrMU - rrMA), vec2(rrMR)))) " + target + " = rrSRGBToLinear(textureLod(rrMirrorMap" + slot + ", rrMA, 0.0).rgb) * " + scale + ";",
+            "\t\telse if (rrMirrorOn" + slot + " > 1.5) " + target + " = vec3(0.0);");
     }
     lines.push("\t}");
     return lines.join("\n");
@@ -3451,6 +3475,8 @@ Reactor3D.Mirrors = {
                 this._uniforms["rrMirrorArea" + slot] = { value: new THREE.Vector4(0, 0, 1, 1) };
             }
             this._uniforms.rrMirrorTolerance = { value: Reactor3D.MIRROR_TOLERANCE };
+            // A mirror finish's share of its picture: 1 in the main view, MIRROR_BOUNCE_GAIN in a mirror's own picture.
+            this._uniforms.rrMirrorGain = { value: 1 };
         }
         return this._uniforms;
     },
@@ -3465,6 +3491,7 @@ Reactor3D.Mirrors = {
         for (const target of this._targets.values()) target.dispose();
         this._targets.clear();
         this._live = null;
+        this._last = null;
         this._applied = null;
         this.active = false;
         if (this._uniforms) this.clear();
@@ -3474,6 +3501,7 @@ Reactor3D.Mirrors = {
     clear() {
         const u = this.uniforms();
         for (let slot = 0; slot < Reactor3D.MIRROR_SLOTS; slot++) { u["rrMirrorOn" + slot].value = 0; u["rrMirrorMap" + slot].value = this.dummy(); u["rrMirrorArea" + slot].value.set(0, 0, 1, 1); }
+        u.rrMirrorGain.value = 1;
     },
 
     target(slot, level, width, height) {
@@ -3691,12 +3719,141 @@ Reactor3D.Mirrors = {
     },
 
     /**
+     * A picture's free slots given the last frame's pictures of planes it draws nothing new for (MIRROR_FEEDBACK):
+     * each a plane `eye` stands in front of, never `own` (the plane being drawn, behind its own eye), never one
+     * already in a slot, and never the texture being drawn into (WebGL refuses a texture read and written in one draw).
+     * The last frame's lookup matrix maps the glass to that picture as the main view saw it: from another eye the
+     * deeper reflections stand a little off, and each is MIRROR_BOUNCE_GAIN darker, so they fade before it shows.
+     */
+    feedback(target, own, eye) {
+        const last = this._last;
+        if (!Reactor3D.MIRROR_FEEDBACK || !last || !last.length) return 0;
+        const u = this.uniforms(), at = (this._feedEye || (this._feedEye = new THREE.Vector3())).setFromMatrixPosition(eye.matrixWorld);
+        const same = (n, d, x, y, z, w) => n.x * x + n.y * y + n.z * z > 0.999 && Math.abs(d - w) < 0.05;
+        let slot = 0, given = 0;
+        for (const entry of last) {
+            if (!entry.texture || entry.texture === target.texture) continue;
+            if (own && same(entry.normal, entry.d, own.normal.x, own.normal.y, own.normal.z, own.d)) continue;
+            if (at.dot(entry.normal) - entry.d <= 0.01) continue;
+            let held = false;
+            for (let s = 0; s < Reactor3D.MIRROR_SLOTS && !held; s++) {
+                const p = u["rrMirrorPlane" + s].value;
+                held = u["rrMirrorOn" + s].value > 0.5 && same(entry.normal, entry.d, p.x, p.y, p.z, p.w);
+            }
+            if (held) continue;
+            while (slot < Reactor3D.MIRROR_SLOTS && u["rrMirrorOn" + slot].value > 0.5) slot++;
+            if (slot >= Reactor3D.MIRROR_SLOTS) break;
+            // 2: a picture from the last frame (mirrorLookup reads it only where it was drawn).
+            u["rrMirrorOn" + slot].value = 2;
+            u["rrMirrorPlane" + slot].value.set(entry.normal.x, entry.normal.y, entry.normal.z, entry.d);
+            u["rrMirrorMatrix" + slot].value.copy(entry.matrix);
+            u["rrMirrorMap" + slot].value = entry.texture;
+            if (entry.uv) u["rrMirrorArea" + slot].value.copy(entry.uv); else u["rrMirrorArea" + slot].value.set(0, 0, 1, 1);
+            given++;
+        }
+        return given;
+    },
+
+    /** The side of a mirror's whole picture (MIRROR_FEEDBACK's), in pixels: read only by reflections inside reflections. */
+    COVER_SIZE: 512,
+
+    /**
+     * A camera at `camera`'s eye reflected in `plane`, aimed at the middle of its mirror and wide enough to take in
+     * all of it (as far as 160 degrees), clipped at the glass, and the lookup matrix of its picture. The frame's own
+     * pictures are drawn for the view, and a reflection seen from another eye (a house of mirrors' deeper ones) reads
+     * parts of a mirror they never drew: as dark walls where the room's reflection should be (owner, 2026-11-17).
+     */
+    coverCamera(camera, plane, cam, matrix) {
+        const box = plane.coverBox || plane.box;
+        if (!box) return false;
+        const n = plane.normal, S = this._coverScratch || (this._coverScratch = { eye: new THREE.Vector3(), centre: new THREE.Vector3(), corner: new THREE.Vector3(),
+            plane: new THREE.Plane(), clip: new THREE.Vector4(), q: new THREE.Vector4() });
+        const eye = S.eye.setFromMatrixPosition(camera.matrixWorld), ahead = eye.dot(n) - plane.d;
+        if (ahead <= 0.01) return false;
+        eye.addScaledVector(n, -2 * ahead);
+        const centre = box.getCenter(S.centre);
+        centre.addScaledVector(n, plane.d - centre.dot(n));
+        cam.position.copy(eye);
+        if (Math.abs(n.y) > 0.9) cam.up.set(0, 0, 1); else cam.up.set(0, 1, 0);
+        cam.lookAt(centre);
+        cam.updateMatrixWorld(true);
+        let reach = 0;
+        for (let i = 0; i < 8; i++) {
+            const c = S.corner.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z);
+            c.addScaledVector(n, plane.d - c.dot(n)).applyMatrix4(cam.matrixWorldInverse);
+            const depth = -c.z;
+            reach = depth > 1e-3 ? Math.max(reach, Math.abs(c.x) / depth, Math.abs(c.y) / depth) : Infinity;
+        }
+        cam.fov = 2 * Math.atan(Math.min(reach * 1.02, 5.67)) * 180 / Math.PI;
+        cam.aspect = 1; cam.near = camera.near; cam.far = camera.far;
+        cam.updateProjectionMatrix();
+        matrix.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1).multiply(cam.projectionMatrix).multiply(cam.matrixWorldInverse);
+        // An oblique near plane on the glass, as `reflect` sets it.
+        const glass = S.plane.setFromNormalAndCoplanarPoint(n, centre).applyMatrix4(cam.matrixWorldInverse);
+        const clip = S.clip.set(glass.normal.x, glass.normal.y, glass.normal.z, glass.constant);
+        const e = cam.projectionMatrix.elements;
+        const q = S.q.set((Math.sign(clip.x) + e[8]) / e[0], (Math.sign(clip.y) + e[9]) / e[5], -1, (1 + e[10]) / e[14]);
+        clip.multiplyScalar(2 / clip.dot(q));
+        e[2] = clip.x; e[6] = clip.y; e[10] = clip.z + 1 - 0.003; e[14] = clip.w;
+        cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
+        return true;
+    },
+
+    /**
+     * Each mirror finish's whole picture (`coverCamera`), small, its own mirrors at the last frame's: what the next
+     * frame's reflections inside reflections read (MIRROR_FEEDBACK). One draw a mirror a frame.
+     */
+    renderCovers(renderer, scene, camera, planes, hidden) {
+        const covers = [], u = this.uniforms(), size = this.COVER_SIZE;
+        for (let i = 0; i < planes.length; i++) {
+            const plane = planes[i];
+            if (!plane.box || (plane.object && plane.object.userData && plane.object.userData.rrMirrorPlane)) continue;
+            const cam = (this._coverCameras || (this._coverCameras = []))[i] || (this._coverCameras[i] = new THREE.PerspectiveCamera());
+            const matrix = new THREE.Matrix4();
+            if (!this.coverCamera(camera, plane, cam, matrix)) continue;
+            const target = this.target("cover" + i, 0, size, size), previous = renderer.getRenderTarget();
+            this.clear();
+            this.feedback(target, plane, cam);
+            u.rrMirrorGain.value = Reactor3D.MIRROR_BOUNCE_GAIN;
+            for (const object of hidden) object.visible = false;
+            const detail = Reactor3D.GeometryDetail;
+            const swaps = detail && !detail._active ? detail.begin(scene, cam, size) : null;
+            if (swaps) detail._active = swaps;
+            renderer.setRenderTarget(target);
+            const warming = Reactor3D.ShaderWarmup ? Reactor3D.ShaderWarmup.passHide(renderer, scene, cam, "mirror") : null;
+            try { Reactor3D.withSkyAt(scene, cam.position, () => renderer.render(scene, cam)); }
+            finally {
+                u.rrMirrorGain.value = 1;
+                if (swaps) { detail.end(swaps); detail._active = null; }
+                if (warming) Reactor3D.ShaderWarmup.show(warming);
+                for (const object of hidden) object.visible = true;
+                renderer.setRenderTarget(previous);
+            }
+            covers.push({ normal: plane.normal, d: plane.d, texture: target.texture, matrix, uv: null });
+        }
+        return covers;
+    },
+
+    /** Whether a plane's world box, reflected in `mirror`'s plane, lies in `frustum`: seen in that mirror from the eye. */
+    seenIn(mirror, box, frustum) {
+        const n = mirror.normal, corner = this._seenCorner || (this._seenCorner = new THREE.Vector3());
+        const image = this._seenBox || (this._seenBox = new THREE.Box3());
+        image.makeEmpty();
+        for (let i = 0; i < 8; i++) {
+            corner.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z);
+            corner.addScaledVector(n, -2 * (corner.dot(n) - mirror.d));
+            image.expandByPoint(corner);
+        }
+        return frustum.intersectsBox(image);
+    },
+
+    /**
      * The mirror pictures seen from `camera`, `level` reflections deep: for
      * each plane in front of it, the view from its reflection (with the
      * other plane's own picture from there drawn first), into a target of
      * its own. Returns the slots' pictures and matrices as seen from `camera`.
      */
-    renderLevel(renderer, scene, camera, planes, level, width, height, hidden, base = 0) {
+    renderLevel(renderer, scene, camera, planes, level, width, height, hidden, base = 0, extras = null, extrasBase = 0) {
         const seen = [];
         if (level < 0 || width < 16 || height < 16) return seen;
         for (let i = 0; i < planes.length; i++) {
@@ -3709,20 +3866,28 @@ Reactor3D.Mirrors = {
             // The other mirrors as seen in this one, first.
             // (This plane is behind its own reflected camera, so only the others come back.)
             const others = planes.length > 1 ? this.renderLevel(renderer, scene, out, planes, level - 1, width >> 1, height >> 1, hidden, base).filter(entry => entry.slot !== slot) : [];
+            // The mirrors seen only in this one (a house of mirrors' side walls), drawn once for this eye, at the
+            // inner size and no deeper: past them the last frame's pictures (MIRROR_FEEDBACK). From the main eye's
+            // own pictures of them they stood mostly outside what was drawn, and showed dark.
+            const more = extras && extras.length ? this.renderLevel(renderer, scene, out, extras, 0, width >> 1, height >> 1, hidden, extrasBase) : [];
             this.clear();
             const u = this.uniforms();
-            for (const entry of others) {
-                const other = planes[entry.slot - base];
+            for (const entry of others.concat(more)) {
+                const other = entry.plane;
                 u["rrMirrorOn" + entry.slot].value = 1;
                 u["rrMirrorPlane" + entry.slot].value.set(other.normal.x, other.normal.y, other.normal.z, other.d);
                 u["rrMirrorMatrix" + entry.slot].value.copy(entry.matrix);
                 u["rrMirrorMap" + entry.slot].value = entry.texture;
             }
             const target = this.target(slot, level, width, height);
+            // The mirrors this picture shows that have none drawn anew for it: the last frame's (MIRROR_FEEDBACK).
+            this.feedback(target, plane, out);
+            // Each reflection inside a reflection keeps MIRROR_BOUNCE_GAIN of the light.
+            u.rrMirrorGain.value = Reactor3D.MIRROR_BOUNCE_GAIN;
             // Seen from the frame's own camera, only the part of the picture its water can read is drawn
             // (`plane.area`); the rest of the target is never looked up.
             const area = camera === this._eye && plane.area ? this.pixelArea(plane.area, width, height) : null;
-            if (area && area.w <= 0) { seen.push({ slot, texture: target.texture, matrix, uv: area.uv }); continue; }
+            if (area && area.w <= 0) { seen.push({ slot, plane, texture: target.texture, matrix, uv: area.uv }); continue; }
             const previous = renderer.getRenderTarget();
             // A lake is left out of its own picture: its wave crests stand above the level the glass
             // clips at, and their undersides showed in the reflection as a grid of dark blots.
@@ -3740,13 +3905,14 @@ Reactor3D.Mirrors = {
             const warming = Reactor3D.ShaderWarmup ? Reactor3D.ShaderWarmup.passHide(renderer, scene, out, "mirror") : null;
             try { Reactor3D.withSkyAt(scene, out.position, () => renderer.render(scene, out)); }
             finally {
+                u.rrMirrorGain.value = 1;
                 if (swaps) { detail.end(swaps); detail._active = null; }
                 if (warming) Reactor3D.ShaderWarmup.show(warming);
                 for (const object of hidden) object.visible = true; for (const object of own) object.visible = true;
                 if (area) this.widen(out, target, width, height);
                 renderer.setRenderTarget(previous);
             }
-            seen.push({ slot, texture: target.texture, matrix, uv: area ? area.uv : null });
+            seen.push({ slot, plane, texture: target.texture, matrix, uv: area ? area.uv : null });
         }
         return seen;
     },
@@ -3768,7 +3934,7 @@ Reactor3D.Mirrors = {
         this.active = false;
         if (!renderer || !scene || !camera || !camera.isPerspectiveCamera || (Reactor3D.isWeakGpu && Reactor3D.isWeakGpu())) return;
         // Nothing mirrors here (most maps, every frame): nothing to weigh, and no earlier plane held on to.
-        if (!candidates || !candidates.length) { this._live = null; return; }
+        if (!candidates || !candidates.length) { this._live = null; this._last = null; return; }
         camera.updateMatrixWorld(true);
         // The weighing's working values, kept: each is done with before the next statement that names it, and none
         // is held past the weighing (a plane that is scored takes copies of its normal and point). Made new, they
@@ -3848,7 +4014,7 @@ Reactor3D.Mirrors = {
                 // How much of the view it fills (per mille of the screen), as squarely as it faces.
                 const share = 1000 * cover(worldBox) * facing;
                 // (Its own normal and point: a scored plane is kept, as this frame's mirror and to weigh the next.)
-                scored.push({ normal: normal.clone(), point: point.clone(), d: normal.dot(point), score: shows * 1e6 + (inView ? 1e3 : 0) + share, share: inView ? share : 0, primary: shows > 0 || inView, object });
+                scored.push({ normal: normal.clone(), point: point.clone(), d: normal.dot(point), score: shows * 1e6 + (inView ? 1e3 : 0) + share, share: inView ? share : 0, primary: shows > 0 || inView, object, box: worldBox.clone() });
             }
         }
         // The mirror kept last frame stays unless another clearly wins: no flicker between near equals.
@@ -3879,8 +4045,22 @@ Reactor3D.Mirrors = {
                 // Read from the share itself: last frame's 1.5x on the score passed any kept plane.
                 if (p.primary && !known(p) && p.share >= 5) planes.push(p);
             }
+            // Then what is seen only in a mirror already taken (a house of mirrors' side walls, the wall behind the
+            // eye): a plane whose box, reflected in that mirror's plane, lies in the view. Left to the capture, a room
+            // walled with mirrors showed sky down both sides of its reflection.
+            for (const p of scored) {
+                if (planes.length >= (Reactor3D.tier() === "full" ? Reactor3D.MIRROR_SLOTS : 2)) break;
+                if (!known(p) && p.box && planes.some(q => this.seenIn(q, p.box, frustum))) planes.push(p);
+            }
         }
-        if (!planes.length) { this._live = null; return; }
+        if (!planes.length) { this._live = null; this._last = null; return; }
+        // A wall of several chunks is one mirror (the shader takes every fragment on its plane): its whole picture
+        // (`coverCamera`) spans every chunk's panel on that plane, or the other chunks read past it, dark.
+        for (const plane of planes) {
+            if (!plane.box) continue;
+            plane.coverBox = plane.box.clone();
+            for (const p of scored) if (p !== plane && p.box && p.normal.dot(plane.normal) > 0.999 && Math.abs(p.d - plane.d) < 0.05) plane.coverBox.union(p.box);
+        }
         const size = renderer.getDrawingBufferSize(S.size);
         // At the size the frame itself is drawn at (`scale`: the view's render scale): its fragments
         // read the picture at their own place on screen, and more texels than fragments are never read.
@@ -3897,14 +4077,45 @@ Reactor3D.Mirrors = {
         let seen;
         try {
             // The first two reflect each other; the rest once, at half size.
-            seen = this.renderLevel(renderer, scene, camera, planes.slice(0, 2), Reactor3D.MIRROR_DEPTH, width, height, hide, 0);
+            seen = this.renderLevel(renderer, scene, camera, planes.slice(0, 2), Reactor3D.MIRROR_DEPTH, width, height, hide, 0, planes.slice(2), 2);
             if (planes.length > 2) seen = seen.concat(this.renderLevel(renderer, scene, camera, planes.slice(2), 0, width >> 1, height >> 1, hide, 2));
         } finally { this._rendering = false; }
         this._live = seen.map(entry => Object.assign({ plane: planes[entry.slot] }, entry));
+        // What the next frame's deepest reflections show of these planes (MIRROR_FEEDBACK): the mirror finishes', not
+        // water's (a lake reflects no other mirror face to face, and its picture is cut to the water in view).
+        // Drawn whole and small (`renderCovers`): the view's own pictures cover only what the view sees of each mirror.
+        if (Reactor3D.MIRROR_FEEDBACK) {
+            this._rendering = true;
+            try { this._last = this.renderCovers(renderer, scene, camera, planes, hide); } finally { this._rendering = false; }
+        } else this._last = null;
         this._renderer = renderer;
         this.active = seen.length > 0;
         this._applied = null;
         this.apply(true);
+    },
+
+    /**
+     * A reflection capture's draw: the mirrors at their whole pictures (`renderCovers`, MIRROR_FEEDBACK), each one
+     * the capture's eye (`at`, its probe) stands in front of, a bounce darker. Off without them, as before.
+     */
+    applyCapture(at) {
+        if (this._applied === "capture") return;
+        this._applied = "capture";
+        this.clear();
+        const last = this._last;
+        if (!Reactor3D.MIRROR_FEEDBACK || !last || !last.length || !at) return;
+        const u = this.uniforms();
+        let slot = 0;
+        for (const entry of last) {
+            if (slot >= Reactor3D.MIRROR_SLOTS) break;
+            if (at.x * entry.normal.x + at.y * entry.normal.y + at.z * entry.normal.z - entry.d <= 0.01) continue;
+            u["rrMirrorOn" + slot].value = 2;
+            u["rrMirrorPlane" + slot].value.set(entry.normal.x, entry.normal.y, entry.normal.z, entry.d);
+            u["rrMirrorMatrix" + slot].value.copy(entry.matrix);
+            u["rrMirrorMap" + slot].value = entry.texture;
+            slot++;
+        }
+        if (slot) u.rrMirrorGain.value = Reactor3D.MIRROR_BOUNCE_GAIN;
     },
 
     /** The main draw's pictures into the slots (on), or every slot off (a capture, another renderer). */
@@ -4042,6 +4253,7 @@ Reactor3D.injectShine = function(material, shader) {
         "uniform vec3 rrSkyLight;",
         Reactor3D.mirrorUniformDeclarations(),
         "uniform float rrMirrorTolerance;",
+        "uniform float rrMirrorGain;",
         "uniform vec4 rrShine;",
         "uniform vec3 rrShineTint;",
         "uniform float rrShineAlbedo;",
@@ -4088,7 +4300,7 @@ Reactor3D.injectShine = function(material, shader) {
             "\telse rrEnv *= rrSkyLight;",
             // On a mirror panel (facing the plane's way and lying on it) the mirror picture, sharp, at this
             // fragment's own place in the reflected view.
-            Reactor3D.mirrorLookup("rrEnv", slot => "dot(rrN, rrMirrorPlane" + slot + ".xyz) > 0.92 && abs(dot(vRRWorldPos, rrMirrorPlane" + slot + ".xyz) - rrMirrorPlane" + slot + ".w) < rrMirrorTolerance", "", "1.0"),
+            Reactor3D.mirrorLookup("rrEnv", slot => "dot(rrN, rrMirrorPlane" + slot + ".xyz) > 0.92 && abs(dot(vRRWorldPos, rrMirrorPlane" + slot + ".xyz) - rrMirrorPlane" + slot + ".w) < rrMirrorTolerance", "", "rrMirrorGain"),
             "\tfloat rrF0 = mix(0.04, 1.0, rrFinish.z);",
             "\tfloat rrFres = rrF0 + (1.0 - rrF0) * pow(1.0 - clamp(dot(rrN, rrV), 0.0, 1.0), 5.0);",
             // Builder metal uses its authored metallic/roughness response, rather than a lacquer over diffuse paint.
@@ -10609,8 +10821,9 @@ Reactor3D.HalfLight = {
         // A scene lit from uniforms of its own (a battle room's) has no part in the split: the light worked out
         // afterwards is the map's (`Reactor3D.lightUniforms`, the volume), not that scene's.
         if (scene.userData && scene.userData.rrOwnLights) return null;
-        // A GPU that lights every pixel as fast as the split does (Reactor3D.fastShading) is spared the split's CPU.
-        if (this.SKIP_ON_FAST_SHADING && Reactor3D.fastShading && Reactor3D.fastShading()) return null;
+        // A GPU that lights every pixel as fast as the split does (Reactor3D.fastShading) is spared the split's CPU,
+        // unless it was tried here and bought frames (Trial).
+        if (this.SKIP_ON_FAST_SHADING && Reactor3D.fastShading && Reactor3D.fastShading() && !(this.Trial && this.Trial.use())) return null;
         if (!Reactor3D.LightVolume || !Reactor3D.LightVolume.supported(renderer)) return null;
         const walk = Reactor3D.SceneWalk, held = walk.hold(scene);
         try {
@@ -11183,6 +11396,88 @@ Reactor3D.HalfLight = {
         return (known[key] = this._fullScreen(material));
     }
 };
+
+/**
+ * Whether a card that "shades fast" by its name draws the light split after all, found by trying it.
+ *
+ * The name's rule came from one measurement: the Iris Xe on Direct3D 11, where the split saved the card nothing and
+ * cost the main thread 1.6 to 2.5 ms (2026-11-08). The same laptop on OpenGL, eight days and the light volume later:
+ * the first room walked at 39.9 and 38.9 frames a second with the split against 32.1 and 33.9 without, North Haven
+ * at 39.7, 39.9 and 40.0 against 36.1, 35.1 and 35.9, the full picture each time (2026-11-16). What a card gains is
+ * the backend's and the map's business as much as its name's, so the machine says: when Auto first finds a window
+ * of play short of its frames on such a card, and before it gives a level up, the split is drawn for a window and
+ * left out for one, turn about (the window after each change not counted: its programs are being built), and it
+ * is kept if its best window beat the best without it by GAIN. Auto holds its levels meanwhile (`note` returns
+ * true): about sixteen seconds, once for a card and backend, kept with the browser's own storage for the game.
+ * A machine that holds its rate is never tried, and loses nothing; a fixed setting (High, Medium, Low) judges no
+ * windows and keeps what was found, or the name's rule. The depth laid first (DepthFirst) stays by the name: tried
+ * the same day it bought nothing in three runs.
+ */
+Reactor3D.HalfLight.Trial = {
+    enabled: true,
+    /** Windows judged of each kind, and the share of frames the split must add. */
+    PAIRS: 2,
+    GAIN: 0.04,
+    KEY: "rr.lightSplit.1",
+    _card: null, _use: null, _run: null,
+    card() {
+        return typeof Graphics !== "undefined" && Graphics.gpuDescription ? String(Graphics.gpuDescription) : "";
+    },
+    /** What was found for `card` (true, false), or null. */
+    read(card) {
+        try { const kept = JSON.parse(localStorage.getItem(this.KEY) || "{}"); return typeof kept[card] === "boolean" ? kept[card] : null; }
+        catch (error) { return null; }
+    },
+    write(card, value) {
+        try { const kept = JSON.parse(localStorage.getItem(this.KEY) || "{}"); kept[card] = value; localStorage.setItem(this.KEY, JSON.stringify(kept)); }
+        catch (error) { /* found again next session */ }
+    },
+    /** Whether the split is drawn on this card: what is being tried now, else what was found (asked by every pass). */
+    use() {
+        if (!this.enabled) return false;
+        const card = this.card();
+        if (this._card !== card) { this._card = card; this._use = card ? this.read(card) : null; this._run = null; }
+        return this._run ? this._run.on : this._use === true;
+    },
+    /** Whether this card is one the name leaves out and nothing is found for yet. */
+    open() {
+        const H = Reactor3D.HalfLight;
+        if (!this.enabled || !H.enabled || !H.SKIP_ON_FAST_SHADING || (H.WEAK_ONLY && Reactor3D.tier() !== "weak")) return false;
+        if (!(Reactor3D.fastShading && Reactor3D.fastShading())) return false;
+        this.use();
+        return !!this._card && this._use === null;
+    },
+    /**
+     * One of Auto's windows of play, `perSecond` frames drawn in it, `short` of its frames or not. True while a
+     * trial is under way: Auto then leaves its levels as they are.
+     */
+    note(perSecond, short) {
+        let run = this._run;
+        if (!run) {
+            if (!short || !this.open()) return false;
+            this._run = { on: true, skip: true, with: [], without: [] };
+            return true;
+        }
+        if (run.skip) { run.skip = false; return true; }
+        (run.on ? run.with : run.without).push(perSecond);
+        if (run.with.length >= this.PAIRS && run.without.length >= this.PAIRS) {
+            const best = list => Math.max(...list);
+            this._use = best(run.with) >= best(run.without) * (1 + this.GAIN);
+            this.last = { with: run.with, without: run.without, use: this._use };
+            this._run = null;
+            this.write(this._card, this._use);
+            return true;
+        }
+        run.on = !run.on; run.skip = true;
+        return true;
+    },
+    /** What was found is forgotten for this card: tried again at the next short window. */
+    reset() {
+        this._run = null; this._use = null;
+        try { const kept = JSON.parse(localStorage.getItem(this.KEY) || "{}"); delete kept[this.card()]; localStorage.setItem(this.KEY, JSON.stringify(kept)); } catch (error) { /* none kept */ }
+    }
+};
+// (the end of HalfLight.Trial)
 
 Reactor3D.Lighting = { file: "reactor_3d_lighting.js" };
 })(typeof globalThis !== "undefined" ? globalThis : this);

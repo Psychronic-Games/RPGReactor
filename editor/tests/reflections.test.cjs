@@ -244,7 +244,8 @@ test('a mirror finish finds its flat panels, reflects the camera in the one faci
         M.update(renderer, new THREE.Scene(), camera, [room], null, [new THREE.Vector3(0, 0.1, 4), new THREE.Vector3(0, 1, 4), new THREE.Vector3(0, 1.8, 4)]);
         assert.equal(M.active, true);
         assert.equal(M._live.length, 2, 'the mirror before the eye and the one it reflects');
-        assert.ok(draws.length >= 2 && draws.length <= 2 * (Reactor3D.MIRROR_DEPTH + 1), 'bounded by the depth');
+        // (and, since 2026-11-17, one small whole picture a mirror for the next frame's deeper reflections: Mirrors.renderCovers)
+        assert.ok(draws.length >= 2 && draws.length <= 2 * (Reactor3D.MIRROR_DEPTH + 1) + 2, 'bounded by the depth');
         assert.equal(M.uniforms().rrMirrorOn0.value, 1);
     } finally { Reactor3D.isWeakGpu = weak; M.clear(); M.active = false; M._live = null; M._applied = null; }
 });
@@ -457,4 +458,93 @@ test('reflection pictures are written as the main passes are (sRGB) and decoded 
     assert.equal((src.match(/if \(rrEnvFlip > 0\.0\) rr(Under|EnvC) = rrSRGBToLinear\(rr(Under|EnvC)\);/g) || []).length, 2, 'and on water, above and below');
     assert.match(R.mirrorUniformDeclarations(), /#ifndef RR_SRGB_DECODE[\s\S]*vec3 rrSRGBToLinear\(vec3 c\)/);
     assert.match(src, /if \(look\.glass\) material\.forceSinglePass = true;/, 'glass is one draw, not a back pass and a front pass that change the material between them');
+});
+
+/** A room walled with mirror-finish slabs (the Demo's Mirror Room in small), a camera in it facing -z. */
+function mirrorRoom() {
+    const shiny = Reactor3D.litMaterial(new THREE.MeshBasicMaterial());
+    Reactor3D.setMaterialShine(shiny, Reactor3D.PIECE_FINISHES.mirror);
+    const room = new THREE.Group();
+    const wall = (w, d, x, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, 6, d), shiny); m.position.set(x, 3, z); m.userData.pieceChunk = 0; room.add(m); return m; };
+    const walls = [wall(20, 1, 0, -10.5), wall(20, 1, 0, 10.5), wall(1, 20, -10.5, 0), wall(1, 20, 10.5, 0)];
+    room.updateMatrixWorld(true);
+    const camera = new THREE.PerspectiveCamera(60, 16 / 9, 0.1, 200); camera.position.set(0, 1.6, 0); camera.lookAt(0, 1.6, -10); camera.updateMatrixWorld(true);
+    return { walls, camera };
+}
+
+test('facing mirrors repeat without end: a deeper reflection reads the last frame\'s picture, never the one being drawn, and darkens (runtime 20261117.3)', () => {
+    const { walls, camera } = mirrorRoom();
+    const M = Reactor3D.Mirrors, weak = Reactor3D.isWeakGpu, tier = Reactor3D.tier;
+    Reactor3D.isWeakGpu = () => false; Reactor3D.tier = () => 'full';
+    let current = null;
+    const passes = [];
+    const renderer = {
+        getRenderTarget: () => current, setRenderTarget: t => { current = t; }, getDrawingBufferSize: v => v.set(640, 360),
+        render() {
+            const u = M.uniforms(), maps = [];
+            for (let s = 0; s < Reactor3D.MIRROR_SLOTS; s++) if (u['rrMirrorOn' + s].value) maps.push(u['rrMirrorMap' + s].value);
+            passes.push({ target: current, maps, gain: u.rrMirrorGain.value });
+        }
+    };
+    try {
+        M.reset();
+        M.update(renderer, new THREE.Scene(), camera, walls, null, null);
+        assert.equal(M._live.length, 4, 'facing one wall: the wall behind and both seen in its reflection have slots too');
+        assert.equal(M._last.length, 4, 'this frame\'s pictures kept for the next');
+        const first = passes.length;
+        assert.ok(passes.every(p => p.gain === Reactor3D.MIRROR_BOUNCE_GAIN), 'every picture of a mirror is drawn a bounce darker');
+        assert.equal(M.uniforms().rrMirrorGain.value, 1, 'the main view keeps its mirrors\' whole picture');
+        const lastTextures = new Set(M._last.map(e => e.texture));
+        passes.length = 0;
+        M.update(renderer, new THREE.Scene(), camera, walls, null, null);
+        assert.equal(passes.length, first, 'no draw more for the feedback');
+        assert.ok(passes.every(p => !p.maps.includes(p.target && p.target.texture)), 'never a picture read while it is drawn');
+        const deepest = passes.filter(p => p.maps.some(t => lastTextures.has(t)));
+        assert.ok(deepest.length > 0, 'the deepest reflections take the last frame\'s pictures');
+        Reactor3D.MIRROR_FEEDBACK = false;
+        passes.length = 0;
+        M.update(renderer, new THREE.Scene(), camera, walls, null, null);
+        assert.ok(passes.some(p => p.maps.length === 0), 'switched off: the deepest picture shows the capture, as before');
+    } finally { Reactor3D.MIRROR_FEEDBACK = true; Reactor3D.isWeakGpu = weak; Reactor3D.tier = tier; M.reset(); }
+});
+
+test('a mirror finish reads its picture at the bounce gain uniform; water keeps its own tint', () => {
+    const lighting = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d_lighting.js'), 'utf8');
+    assert.match(lighting, /rrMirrorPlane" \+ slot \+ "\.w\) < rrMirrorTolerance", "", "rrMirrorGain"\),/);
+    assert.match(lighting, /"uniform float rrMirrorTolerance;",\s*"uniform float rrMirrorGain;",/);
+    assert.equal(Reactor3D.Mirrors.uniforms().rrMirrorGain.value, 1);
+});
+
+test('each mirror also gets a small whole picture for deeper reflections and the capture: every part of its wall lies inside it (runtime 20261117.4)', () => {
+    const { walls, camera } = mirrorRoom();
+    const M = Reactor3D.Mirrors, weak = Reactor3D.isWeakGpu, tier = Reactor3D.tier;
+    Reactor3D.isWeakGpu = () => false; Reactor3D.tier = () => 'full';
+    let current = null;
+    const renderer = { getRenderTarget: () => current, setRenderTarget: t => { current = t; }, getDrawingBufferSize: v => v.set(640, 360), render() {} };
+    try {
+        M.reset();
+        M.update(renderer, new THREE.Scene(), camera, walls, null, null);
+        assert.equal(M._last.length, M._live.length, 'one whole picture a mirror');
+        const own = new Set(M._live.map(e => e.texture));
+        assert.ok(M._last.every(e => !own.has(e.texture) && e.texture.image.width === M.COVER_SIZE), 'small, and apart from the view\'s own pictures');
+        for (const entry of M._last) {
+            const live = M._live.find(e => e.plane.normal.dot(entry.normal) > 0.999);
+            const box = live.plane.coverBox || live.plane.box, c = new THREE.Vector3(), p = new THREE.Vector4();
+            for (let i = 0; i < 8; i++) {
+                c.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z);
+                c.addScaledVector(entry.normal, entry.d - c.dot(entry.normal));
+                p.set(c.x, c.y, c.z, 1).applyMatrix4(entry.matrix);
+                assert.ok(p.w > 0 && p.x / p.w >= -1e-3 && p.x / p.w <= 1.001 && p.y / p.w >= -1e-3 && p.y / p.w <= 1.001, 'a corner of the mirror inside its whole picture');
+            }
+        }
+        // A capture's draw sees the mirrors at those pictures, a bounce darker; the view then has its own back.
+        M.applyCapture(new THREE.Vector3(0, 1.6, 0));
+        const u = M.uniforms();
+        assert.equal(u.rrMirrorOn0.value, 2);
+        assert.ok(M._last.some(e => e.texture === u.rrMirrorMap0.value));
+        assert.equal(u.rrMirrorGain.value, Reactor3D.MIRROR_BOUNCE_GAIN);
+        M.apply(true);
+        assert.equal(u.rrMirrorOn0.value, 1);
+        assert.equal(u.rrMirrorGain.value, 1);
+    } finally { Reactor3D.isWeakGpu = weak; Reactor3D.tier = tier; M.reset(); }
 });

@@ -3282,7 +3282,7 @@
     // fought here against the troop and the units the start rule takes. Its If Win / Escape / Lose rows follow
     // the result. On the battle screen it fights the troop whose mode was read, and it is the next battle.
     const command301 = Game_Interpreter.prototype.command301;
-    Game_Interpreter.prototype.command301 = function(params) {
+    Game_Interpreter.prototype.command301 = function(params) { params = params || this._params || [];
         if ($gameParty.inBattle() || !($gameMap.mapId() > 0)) return command301.call(this, params);
         const troopId = params[0] === 0 ? params[1] : params[0] === 1 ? $gameVariables.value(params[1]) : $gamePlayer.makeEncounterTroopId();
         const fight = $gameFight;

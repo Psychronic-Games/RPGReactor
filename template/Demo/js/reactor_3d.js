@@ -1083,6 +1083,10 @@ Reactor3D.Quality = {
         // What this window says of the graphics backend the game is running on (reactor_main.js, ReactorBackend).
         if (typeof ReactorBackend !== "undefined" && ReactorBackend._live) ReactorBackend.note(this.lastWindow);
         this.clearWindow();
+        // A card whose light split is not settled yet is tried with it and without before a level is given up
+        // (Reactor3D.HalfLight.Trial): the levels stand still meanwhile.
+        const splitTrial = Reactor3D.HalfLight && Reactor3D.HalfLight.Trial;
+        if (splitTrial && splitTrial.note(perSecond, short >= this.SLOW)) { this._slowRun = 0; return; }
         if (this.spareGpu(perSecond, busyMs, gpuMs)) return;
         // The last two windows' frames, for a step's before and after (checkStep).
         const recent = this._recent || (this._recent = []);

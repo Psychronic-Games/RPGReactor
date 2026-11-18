@@ -667,3 +667,15 @@ test('judging UltraMode7 hooks costs well under a frame', t => {
     t.diagnostic(`one judgment of the UltraMode7 hooks: ${ms.toFixed(3)} ms`);
     withinBudget(t, ms, 8, `${ms} ms`);
 });
+
+test('a mesh rewritten twice before it is drawn sends everything it ever held', () => {
+    // PIXI uploads only the bytes the last update named. A block painted with 50 tiles, then reused with 10 and
+    // repainted before its next draw, must not leave quads 10 to 50 on the card as they were.
+    const { stock } = pair();
+    const sizes = vm.runInContext(`(() => { const L = Tilemap.Layer, quads = L._newV8Quads(), sizes = [], uv = [];
+        L._ensureV8Quads(quads, 50);
+        const geometry = { attributes: { aPosition: { buffer: { data: quads.positions, update: n => sizes.push(n) } }, aUV: { buffer: { update: n => uv.push(n) } } } };
+        for (const count of [50, 10, 10, 0]) L._publishV8Quads(geometry, quads, count, false);
+        return JSON.stringify([sizes, uv, quads.used]); })()`, stock);
+    assert.deepEqual(JSON.parse(sizes), [[1600, 1600, 1600, 1600], [1600, 1600, 1600, 1600], 0]);
+});

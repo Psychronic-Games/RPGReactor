@@ -258,6 +258,9 @@ class DatabaseSystem2Editor {
             { label: 'Main Font', field: 'mainFontFilename', value: adv.mainFontFilename || '', type: 'text' },
             { label: 'Number Font', field: 'numberFontFilename', value: adv.numberFontFilename || '', type: 'text' },
             { label: 'Fallback Fonts', field: 'fallbackFonts', value: adv.fallbackFonts || '', type: 'text' },
+            // Frames shown whole, in step with the monitor (no tearing), for a frame of delay; off, each frame is shown the
+            // moment it is drawn. On unless unticked. Carried into the manifest as reactorVsync (ProjectManager.projectVsync).
+            { label: 'V-Sync', field: 'vsync', value: adv.vsync !== false, type: 'checkbox' },
             // How the game reaches the graphics card under Windows. Auto: each player's machine finds its own by
             // playing (the game's ReactorBackend); a named one is carried into the manifest (ProjectManager.GRAPHICS_BACKENDS).
             { label: 'Graphics Backend (Windows)', field: 'graphicsBackend', type: 'select',

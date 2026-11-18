@@ -101,3 +101,16 @@ test('the runtime fix reached the bundled templates', () => {
     assert.ok(fs.existsSync(demo), 'the Demo ships this file');
     assert.ok(canonical.equals(fs.readFileSync(demo)), 'and it matches runtime/');
 });
+
+test('a transparent window holding only its own mask, cursor and contents is parked', () => {
+    // Every window's client area holds these four. Counted as something drawing, they kept 134 textless event labels
+    // on Moletown's stage (Star Shift Rebellion, 2026-11-17), a colour filter's pass each.
+    const mask = {}, back = {}, contents = {}, cursor = { visible: true };
+    const label = cursorRect => windowAt({ opacity: 0, contentsOpacity: 0, _clipMask: mask, _contentsBackSprite: back, _contentsSprite: contents,
+        _cursorSprite: cursor, _cursorRect: cursorRect, _clientArea: { children: [mask, back, cursor, contents] } });
+    assert.equal(dormant(label({ width: 0, height: 0 })), true, 'nothing it could draw');
+    assert.equal(dormant(label({ width: 96, height: 36 })), false, 'a cursor showing a rectangle is drawn');
+    const gauge = label({ width: 0, height: 0 });
+    gauge._clientArea.children.push({});
+    assert.equal(dormant(gauge), false, 'a sprite added inside it still draws');
+});

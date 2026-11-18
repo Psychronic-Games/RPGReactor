@@ -3808,12 +3808,18 @@
 
         html.rr-web #event-editor-modal > div,
         html.rr-web #map-properties-modal > div,
-        html.rr-web #image-picker-modal > div,
-        html.rr-web .modal-content {
+        html.rr-web #image-picker-modal > div {
             width: min(100%, 1400px) !important;
             min-width: 0 !important;
             max-width: calc(100vw - 16px) !important;
             height: min(100%, 1000px) !important;
+            max-height: calc(100dvh - 16px) !important;
+        }
+
+        /* About and the Audio Player keep the size they have on the desktop, held inside the browser's window. */
+        html.rr-web .modal-content {
+            min-width: 0 !important;
+            max-width: calc(100vw - 16px) !important;
             max-height: calc(100dvh - 16px) !important;
         }
 

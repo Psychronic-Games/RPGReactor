@@ -143,7 +143,9 @@ test('a lookup outside the drawn part keeps the capture: the shader tests the sl
     const glsl = Reactor3D.mirrorLookup('rrEnv', () => 'true', '', '1.0');
     // Since 2026-11-14 a lookup a little past the area reads the area's edge (a view turned since the picture was drawn);
     // further off, and with an empty area, the capture is kept.
-    assert.match(glsl, /vec2 rrMA = clamp\(rrMU, rrMirrorArea0\.xy, rrMirrorArea0\.zw\);\s*if \(rrMC\.w > 0\.0 && rrMirrorArea0\.z > rrMirrorArea0\.x && all\(lessThan\(abs\(rrMU - rrMA\), vec2\(0\.100\)\)\)\)/);
+    // (Since 2026-11-17 a slot at 2, the last frame's picture, reads only where it was drawn and is dark past it.)
+    assert.match(glsl, /vec2 rrMA = clamp\(rrMU, rrMirrorArea0\.xy, rrMirrorArea0\.zw\);\s*float rrMR = rrMirrorOn0 > 1\.5 \? 0\.0001 : 0\.100;\s*if \(rrMC\.w > 0\.0 && rrMirrorArea0\.z > rrMirrorArea0\.x && all\(lessThan\(abs\(rrMU - rrMA\), vec2\(rrMR\)\)\)\)/);
+    assert.match(glsl, /\telse if \(rrMirrorOn0 > 1\.5\) rrEnv = vec3\(0\.0\);/);
     assert.match(Reactor3D.mirrorUniformDeclarations(), /uniform vec4 rrMirrorArea0;/);
     const u = M.uniforms();
     u.rrMirrorArea1.value.set(0.2, 0.2, 0.4, 0.4);

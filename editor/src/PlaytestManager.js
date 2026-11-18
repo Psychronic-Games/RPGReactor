@@ -13,6 +13,14 @@ class PlaytestManager {
      * opts out with "reactorAngle": "default" in its package.json; any other GPU, or another system, is left alone.
      */
     static WEAK_ANGLE_ARGS = Object.freeze(['--use-angle=d3d11on12']);
+    /**
+     * Intel's integrated graphics starts on OpenGL instead, as the game itself does with nothing known of the card
+     * (ReactorBackend.startOf, the same pattern): on the Iris Xe, Direct3D 11 on 12 lost to OpenGL once both were
+     * played on the same map (35-39 frames a second against 41-46, 2026-11-11), and a first session on either
+     * Direct3D backend is spent building shaders. The integrated Radeons keep the older guess: not measured.
+     */
+    static INTEL_ANGLE_ARGS = Object.freeze(['--use-angle=gl']);
+    static INTEL_GPU_PATTERN = /\bIntel\b.*\b(UHD|HD|Iris)\b.*\bGraphics\b/i;
     static WEAK_GPU_PATTERN = /\b(Intel|UHD|Iris|HD Graphics|Radeon\(TM\) Graphics|Radeon Graphics|Vega \d+ Graphics)\b/i;
     static weakAngleArgs(platform, rendererDescription, packageData) {
         if (platform !== 'win32' || !rendererDescription) return [];
@@ -21,6 +29,7 @@ class PlaytestManager {
         // Plain Direct3D 11 only: already another backend (or a project's own --use-angle) is not touched.
         if (!/Direct3D11 /.test(description) || /Direct3D11on12/.test(description)) return [];
         if (packageData && typeof packageData['chromium-args'] === 'string' && /--use-angle=/.test(packageData['chromium-args'])) return [];
+        if (PlaytestManager.INTEL_GPU_PATTERN.test(description)) return PlaytestManager.INTEL_ANGLE_ARGS.slice();
         return PlaytestManager.WEAK_GPU_PATTERN.test(description) ? PlaytestManager.WEAK_ANGLE_ARGS.slice() : [];
     }
 
@@ -93,7 +102,7 @@ class PlaytestManager {
         const host = '--rr-angle-host=editor';
         if (PlaytestManager.BACKENDS.includes(plan)) return plan === 'd3d11' ? ['--rr-angle=d3d11', host] : [`--use-angle=${plan}`, `--rr-angle=${plan}`, host];
         const guess = PlaytestManager.weakAngleArgs(platform, rendererDescription, packageData);
-        return guess.length ? [...guess, '--rr-angle=d3d11on12', host] : ['--rr-angle=d3d11', host];
+        return guess.length ? [...guess, '--rr-angle=' + guess[0].slice('--use-angle='.length), host] : ['--rr-angle=d3d11', host];
     }
 
     /** The editor's own WebGL renderer, as the game will see it on this machine ("" when it will not say). */

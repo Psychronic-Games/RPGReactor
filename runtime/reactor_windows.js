@@ -3086,7 +3086,9 @@ Window_Options.prototype.addGeneralOptions = function() {
  */
 Window_Options.FRAME_TEXT = { name: "Frame Rate", monitor: "Monitor", unlimited: "Unlimited" };
 Window_Options.offersFrameRate = function() {
-    return typeof Graphics !== "undefined" && !!Graphics.FrameLimit && Graphics.FrameLimit.enabled && Graphics.FrameLimit.hz() > 0;
+    return typeof Graphics !== "undefined" && !!Graphics.FrameLimit && Graphics.FrameLimit.enabled && Graphics.FrameLimit.hz() > 0
+        // With V-Sync on (the project's setting) the browser holds frames to the monitor: there is no Unlimited to offer.
+        && !(typeof Graphics.FrameLimit.vsync === "function" && Graphics.FrameLimit.vsync());
 };
 Window_Options.prototype.addFrameRateOption = function() {
     if (Window_Options.offersFrameRate()) this.addCommand(Window_Options.FRAME_TEXT.name, "frameLimit");

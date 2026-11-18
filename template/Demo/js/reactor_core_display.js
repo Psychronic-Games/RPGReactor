@@ -1618,7 +1618,7 @@ Tilemap.prototype._rrAnimateChunk = function(state, chunk) {
                 uvs[p + 5] = uvs[p + 7] = bottom + dv;
             }
         }
-        part.geometry.attributes.aUV.buffer.update(part.quads.used * 8 * 4);
+        part.geometry.attributes.aUV.buffer.update(Math.max(part.quads.high || 0, part.quads.used) * 8 * 4);
         const stats = Tilemap.Layer._v8Stats();
         stats.animPatches = (stats.animPatches || 0) + 1;
         if (started) stats.animPatchMs = (stats.animPatchMs || 0) + performance.now() - started;
@@ -2552,14 +2552,20 @@ Tilemap.Layer._publishV8Quads = function(geometry, quads, count, grew) {
     }
     const written = Math.max(count, quads.used);
     quads.used = count;
+    // The most quads these arrays have held. PIXI sends a buffer to the card when its mesh is next drawn, and only
+    // as many bytes as the LAST update named: a block rewritten twice while hidden (painted ahead of the view,
+    // then repainted or reused for another block with fewer tiles) sent the smaller count, and the card kept the
+    // tiles past it from the mesh's earlier life: a piece of a building standing in the road, or tiles gone,
+    // now and then (Star Shift Rebellion, 2026-11-17). So every update names all that was ever written.
+    const high = quads.high = Math.max(quads.high || 0, written);
     const positionBuffer = geometry.attributes.aPosition.buffer;
     if (grew || positionBuffer.data !== quads.positions) {
         geometry.positions = quads.positions;
         geometry.uvs = quads.uvs;
         geometry.indices = quads.indices;
-    } else if (written > 0) {
-        positionBuffer.update(written * 8 * 4);
-        geometry.attributes.aUV.buffer.update(written * 8 * 4);
+    } else if (high > 0) {
+        positionBuffer.update(high * 8 * 4);
+        geometry.attributes.aUV.buffer.update(high * 8 * 4);
     }
 };
 

@@ -46,7 +46,7 @@ html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
 </head>
 <body>
 <iframe id="game" src="${link}" title="${name}" allow="${allow}" allowfullscreen></iframe>
-<div id="away" hidden><div><div>${name} could not be reached just now.</div><a href="${link}" target="_blank" rel="noopener">Open the game in a new tab</a></div></div>
+<div id="away" hidden><div><div>${name} could not be reached just now.</div><a href="${link}" target="_blank" rel="noopener">Open in a new tab</a></div></div>
 <script>
 (function () {
     var frame = document.getElementById("game"), away = document.getElementById("away");
@@ -65,12 +65,23 @@ html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
 `;
 }
 
-/** Writes the build: the page alone, in a folder made empty for it. Returns { folder, address, bytes }. */
-function writeRemoteBuild(folder, { url, title } = {}) {
+/**
+ * Writes the build: the page alone, in a folder made empty for it, and with `zip` (a path) the archive a store
+ * takes, the page at its top. Returns { folder, address, bytes, zip }.
+ */
+function writeRemoteBuild(folder, { url, title, zip } = {}) {
     const page = remotePage(url, title);
+    fs.rmSync(folder, { recursive: true, force: true });
     fs.mkdirSync(folder, { recursive: true });
     fs.writeFileSync(path.join(folder, 'index.html'), page);
-    return { folder, address: remoteAddress(url), bytes: Buffer.byteLength(page) };
+    if (zip) {
+        fs.rmSync(zip, { force: true });
+        const { execFileSync } = require('child_process');
+        // As the editor's other archives are made: the system's zip, and on Windows its tar, which writes one too.
+        if (process.platform === 'win32') execFileSync('tar', ['-a', '-c', '-f', zip, '-C', folder, 'index.html'], { stdio: 'pipe' });
+        else execFileSync('zip', ['-qXDj', zip, path.join(folder, 'index.html')], { stdio: 'pipe' });
+    }
+    return { folder, address: remoteAddress(url), bytes: Buffer.byteLength(page), zip: zip || '' };
 }
 
 module.exports = { remoteAddress, remotePage, writeRemoteBuild };

@@ -12771,17 +12771,90 @@ Reactor3D.InstanceCull = {
         if (camera.parent === null && camera.matrixWorldAutoUpdate !== false) camera.updateMatrixWorld();
         frustum.setFromProjectionMatrix(matrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
         let hidden = null;
+        this.last.measured = 0; this.last.hidden = 0;
         for (const object of group.children) {
             if (!object.visible || object.userData.rrNoCull || !this.skinned(object)) continue;
             const span = Reactor3D.instanceSpan(object);
             sphere.center.setFromMatrixPosition(object.matrixWorld);
             sphere.center.y += span * 0.5;
             sphere.radius = span * this.SPAN_REACH + this.PAD;
-            if (frustum.intersectsSphere(sphere)) continue;
+            if (frustum.intersectsSphere(sphere) && !(this.tight && this.outside(object, frustum, sphere, span))) continue;
             object.visible = false;
             (hidden || (hidden = [])).push(object);
         }
         return hidden;
+    },
+    /**
+     * The closer test, for an instance the wide sphere keeps. That sphere is about 3.7 tiles across for a figure of
+     * 1.8, so that no pose leaves it, and a follower a whole body's width outside the picture was still drawn: in
+     * five samples of a party of eight walking North Haven, one or two of them each time sent 51 to 77 thousand
+     * triangles with no pixel showing, 12 to 29% of the characters' own (2026-11-16). Where the body's own sphere
+     * (half a span and a little) is outside the frustum too, the instance is measured as it stands: the box of
+     * its skeletons' joints, with the spheres of its rigid meshes (what it holds and wears) and a margin for the flesh
+     * round the joints. Outside the frustum by that box, it is hidden. The bones' places are those of the last
+     * draw (this one's are worked out after the cull), a frame's movement inside the margin. An instance with no
+     * bones to measure, or whose bones are not where it stands (not placed yet), is kept.
+     *
+     * Left off. It hides what it should and nothing else (64 character samples with the view's own pixels counted:
+     * three of the seven that showed nothing were hidden, none that showed a pixel), but a follower is outside the
+     * margin only now and then: walking North Haven it took the characters' triangles from 429 to 412 thousand a
+     * frame and 1.2 draws of 26, and the frame rate did not move (33.6 against 34.8 a second, turn about over six
+     * windows; the card 21.2 against 21.6 ms). `tight = true` switches it on, for a map where more of a crowd
+     * stands at the picture's edge.
+     */
+    tight: false,
+    BODY_REACH: 0.5,
+    BODY_PAD: 0.25,
+    // The margin round the joints: 0.4 of a tile, or 0.15 of the span for a big body. It was 0.6 and 0.3: a figure 2.7
+    // tiles tall (span 3) carried 0.9 of a tile each way and was still "in view" a body's width outside the picture.
+    TIGHT_PAD: 0.4,
+    TIGHT_SPAN: 0.15,
+    /** What the last `hide` measured closely, and hid by it. */
+    last: { measured: 0, hidden: 0 },
+    outside(object, frustum, sphere, span) {
+        const wide = sphere.radius;
+        sphere.radius = span * this.BODY_REACH + this.BODY_PAD;
+        const bodyIn = frustum.intersectsSphere(sphere);
+        sphere.radius = wide;
+        if (bodyIn) return false;
+        const box = this._box || (this._box = new THREE.Box3()), point = this._point || (this._point = new THREE.Vector3());
+        const part = this._part || (this._part = new THREE.Sphere());
+        box.makeEmpty();
+        let bones = 0;
+        // (The joints of each skin's skeleton, each skeleton once: they are plain objects here, not THREE.Bone, so
+        // the walk cannot know them by their kind.)
+        const stamp = this._stamp = (this._stamp || 0) + 1;
+        const stack = this._stack || (this._stack = []);
+        stack.length = 0; stack.push(object);
+        while (stack.length) {
+            const node = stack.pop();
+            if (node.isSkinnedMesh) {
+                const skeleton = node.skeleton;
+                if (skeleton && skeleton.bones && skeleton.__rrCullStamp !== stamp) {
+                    skeleton.__rrCullStamp = stamp;
+                    const joints = skeleton.bones;
+                    for (let i = 0; i < joints.length; i++) { box.expandByPoint(point.setFromMatrixPosition(joints[i].matrixWorld)); bones++; }
+                }
+            } else if (node.isMesh && node.visible && node.geometry) {
+                const g = node.geometry;
+                if (!g.boundingSphere) g.computeBoundingSphere();
+                if (g.boundingSphere && Number.isFinite(g.boundingSphere.radius)) {
+                    part.copy(g.boundingSphere).applyMatrix4(node.matrixWorld);
+                    box.expandByPoint(point.copy(part.center).addScalar(part.radius));
+                    box.expandByPoint(point.copy(part.center).addScalar(-part.radius));
+                }
+            }
+            const children = node.children;
+            for (let i = 0; i < children.length; i++) stack.push(children[i]);
+        }
+        this.last.measured++;
+        if (!bones || box.isEmpty()) return false;
+        // Bones not where the instance stands (never drawn yet, or held somewhere else): not measured.
+        if (box.distanceToPoint(sphere.center) > span) return false;
+        box.expandByScalar(Math.max(this.TIGHT_PAD, span * this.TIGHT_SPAN));
+        if (frustum.intersectsBox(box)) return false;
+        this.last.hidden++;
+        return true;
     },
     show(hidden) {
         if (hidden) for (const object of hidden) object.visible = true;
@@ -16275,9 +16348,25 @@ Reactor3D.LayeredParts = {
         return turn;
     },
 
+    /**
+     * While a map loads behind its dark screen (its arrival's model wait, or a map scene not yet started), layers go
+     * up for this many ms of a frame, not one a frame: nothing is seen, and a layer a frame ran one queue for every
+     * character in turn (North Haven's 18: about 300 layers at 30 to 55 ms a frame, the last characters done 2 to 3
+     * s after the map's wait for them had given up, RTX 3060 laptop, 2026-11-17). In view, a layer a frame as before.
+     */
+    LOAD_LAYER_MS: 8,
+
+    /** Whether another layer goes up in this frame: only while the map is loading, inside LOAD_LAYER_MS of it. */
+    moreThisFrame(sliceStart) {
+        if (!(this.LOAD_LAYER_MS > 0) || performance.now() - sliceStart >= this.LOAD_LAYER_MS) return false;
+        const A = Reactor3D.Arrival, scene = typeof SceneManager !== "undefined" ? SceneManager._scene : null;
+        return !!(A && A.pacing) || (typeof Scene_Map !== "undefined" && scene instanceof Scene_Map && !scene._active);
+    },
+
     async preloadNow(lists) {
         const viewport = Reactor3D.viewport && Reactor3D.viewport(), renderer = viewport && viewport._renderer;
         if (!renderer || typeof renderer.initTexture !== "function") return;
+        let slice = performance.now();
         for (const list of lists) for (const array of list) {
             if (!array || !array.isDataArrayTexture || !array.image || !array.image.data || typeof array.addLayerUpdate !== "function") continue;
             const depth = array.image.depth, mips = array.generateMipmaps;
@@ -16292,7 +16381,7 @@ Reactor3D.LayeredParts = {
                 this.plainUnpack(renderer);
                 try { renderer.initTexture(array); } catch (error) { array.userData.rrLayersLeft = 0; array.clearLayerUpdates(); array.generateMipmaps = mips; array.needsUpdate = true; break; }
                 finally { this.handBack(viewport); }
-                await this.nextFrame();
+                if (!this.moreThisFrame(slice)) { await this.nextFrame(); slice = performance.now(); }
             }
             array.generateMipmaps = mips;
         }

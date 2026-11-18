@@ -45,7 +45,7 @@ test('release CLI config pins trusted NW.js and bundled Demo staging', () => {
             outputDir: '/tmp/rpg-release-test',
             env: {},
         });
-        assert.equal(workerData.nwVersion, '0.107.0');
+        assert.equal(workerData.nwVersion, '0.120.0');
         assert.equal(workerData.nwVersionPolicy, 'exact');
         assert.equal(workerData.releaseBuild, true);
         assert.equal(workerData.allowBundledRuntime, false);

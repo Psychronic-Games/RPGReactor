@@ -2,6 +2,7 @@
 
 One file per release or labeled development checkpoint, newest first. Each is that release's GitHub release notes; the [editor changelog](editor/CHANGELOG.md) has the full technical list for the same version.
 
+- [0.99.7](changelog/0.99.7.md) (in development)
 - [0.99.6](changelog/0.99.6.md) - 2026-11-16
 - [0.99.5](changelog/0.99.5.md) - 2026-11-12
 - [0.99.4](changelog/0.99.4.md) - 2026-11-02

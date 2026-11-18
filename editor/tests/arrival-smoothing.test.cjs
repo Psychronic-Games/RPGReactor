@@ -52,5 +52,5 @@ test('a reflection waits for a mesh\'s pictures as the view does, and the check 
 test('a merged array\'s mip levels are made after its last layer, not after every one', () => {
     const models = read('reactor_3d_models.js');
     assert.match(models, /array\.generateMipmaps = mips && \(layer === 0 \|\| layer === depth - 1\);/);
-    assert.match(models, /await this\.nextFrame\(\);\s*\}\s*array\.generateMipmaps = mips;/);
+    assert.match(models, /if \(!this\.moreThisFrame\(slice\)\) \{ await this\.nextFrame\(\); slice = performance\.now\(\); \}\s*\}\s*array\.generateMipmaps = mips;/);
 });

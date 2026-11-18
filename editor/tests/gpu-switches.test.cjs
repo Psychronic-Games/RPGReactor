@@ -44,33 +44,78 @@ test('applyGpuChromiumArgs appends after the project arguments, once', () => {
     const manager = new (loadProjectManager())();
     const pkg = { 'chromium-args': '--force-color-profile=srgb --window-size=816,624 --my-flag' };
     assert.equal(manager.applyGpuChromiumArgs(pkg), true);
-    assert.equal(pkg['chromium-args'], '--force-color-profile=srgb --window-size=816,624 --my-flag --force-high-performance-gpu --ignore-gpu-blocklist --disable-gpu-vsync --disable-frame-rate-limit');
+    assert.equal(pkg['chromium-args'], '--force-color-profile=srgb --window-size=816,624 --my-flag --force-high-performance-gpu --ignore-gpu-blocklist');
     assert.equal(manager.applyGpuChromiumArgs(pkg), false, 'nothing to add the second time');
     const partial = { 'chromium-args': '--ignore-gpu-blocklist' };
     manager.applyGpuChromiumArgs(partial);
-    assert.equal(partial['chromium-args'], '--ignore-gpu-blocklist --force-high-performance-gpu --disable-gpu-vsync --disable-frame-rate-limit');
+    assert.equal(partial['chromium-args'], '--ignore-gpu-blocklist --force-high-performance-gpu');
     const none = {};
     manager.applyGpuChromiumArgs(none);
-    assert.equal(none['chromium-args'], GPU_ARGS.join(' ') + ' --disable-gpu-vsync --disable-frame-rate-limit');
+    assert.equal(none['chromium-args'], GPU_ARGS.join(' ') + '');
 });
 
 test('reactorHighPerformanceGpu: false takes the switches out and keeps the rest', () => {
     const manager = new (loadProjectManager())();
     const pkg = { reactorHighPerformanceGpu: false, 'chromium-args': '--force-color-profile=srgb --force-high-performance-gpu --ignore-gpu-blocklist' };
     assert.equal(manager.applyGpuChromiumArgs(pkg), true);
-    assert.equal(pkg['chromium-args'], '--force-color-profile=srgb --disable-gpu-vsync --disable-frame-rate-limit', 'the GPU switches go; no vsync has its own opt-out');
+    assert.equal(pkg['chromium-args'], '--force-color-profile=srgb', 'the GPU switches go');
     assert.equal(manager.applyGpuChromiumArgs(pkg), false);
 });
 
-test('reactorVsync: true keeps vsync: the no-vsync switches stay out, the GPU ones stay in', () => {
+test('V-Sync is on unless the manifest says reactorVsync: false: then the no-vsync switches go in', () => {
     const manager = new (loadProjectManager())();
-    const pkg = { reactorVsync: true, 'chromium-args': '--force-color-profile=srgb --force-high-performance-gpu --ignore-gpu-blocklist --disable-gpu-vsync --disable-frame-rate-limit' };
+    // A manifest from 2026-11-07 to 11-17 carries the no-vsync switches: they leave, the GPU ones stay.
+    const pkg = { 'chromium-args': '--force-color-profile=srgb --force-high-performance-gpu --ignore-gpu-blocklist --disable-gpu-vsync --disable-frame-rate-limit' };
     assert.equal(manager.applyGpuChromiumArgs(pkg), true);
     assert.equal(pkg['chromium-args'], '--force-color-profile=srgb --force-high-performance-gpu --ignore-gpu-blocklist');
     assert.equal(manager.applyGpuChromiumArgs(pkg), false);
-    // A new project draws uncapped.
+    const off = { reactorVsync: false, 'chromium-args': '--force-color-profile=srgb --force-high-performance-gpu --ignore-gpu-blocklist' };
+    assert.equal(manager.applyGpuChromiumArgs(off), true);
+    assert.equal(off['chromium-args'], '--force-color-profile=srgb --force-high-performance-gpu --ignore-gpu-blocklist --disable-gpu-vsync --disable-frame-rate-limit');
+    assert.equal(manager.applyGpuChromiumArgs(off), false);
+    // A new project has vsync, and so has the Demo.
     const starter = new (loadProjectManager())().getStarterPackage('Game', '1');
-    assert.match(starter['chromium-args'], /--disable-gpu-vsync --disable-frame-rate-limit/);
+    assert.doesNotMatch(starter['chromium-args'], /--disable-gpu-vsync|--disable-frame-rate-limit/);
+    assert.doesNotMatch(fs.readFileSync(path.join(repoRoot, 'template', 'Demo', 'package.json'), 'utf8'), /--disable-gpu-vsync|--disable-frame-rate-limit/);
+});
+
+test('V-Sync is a setting of the project: System.json advanced.vsync is the manifest\'s reactorVsync', () => {
+    const ProjectManager = loadProjectManager();
+    const old = '--force-color-profile=srgb --disable-gpu-vsync --disable-frame-rate-limit';
+    const dir = tempProject(JSON.stringify({ name: 'game', 'chromium-args': old }, null, 4) + '\n');
+    try {
+        fs.mkdirSync(path.join(dir, 'data'));
+        const manager = new ProjectManager();
+        manager.fs = fs; manager.path = path;
+        const system = advanced => fs.writeFileSync(path.join(dir, 'data', 'System.json'), JSON.stringify({ advanced }));
+        const pkg = () => JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
+        // No choice made: vsync, and an older manifest's switches leave.
+        system({});
+        assert.equal(manager.projectVsync(dir), undefined);
+        assert.equal(manager.ensureGpuChromiumArgs(dir).updated, true);
+        assert.doesNotMatch(pkg()['chromium-args'], /--disable-gpu-vsync|--disable-frame-rate-limit/);
+        assert.equal('reactorVsync' in pkg(), false);
+        // Unticked: the switches go in and the manifest says why.
+        system({ vsync: false });
+        assert.equal(manager.ensureGpuChromiumArgs(dir).updated, true);
+        assert.match(pkg()['chromium-args'], /--disable-gpu-vsync --disable-frame-rate-limit/);
+        assert.equal(pkg().reactorVsync, false);
+        assert.match(pkg()['chromium-args'], /--force-high-performance-gpu/, 'the GPU switches stay');
+        assert.equal(manager.ensureGpuChromiumArgs(dir).updated, false);
+        // Ticked again: back as it was.
+        system({ vsync: true });
+        assert.equal(manager.ensureGpuChromiumArgs(dir).updated, true);
+        assert.doesNotMatch(pkg()['chromium-args'], /--disable-gpu-vsync|--disable-frame-rate-limit/);
+        assert.equal('reactorVsync' in pkg(), false);
+        assert.equal(pkg().name, 'game');
+        // A manifest that says false by hand keeps it where the project never chose.
+        fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'game', reactorVsync: false, 'chromium-args': '--force-color-profile=srgb' }));
+        system({});
+        manager.ensureGpuChromiumArgs(dir);
+        assert.equal(pkg().reactorVsync, false);
+        assert.match(pkg()['chromium-args'], /--disable-gpu-vsync/);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+    assert.match(fs.readFileSync(path.join(repoRoot, 'editor', 'src', 'database', 'DatabaseSystem2Editor.js'), 'utf8'), /label: 'V-Sync', field: 'vsync', value: adv\.vsync !== false, type: 'checkbox'/);
 });
 
 test('opening a project adds the switches without rewriting the rest of package.json', async () => {
@@ -82,7 +127,7 @@ test('opening a project adds the switches without rewriting the rest of package.
         manager.getRuntimePath = () => null;
         await manager.refreshReactorRuntime(dir, { engineVersion: 'x' });
         const after = fs.readFileSync(path.join(dir, 'package.json'), 'utf8');
-        assert.equal(after, text.replace('--window-size=1280,720"', '--window-size=1280,720 --force-high-performance-gpu --ignore-gpu-blocklist --disable-gpu-vsync --disable-frame-rate-limit"'),
+        assert.equal(after, text.replace('--window-size=1280,720"', '--window-size=1280,720 --force-high-performance-gpu --ignore-gpu-blocklist"'),
             'only the chromium-args value changed: indentation, BOM and layout stay');
         const mtime = fs.statSync(path.join(dir, 'package.json')).mtimeMs;
         await manager.refreshReactorRuntime(dir, { engineVersion: 'x' });
@@ -98,7 +143,7 @@ test('an opted-out project keeps no switches after opening', async () => {
         const manager = new ProjectManager();
         manager.getRuntimePath = () => null;
         await manager.refreshReactorRuntime(dir, { engineVersion: 'x' });
-        assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'))['chromium-args'], '--force-color-profile=srgb --disable-gpu-vsync --disable-frame-rate-limit');
+        assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'))['chromium-args'], '--force-color-profile=srgb');
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -135,7 +180,9 @@ test('the game and editor WebGL contexts ask for the high-performance GPU', () =
 test('a playtest on a weak GPU under Windows Direct3D 11 runs its WebGL through D3D11-on-12, and nothing else does', () => {
     const PlaytestManager = require('../src/PlaytestManager.js');
     const iris = 'ANGLE (Intel, Intel(R) Iris(R) Xe Graphics (0x00009A49) Direct3D11 vs_5_0 ps_5_0, D3D11)';
-    assert.deepEqual(PlaytestManager.weakAngleArgs('win32', iris, {}), ['--use-angle=d3d11on12']);
+    assert.deepEqual(PlaytestManager.weakAngleArgs('win32', iris, {}), ['--use-angle=gl'], 'Intel integrated graphics: OpenGL (2026-11-16)');
+    assert.deepEqual(PlaytestManager.weakAngleArgs('win32', 'ANGLE (Intel, Intel(R) UHD Graphics 630 (0x00003E9B) Direct3D11 vs_5_0 ps_5_0, D3D11)', {}), ['--use-angle=gl']);
+    assert.deepEqual(PlaytestManager.weakAngleArgs('win32', 'ANGLE (Intel, Intel(R) Arc(TM) A770 Graphics (0x000056A0) Direct3D11 vs_5_0 ps_5_0, D3D11)', {}), ['--use-angle=d3d11on12'], 'another Intel card keeps the older guess');
     assert.deepEqual(PlaytestManager.weakAngleArgs('win32', 'ANGLE (AMD, AMD Radeon(TM) Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)', null), ['--use-angle=d3d11on12'], 'integrated Radeon');
     assert.deepEqual(PlaytestManager.weakAngleArgs('win32', 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Laptop GPU Direct3D11 vs_5_0 ps_5_0, D3D11)', {}), [], 'a discrete GPU is left alone');
     assert.deepEqual(PlaytestManager.weakAngleArgs('linux', 'ANGLE (Intel, Mesa Intel(R) Xe Graphics (TGL GT2), OpenGL 4.6)', {}), [], 'another system is left alone');
@@ -153,7 +200,7 @@ test('a project that names its graphics backend carries it in its manifest, and 
     assert.equal(ProjectManager.normalizeGraphicsBackend('vulkan'), 'vulkan');
     assert.equal(ProjectManager.normalizeGraphicsBackend('metal'), 'auto', 'a name that is not offered is Auto');
     assert.equal(ProjectManager.normalizeGraphicsBackend(undefined), 'auto');
-    const base = '--force-color-profile=srgb --force-high-performance-gpu --ignore-gpu-blocklist --disable-gpu-vsync --disable-frame-rate-limit';
+    const base = '--force-color-profile=srgb --force-high-performance-gpu --ignore-gpu-blocklist';
     const pkg = { 'chromium-args': base };
     assert.equal(manager.applyGpuChromiumArgs(pkg, 'auto'), false, 'Auto on a plain manifest changes nothing');
     assert.equal(manager.applyGpuChromiumArgs(pkg, 'gl'), true);
@@ -177,14 +224,37 @@ test('a project that names its graphics backend carries it in its manifest, and 
     // Vulkan cannot take the hardware decoder's frames: its project decodes video in software, and only while it is on Vulkan.
     const vk = { 'chromium-args': base };
     assert.equal(manager.applyGpuChromiumArgs(vk, 'vulkan'), true);
-    assert.equal(vk['chromium-args'], base + ' --disable-accelerated-video-decode --enable-angle-features=enableParallelCompileAndLink --use-angle=vulkan', 'software video, and shaders built on the driver\'s threads');
+    // And its window is presented without DirectComposition: under Windows nothing of a Vulkan game reaches the screen through it.
+    assert.equal(vk['chromium-args'], base + ' --disable-accelerated-video-decode --enable-angle-features=enableParallelCompileAndLink --disable-direct-composition --disable-angle-features=supportsGraphicsPipelineLibrary,supportsSwapchainMaintenance1 --use-angle=vulkan', 'software video, shaders built on the driver\'s threads, a window that shows, and draw state built whole');
     assert.equal(manager.applyGpuChromiumArgs(vk, 'vulkan'), false);
     const older = { 'chromium-args': base + ' --use-angle=vulkan', reactorAngle: 'vulkan' };
     assert.equal(manager.applyGpuChromiumArgs(older, 'vulkan'), true, 'a manifest written before the switch gets it');
-    assert.match(older['chromium-args'], / --disable-accelerated-video-decode --enable-angle-features=enableParallelCompileAndLink$/);
+    assert.match(older['chromium-args'], / --disable-accelerated-video-decode --enable-angle-features=enableParallelCompileAndLink --disable-direct-composition --disable-angle-features=supportsGraphicsPipelineLibrary,supportsSwapchainMaintenance1$/);
+    // (The Demo's own manifest as the editor wrote it on 2026-11-15, before the window switch and the pipeline one.)
+    const demo = { 'chromium-args': base + ' --disable-accelerated-video-decode --enable-angle-features=enableParallelCompileAndLink --use-angle=vulkan', reactorAngle: 'vulkan' };
+    assert.equal(manager.applyGpuChromiumArgs(demo, 'vulkan'), true);
+    assert.equal(demo['chromium-args'], base + ' --disable-accelerated-video-decode --enable-angle-features=enableParallelCompileAndLink --use-angle=vulkan --disable-direct-composition --disable-angle-features=supportsGraphicsPipelineLibrary,supportsSwapchainMaintenance1');
+    assert.equal(manager.applyGpuChromiumArgs(demo, 'vulkan'), false);
+    assert.equal(manager.applyGpuChromiumArgs(demo, 'gl'), true);
+    assert.equal(demo['chromium-args'], base + ' --use-angle=gl', 'all four go with Vulkan');
+    // (The Demo's manifest as written on 2026-11-16: the libraries off, the swapchain's maintenance not yet, which
+    // crashes the graphics process at the window's first resize on the RTX 3060 laptop.)
+    const libsOnly = { 'chromium-args': base + ' --disable-accelerated-video-decode --enable-angle-features=enableParallelCompileAndLink --disable-direct-composition --disable-angle-features=supportsGraphicsPipelineLibrary --use-angle=vulkan', reactorAngle: 'vulkan' };
+    assert.equal(manager.applyGpuChromiumArgs(libsOnly, 'vulkan'), true, 'the older switch is ours and is widened');
+    assert.equal(libsOnly['chromium-args'], base + ' --disable-accelerated-video-decode --enable-angle-features=enableParallelCompileAndLink --disable-direct-composition --disable-angle-features=supportsGraphicsPipelineLibrary,supportsSwapchainMaintenance1 --use-angle=vulkan');
+    assert.equal(manager.applyGpuChromiumArgs(libsOnly, 'vulkan'), false);
+    const libsOnlyOff = { 'chromium-args': base + ' --disable-accelerated-video-decode --enable-angle-features=enableParallelCompileAndLink --disable-direct-composition --disable-angle-features=supportsGraphicsPipelineLibrary --use-angle=vulkan', reactorAngle: 'vulkan' };
+    assert.equal(manager.applyGpuChromiumArgs(libsOnlyOff, 'auto'), true);
+    assert.equal(libsOnlyOff['chromium-args'], base, 'and the older switch goes with Vulkan too');
     const features = { 'chromium-args': base + ' --enable-angle-features=supportsFoo' };
     assert.equal(manager.applyGpuChromiumArgs(features, 'vulkan'), true);
     assert.doesNotMatch(features['chromium-args'], /enableParallelCompileAndLink/, 'a project that names ANGLE features itself keeps its own (a second switch would replace them)');
+    assert.match(features['chromium-args'], / --disable-angle-features=supportsGraphicsPipelineLibrary/, 'and still has the libraries off: that is another switch');
+    const disabled = { 'chromium-args': base + ' --disable-angle-features=supportsBar' };
+    assert.equal(manager.applyGpuChromiumArgs(disabled, 'vulkan'), true);
+    assert.doesNotMatch(disabled['chromium-args'], /supportsGraphicsPipelineLibrary/, 'a project that disables ANGLE features itself keeps its own list');
+    assert.equal(manager.applyGpuChromiumArgs(disabled, 'gl'), true);
+    assert.match(disabled['chromium-args'], / --disable-angle-features=supportsBar /, 'and keeps it off Vulkan');
     assert.equal(manager.applyGpuChromiumArgs(vk, 'gl'), true);
     assert.equal(vk['chromium-args'], base + ' --use-angle=gl', 'the switch goes with Vulkan');
     assert.equal(manager.applyGpuChromiumArgs(vk, 'vulkan'), true);
@@ -251,7 +321,11 @@ test('the editor\'s own backend is the user\'s choice where one is made, else th
     assert.equal(E('d3d11on12', 'vulkan'), 'vulkan', 'Vulkan by choice');
     assert.equal(E('d3d11on12', 'metal'), 'd3d11on12', 'a name that is not offered is Auto');
     assert.equal(E('vulkan', null), '', 'and never from the machine\'s record');
-    assert.match(fs.readFileSync(path.join(editorRoot, 'RPGReactor.bat'), 'utf8'), /if \/i "%RR_ANGLE%"=="vulkan" set "RR_ANGLE_ARGS=--use-angle=vulkan --rr-editor-angle=vulkan"/);
+    // (Vulkan with the window switch and no pipeline libraries: the editor draws the same maps through the same browser.)
+    const vulkanLine = 'if /i "%RR_ANGLE%"=="vulkan" set "RR_ANGLE_ARGS=--use-angle=vulkan --disable-direct-composition --disable-angle-features=supportsGraphicsPipelineLibrary,supportsSwapchainMaintenance1 --rr-editor-angle=vulkan"';
+    assert.ok(fs.readFileSync(path.join(editorRoot, 'RPGReactor.bat'), 'utf8').includes(vulkanLine));
+    assert.ok(fs.readFileSync(path.join(editorRoot, 'build-scripts', 'dist-editor-worker.js'), 'utf8').includes(vulkanLine + '\\r\\n'), 'the packaged editor\'s launcher says the same');
+    assert.match(fs.readFileSync(path.join(editorRoot, 'src', 'main.js'), 'utf8'), /a !== '--disable-direct-composition' && !\/\^--disable-angle-features=supportsGraphicsPipelineLibrary\(,supportsSwapchainMaintenance1\)\?\$\/\.test\(a\)\);/, 'a start again on the browser\'s own backend drops both, in either spelling');
     assert.equal(require('../src/PlaytestManager.js').BACKENDS.includes('vulkan'), false, 'the game\'s planner has three backends');
     assert.equal(PlaytestManager.editorBackend('linux', iris, [], 'gl', {}, false, 'gl'), null, 'another system has nothing to choose');
     const options = fs.readFileSync(path.join(editorRoot, 'src', 'OptionsManager.js'), 'utf8');

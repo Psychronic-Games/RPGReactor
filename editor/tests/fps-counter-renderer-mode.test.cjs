@@ -76,3 +76,8 @@ test('the mode, the graphics device and the backend are a row each, so the box s
     assert.deepStrictEqual(names('ANGLE (NVIDIA, Vulkan 1.3.277 (NVIDIA NVIDIA GeForce RTX 5070 (0x00002F04)), NVIDIA)'), ['RTX 5070', 'Vulkan']);
     assert.deepStrictEqual(names(''), ['', '']);
 });
+
+test('the F2 box centres its rows, the number with the rest (owner, 2026-11-17)', () => {
+    assert.ok(coreSource.includes('"display:none; flex-direction:column; align-items:center;"'));
+});
+

@@ -650,7 +650,9 @@ test('a mirror picture read a little past its drawn area gives its edge; a refle
     const glsl = R.mirrorLookup('rrEnvC', slot => 'true', 'rrRipple', 'rrWaterTint');
     assert.ok(R.MIRROR_EDGE_REACH > 0 && R.MIRROR_EDGE_REACH <= 0.2);
     assert.match(glsl, /vec2 rrMA = clamp\(rrMU, rrMirrorArea0\.xy, rrMirrorArea0\.zw\);/);
-    assert.match(glsl, /rrMirrorArea0\.z > rrMirrorArea0\.x && all\(lessThan\(abs\(rrMU - rrMA\), vec2\(0\.100\)\)\)\) rrEnvC = rrSRGBToLinear\(textureLod\(rrMirrorMap0, rrMA, 0\.0\)\.rgb\) \* rrWaterTint;/, 'an empty area (no water in view) reads nothing');
+    // (The reach is held in rrMR since 2026-11-17: 0.1 for a picture drawn this frame, none for the last frame's, slot at 2.)
+    assert.match(glsl, /float rrMR = rrMirrorOn0 > 1\.5 \? 0\.0001 : 0\.100;/);
+    assert.match(glsl, /rrMirrorArea0\.z > rrMirrorArea0\.x && all\(lessThan\(abs\(rrMU - rrMA\), vec2\(rrMR\)\)\)\) rrEnvC = rrSRGBToLinear\(textureLod\(rrMirrorMap0, rrMA, 0\.0\)\.rgb\) \* rrWaterTint;/, 'an empty area (no water in view) reads nothing');
     assert.doesNotMatch(glsl, /textureLod\(rrMirrorMap\d, rrMU,/);
     // A screen that refreshes once an update never drew a face again after the first six.
     const core = fs.readFileSync(path.join(root, 'runtime/reactor_3d.js'), 'utf8');

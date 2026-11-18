@@ -63,6 +63,19 @@ class DistEditorManager {
                                             <span style="display: block; color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 2px;">${tt('A few zip archives in place of many files, for web hosts with file limits.')}</span>
                                         </span>
                                     </label>
+                                    <div id="dist-remote-option" style="display: none; margin-left: 28px; padding: 7px 9px; background: var(--color-bg-surface); border: 1px solid var(--color-border-subtle); border-left: 2px solid var(--color-accent-border); border-radius: 4px;">
+                                        <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer;">
+                                            <input id="dist-remote-on" type="checkbox" class="system-checkbox" style="width: 16px; height: 16px; min-width: 16px; min-height: 16px; max-width: 16px; max-height: 16px; flex: 0 0 16px; margin: 1px 0 0;">
+                                            <span>
+                                                <span style="display: block; color: var(--color-text); font-weight: 600; font-size: 12px;">${tt('Play from a server')}</span>
+                                                <span style="display: block; color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 2px;">${tt('The package is one small page that shows the editor from the address below. For store pages with size limits: the editor itself stays on your server.')}</span>
+                                            </span>
+                                        </label>
+                                        <div id="dist-remote-address" style="display: none; margin-top: 8px;">
+                                            <label for="dist-remote-url" style="display: block; color: var(--color-text); font-weight: 600; font-size: 12px;">${tt('Editor address')}</label>
+                                            <input id="dist-remote-url" class="rr-input" type="url" spellcheck="false" placeholder="https://" style="width: 100%; box-sizing: border-box; margin-top: 4px; font-size: 12px; padding: 5px 7px;">
+                                        </div>
+                                    </div>
                                 </div>
                                 <label style="margin-top: 10px; display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer;">
                                     <input id="dist-unused-files" type="checkbox" class="system-checkbox" style="width: 16px; height: 16px; min-width: 16px; min-height: 16px; max-width: 16px; max-height: 16px; flex: 0 0 16px; margin: 1px 0 0;">
@@ -214,6 +227,7 @@ class DistEditorManager {
             this.versionPicker.setEnabled(versionPolicy.value === 'exact');
         });
         document.getElementById('dist-platform-linux').addEventListener('change', () => this.updatePlatformVisibility());
+        document.getElementById('dist-remote-on').addEventListener('change', () => this.updatePlatformVisibility());
 
         // Close on background click
         this.modal.addEventListener('click', (e) => {
@@ -247,6 +261,11 @@ class DistEditorManager {
 
     }
 
+    /** Whether the Web package is one page that shows the editor from a server, and that address: kept apart from a game's. */
+    remotePreference() {
+        return this._remotePreference || (this._remotePreference = Object.assign(Object.create(window.WebRemotePreference), { KEY: 'rr-dist-web-remote' }));
+    }
+
     updatePlatformVisibility() {
         const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const type = this.modal.querySelector('input[name="dist-package-type"]:checked').value;
@@ -254,8 +273,15 @@ class DistEditorManager {
         const web = type === 'web';
         section.style.display = type === 'platform' ? 'block' : 'none';
         document.getElementById('dist-nw-section').style.display = web ? 'none' : 'block';
-        document.getElementById('dist-pack-option').style.display = web ? 'flex' : 'none';
-        document.getElementById('dist-pack-files').checked = web && !!window.WebPackPreference?.load();
+        // The Web package as one page that shows the editor from a server: with it on there is nothing to pack.
+        const remoteBox = document.getElementById('dist-remote-on'), remoteUrl = document.getElementById('dist-remote-url');
+        const kept = this.remotePreference().load();
+        if (!this._remoteShown) { this._remoteShown = true; remoteBox.checked = kept.on; remoteUrl.value = kept.url; }
+        const remote = web && remoteBox.checked;
+        document.getElementById('dist-remote-option').style.display = web ? 'block' : 'none';
+        document.getElementById('dist-remote-address').style.display = remote ? 'block' : 'none';
+        document.getElementById('dist-pack-option').style.display = web && !remote ? 'flex' : 'none';
+        document.getElementById('dist-pack-files').checked = web && !remote && !!window.WebPackPreference?.load();
         // Remembered for each kind of package: on for Web, off for desktop until changed.
         const prefs = window.DeploymentAssetPreferences;
         if (prefs) document.getElementById('dist-unused-files').checked = prefs.loadUnusedFiles(localStorage, prefs.distUnusedFilesKey(type), web);
@@ -429,8 +455,15 @@ class DistEditorManager {
         const edition = this.modal.querySelector('input[name="dist-edition"]:checked').value;
         const includeProprietaryCodecs = document.getElementById('dist-include-proprietary-codecs').checked;
         const createLinuxAppImage = document.getElementById('dist-create-linux-appimage').checked;
-        const packWebFiles = packageType === 'web' && document.getElementById('dist-pack-files').checked;
-        if (packageType === 'web') window.WebPackPreference?.save(packWebFiles);
+        const webRemoteOn = packageType === 'web' && document.getElementById('dist-remote-on').checked;
+        const webRemoteUrl = webRemoteOn ? this.remotePreference().address(document.getElementById('dist-remote-url').value) : '';
+        if (webRemoteOn && !webRemoteUrl) {
+            await RRDialog.alert(tt('Enter the address the editor is opened at. It starts with https://'), { title: tt('Deploy Editor') });
+            return;
+        }
+        if (packageType === 'web') this.remotePreference().save(webRemoteOn, webRemoteUrl || document.getElementById('dist-remote-url').value.trim());
+        const packWebFiles = packageType === 'web' && !webRemoteOn && document.getElementById('dist-pack-files').checked;
+        if (packageType === 'web' && !webRemoteOn) window.WebPackPreference?.save(packWebFiles);
         const prefs = window.DeploymentAssetPreferences;
         const leaveOut = document.getElementById('dist-unused-files').checked;
         const unusedFiles = leaveOut ? 'all' : 'off';
@@ -516,6 +549,7 @@ class DistEditorManager {
                     includeProprietaryCodecs,
                     createLinuxAppImage,
                     packWebFiles,
+                    webRemoteUrl,
                     unusedFiles,
                     releaseBuild: false,
                     releaseHashManifestPath: process.env.RPG_REACTOR_RELEASE_HASH_MANIFEST ||

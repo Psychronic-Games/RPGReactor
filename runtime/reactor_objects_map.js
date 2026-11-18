@@ -1463,7 +1463,9 @@ Game_CharacterBase.prototype.screenX = function() {
     const point = this.reactor3DScreenPoint();
     if (point) return Math.round(point.x);
     const tw = $gameMap.tileWidth();
-    return Math.floor(this.scrolledX() * tw + tw / 2);
+    // (A hair over: a scroll held to whole pixels by dividing by the tile size (YEP_CoreEngine's displayX) comes
+    // back as 108.99999999999994 for 109, one time in seven, and the picture stood a pixel off its tile.)
+    return Math.floor(this.scrolledX() * tw + tw / 2 + 1e-6);
 };
 
 Game_CharacterBase.prototype.screenY = function() {
@@ -1473,7 +1475,7 @@ Game_CharacterBase.prototype.screenY = function() {
     if (point) return Math.round(point.y - this.jumpHeight());
     const th = $gameMap.tileHeight();
     return Math.floor(
-        this.scrolledY() * th + th - this.shiftY() - this.jumpHeight()
+        this.scrolledY() * th + th - this.shiftY() - this.jumpHeight() + 1e-6
     );
 };
 

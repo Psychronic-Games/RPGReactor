@@ -148,9 +148,10 @@ test('a playtest starts on the plan the game left for this card, else on the gue
     assert.deepEqual(PlaytestManager.backendArgs('win32', rtx, {}, 'gl'), ['--use-angle=gl', '--rr-angle=gl', host]);
     assert.deepEqual(PlaytestManager.backendArgs('win32', D3D11, {}, 'd3d11'), ['--rr-angle=d3d11', host], 'the plain launch, recorded');
     // No plan yet: the weak-GPU guess, or the plain launch; either way the game records it.
-    assert.deepEqual(PlaytestManager.backendArgs('win32', D3D11, {}, null), ['--use-angle=d3d11on12', '--rr-angle=d3d11on12', host]);
+    assert.deepEqual(PlaytestManager.backendArgs('win32', D3D11, {}, null), ['--use-angle=gl', '--rr-angle=gl', host], 'Intel integrated graphics starts on OpenGL (2026-11-16)');
+    assert.deepEqual(PlaytestManager.backendArgs('win32', 'ANGLE (AMD, AMD Radeon(TM) Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)', {}, null), ['--use-angle=d3d11on12', '--rr-angle=d3d11on12', host], 'an integrated Radeon as before');
     assert.deepEqual(PlaytestManager.backendArgs('win32', rtx, {}, null), ['--rr-angle=d3d11', host]);
-    assert.deepEqual(PlaytestManager.backendArgs('win32', D3D11, {}, 'vulkan'), ['--use-angle=d3d11on12', '--rr-angle=d3d11on12', host], 'a name it does not know is no plan');
+    assert.deepEqual(PlaytestManager.backendArgs('win32', D3D11, {}, 'vulkan'), ['--use-angle=gl', '--rr-angle=gl', host], 'a name it does not know is no plan');
     // Left alone: another system, a project's own choice, an editor someone set up on another backend.
     assert.deepEqual(PlaytestManager.backendArgs('linux', GL, {}, 'gl'), []);
     assert.deepEqual(PlaytestManager.backendArgs('win32', D3D11, { reactorAngle: 'default' }, 'gl'), []);
@@ -191,6 +192,67 @@ const played = (B, maps) => {
     }
     return whole;
 };
+
+test('a card with nothing known of it starts on OpenGL when it is Intel integrated graphics, and on the first backend otherwise (runtime 20261116.2)', () => {
+    const B = make();
+    const rtx = 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Laptop GPU (0x00002560) Direct3D11 vs_5_0 ps_5_0, D3D11)';
+    assert.equal(B.startOf(D3D11), 'gl');
+    assert.equal(B.startOf(GL), 'gl', 'the same card through any backend');
+    assert.equal(B.startOf('ANGLE (Intel, Intel(R) UHD Graphics 630 (0x00003E9B) Direct3D11 vs_5_0 ps_5_0, D3D11)'), 'gl');
+    assert.equal(B.startOf('ANGLE (Intel, Intel(R) HD Graphics 520 (0x00001916) Direct3D11 vs_5_0 ps_5_0, D3D11)'), 'gl');
+    assert.equal(B.startOf('ANGLE (Intel, Intel(R) Arc(TM) A770 Graphics (0x000056A0) Direct3D11 vs_5_0 ps_5_0, D3D11)'), 'd3d11', 'not measured: as before');
+    assert.equal(B.startOf('ANGLE (AMD, AMD Radeon(TM) Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)'), 'd3d11');
+    assert.equal(B.startOf(rtx), 'd3d11');
+    assert.equal(B.startOf(''), 'd3d11');
+    // Nothing known: the first launch plans OpenGL, and the game started on Direct3D 11 gives way to it at once.
+    const entry = { backends: {}, failed: [], start: B.startOf(D3D11) };
+    assert.equal(B.plan(entry), 'gl');
+    assert.equal(entry.choice, null, 'nothing is settled by the name');
+    assert.equal(B.plan({ backends: {}, failed: [], start: B.startOf(rtx) }), 'd3d11');
+    assert.equal(B.plan({ backends: {}, failed: [] }), 'd3d11', 'an entry from an earlier runtime, before its next launch');
+    // It holds there: kept, and Direct3D is never tried.
+    entry.backends.gl = record(B, 5, 63, 0);
+    assert.equal(B.plan(entry), 'gl', 'under way');
+    entry.backends.gl = record(B, B.MIN_WINDOWS, 63, 1);
+    assert.equal(B.plan(entry), 'gl');
+    assert.equal(entry.choice, 'gl');
+    // It does not hold: Direct3D 11 is tried next, then 11 on 12, and they are set against each other as before.
+    const slow = { backends: { gl: record(B, B.MIN_WINDOWS, 40, 8) }, failed: [], start: 'gl' };
+    assert.equal(B.plan(slow), 'd3d11');
+    slow.backends.d3d11 = record(B, B.MIN_WINDOWS, 41, 8);
+    assert.equal(B.plan(slow), 'd3d11on12');
+    // OpenGL that does not start on the card is passed over.
+    const broken = { backends: {}, failed: [], start: 'gl' };
+    B.markFailed(broken, 'gl');
+    assert.equal(B.plan(broken), 'd3d11');
+    // The launch keeps the card's start in its entry before it plans, and the editor guesses by the same pattern.
+    assert.match(source, /store\.last = key;\s*entry\.start = this\.startOf\(renderer\);/);
+    const PlaytestManager = require('../src/PlaytestManager.js');
+    assert.equal(String(PlaytestManager.INTEL_GPU_PATTERN), String(B.START_GL));
+});
+
+test('a game started again on another backend is started with its own folder, whatever words came after it', () => {
+    const lines = [];
+    const start = (args, has = () => false) => {
+        const fakeProcess = { mainModule: { filename: 'C:\\games\\demo\\index.html' }, execPath: 'C:\\nw\\nw.exe', env: {} };
+        const fakeNw = { Window: { get: () => ({ hide() {} }) }, App: { quit() {} } };
+        const B = new Function('require', 'nw', 'process', 'setTimeout', block + '\nreturn ReactorBackend;')(require, fakeNw, fakeProcess, () => {});
+        B._env = { args, hops: 0, path: path.win32, fs: { existsSync: has }, cp: { spawn: (program, list) => { lines.push(list[list.length - 1]); return { unref() {} }; } } };
+        assert.equal(B.relaunch('gl'), true);
+        return lines[lines.length - 1];
+    };
+    // As a player starts it: nothing after the program.
+    assert.match(start([]), /start "" "C:\\nw\\nw\.exe" "C:\\games\\demo" "--use-angle=gl" "--rr-angle=gl" "--rr-hop=1"/);
+    // `nw . test`: the browser keeps the folder to itself and hands on "test".
+    assert.match(start(['--mute-audio', 'test']), /nw\.exe" "C:\\games\\demo" "--mute-audio" "test" "--use-angle=gl"/);
+    // A folder named among the arguments is kept as it is, and not given twice.
+    const named = start(['D:\\other\\game', 'test'], file => file === 'D:\\other\\game\\package.json');
+    assert.match(named, /nw\.exe" "D:\\other\\game" "test" "--use-angle=gl"/);
+    assert.doesNotMatch(named, /games\\demo/);
+    assert.match(start(['C:\\x\\game.nw']), /nw\.exe" "C:\\x\\game\.nw" "--use-angle=gl"/);
+    // An earlier backend's switches are not carried over.
+    assert.doesNotMatch(start(['--use-angle=d3d11on12', '--rr-angle=d3d11on12', '--rr-hop=1']), /d3d11on12/);
+});
 
 test('a backend plainly ahead on the same map on both is chosen after a few windows of each, and the third is never tried', () => {
     const B = make();

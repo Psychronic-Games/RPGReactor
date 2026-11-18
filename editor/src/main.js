@@ -1668,7 +1668,7 @@ class RPGReactor {
             const renderer = PlaytestManager.rendererDescription(), hop = PlaytestManager.editorHop(args);
             if (hop && hop !== 'default' && !renderer && !navigator.webdriver) {
                 try { fs.rmSync(note, { force: true }); } catch (error) { /* the next start asks again */ }
-                const keep = args.filter(a => !/^--(use-angle|rr-editor-angle)=/.test(a));
+                const keep = args.filter(a => !/^--(use-angle|rr-editor-angle)=/.test(a) && a !== '--disable-direct-composition' && !/^--disable-angle-features=supportsGraphicsPipelineLibrary(,supportsSwapchainMaintenance1)?$/.test(a));
                 const main = process.mainModule && process.mainModule.filename ? path.dirname(process.mainModule.filename) : '';
                 const next = [...(main && !keep.some(a => !a.startsWith('--')) ? [main] : []), ...keep, '--rr-editor-angle=default'];
                 const quote = a => '"' + String(a).replace(/"/g, '') + '"';

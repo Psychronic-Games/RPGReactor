@@ -28,5 +28,25 @@
     "file": "06-admin-characters.jpg",
     "title": "Stored characters on the admin page",
     "caption": "Every character players have made, its size and who uses it."
+  },
+  {
+    "file": "07-open-road-frame-rate.jpg",
+    "title": "The Open Road with the frame-rate box",
+    "caption": "The Demo's Open Road at 1,232 frames a second on an RTX 5070."
+  },
+  {
+    "file": "08-hatch-to-the-reactor-room.jpg",
+    "title": "A hatch down to the Reactor Room",
+    "caption": "A hatch on the Open Road: the Reactor Room is the map below, seen through the opening, with its ladder coming up to the surface."
+  },
+  {
+    "file": "09-character-groups.jpg",
+    "title": "Character Groups in the Forge",
+    "caption": "Character Groups: a hundred villagers of several species, with tabs for the outfits, clothing pieces and accessories they can wear."
+  },
+  {
+    "file": "10-audio-player.jpg",
+    "title": "The Audio Player in its own window",
+    "caption": "The Audio Player is a window of its own, with pin, minimize and fill."
   }
 ]

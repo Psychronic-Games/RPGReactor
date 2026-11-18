@@ -25,7 +25,8 @@ function runWebDistribution(outputDir) {
                 platforms: [],
                 packageType: 'web',
                 edition: 'normal',
-                nwVersion: '0.113.0',
+                // The pinned version: the build refuses one older than the newest ever shipped.
+                nwVersion: require('../build-scripts/release-config.cjs').NW_VERSION,
                 outputDir,
             }
         });
