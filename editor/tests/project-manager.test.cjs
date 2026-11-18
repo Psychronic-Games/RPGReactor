@@ -378,6 +378,112 @@ test('a failed runtime refresh leaves the revision marker stale so the next open
     }
 });
 
+/** A project whose runtime is `project` ({ version, revision }), opened by an editor whose runtime is `editor`. */
+function runtimeFixture(t, project, editor) {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'rpg-reactor-runtime-downgrade-test-'));
+    t.after(() => fs.rmSync(tempRoot, { recursive: true, force: true }));
+    const runtimePath = path.join(tempRoot, 'runtime'), projectPath = path.join(tempRoot, 'Project');
+    const main = side => `// RPG Reactor runtime version: ${side.version}\n// RPG Reactor runtime revision: ${side.revision}\n`;
+    fs.mkdirSync(runtimePath, { recursive: true });
+    fs.mkdirSync(path.join(projectPath, 'js'), { recursive: true });
+    fs.writeFileSync(path.join(projectPath, 'index.html'), '<script src="js/reactor_main.js"></script>');
+    fs.writeFileSync(path.join(projectPath, 'js', 'reactor_main.js'), main(project));
+    fs.writeFileSync(path.join(projectPath, 'js', 'reactor_core.js'), '// the project core\n');
+    const metadata = { name: 'Existing', version: project.version, engine: 'RPG Reactor', engineVersion: project.version };
+    fs.writeFileSync(path.join(projectPath, 'project.rpgreactor'), JSON.stringify(metadata));
+    fs.writeFileSync(path.join(runtimePath, 'reactor_main.js'), main(editor));
+    fs.writeFileSync(path.join(runtimePath, 'reactor_core.js'), '// the editor core\n');
+    const ProjectManager = loadBrowserClass(path.join(repoRoot, 'src', 'ProjectManager.js'), 'ProjectManager');
+    const manager = new ProjectManager();
+    manager.getRuntimePath = () => runtimePath;
+    manager.getEngineVersion = () => editor.version;
+    const read = name => fs.readFileSync(path.join(projectPath, 'js', name), 'utf8');
+    return { manager, projectPath, read, projectData: () => readJson(path.join(projectPath, 'project.rpgreactor')) };
+}
+
+test('runtime versions and revisions compare as numbers, part by part', () => {
+    const ProjectManager = loadBrowserClass(path.join(repoRoot, 'src', 'ProjectManager.js'), 'ProjectManager');
+    const manager = new ProjectManager();
+    assert.equal(manager.compareDottedNumbers('20261116.1', '20261115.12'), 1);
+    assert.equal(manager.compareDottedNumbers('0.98.4', '0.99.6'), -1);
+    assert.equal(manager.compareDottedNumbers('0.99.10', '0.99.9'), 1);
+    assert.equal(manager.compareDottedNumbers('0.99', '0.99.0'), 0);
+    assert.equal(manager.compareDottedNumbers('current', '20261115.12'), null);
+    assert.equal(manager.compareDottedNumbers('', '0.99.6'), null);
+    const newer = (project, editor) => manager.isProjectRuntimeNewer(project, editor);
+    assert.equal(newer({ version: '0.99.6', revision: '20261115.12' }, { version: '0.98.4', revision: '20261201.1' }), true, 'the version decides first');
+    assert.equal(newer({ version: '0.99.6', revision: '20261117.1' }, { version: '0.99.6', revision: '20261115.12' }), true);
+    assert.equal(newer({ version: '0.99.6', revision: '20261115.12' }, { version: '0.99.6', revision: '20261117.1' }), false);
+    assert.equal(newer({ version: '0.99.6', revision: 'old' }, { version: '0.99.6', revision: 'current' }), false, 'unreadable revisions refresh as before');
+});
+
+test('an older editor keeps a project\'s newer runtime unless the author chooses to replace it', async t => {
+    const cases = [
+        ['an older version', { version: '0.99.6', revision: '20261117.1' }, { version: '0.98.4', revision: '20260901.1' }],
+        ['the same version, an older revision', { version: '0.99.6', revision: '20261117.1' }, { version: '0.99.6', revision: '20261115.12' }]
+    ];
+    for (const [label, project, editor] of cases) {
+        for (const answer of [undefined, false]) {
+            const fixture = runtimeFixture(t, project, editor);
+            const asked = [];
+            const options = answer === undefined ? {} : { confirmDowngrade: sides => { asked.push(sides); return answer; } };
+            const result = await fixture.manager.refreshReactorRuntime(fixture.projectPath, fixture.projectData(), options);
+            assert.equal(result.ok, true, label);
+            assert.equal(result.updated, false, label);
+            assert.equal(result.keptNewer, true, label);
+            assert.match(fixture.read('reactor_main.js'), new RegExp('revision: ' + project.revision.replace('.', '\\.')), label + ': the project keeps its runtime');
+            assert.equal(fixture.read('reactor_core.js'), '// the project core\n', label);
+            assert.equal(fixture.projectData().engineVersion, project.version, label + ': project.rpgreactor is not rewritten');
+            if (answer === false) assert.deepEqual(JSON.parse(JSON.stringify(asked)), [{ project, editor }], label + ': asked with both runtimes');
+        }
+        const fixture = runtimeFixture(t, project, editor);
+        const result = await fixture.manager.refreshReactorRuntime(fixture.projectPath, fixture.projectData(), { confirmDowngrade: async () => true });
+        assert.equal(result.updated, true, label + ': replaced when the author says so');
+        assert.match(fixture.read('reactor_main.js'), new RegExp('revision: ' + editor.revision.replace('.', '\\.')));
+        assert.equal(fixture.read('reactor_core.js'), '// the editor core\n');
+        assert.equal(fixture.projectData().engineVersion, editor.version);
+    }
+});
+
+test('a newer editor still updates an older project runtime without asking', async t => {
+    const fixture = runtimeFixture(t, { version: '0.99.6', revision: '20261115.12' }, { version: '0.99.6', revision: '20261117.1' });
+    const result = await fixture.manager.refreshReactorRuntime(fixture.projectPath, fixture.projectData(), {
+        confirmDowngrade: () => assert.fail('nothing to ask when the editor is newer')
+    });
+    assert.equal(result.updated, true);
+    assert.equal(fixture.read('reactor_core.js'), '// the editor core\n');
+});
+
+test('opening a project asks before an older runtime replaces a newer one; Enter and Escape keep it', async () => {
+    const dialogs = [];
+    const ProjectController = vm.runInNewContext(`${fs.readFileSync(path.join(repoRoot, 'src', 'ProjectController.js'), 'utf8')}\nProjectController;`, {
+        console, window: undefined,
+        RRDialog: { confirm: async (message, options) => { dialogs.push({ message, options }); return false; } }
+    });
+    const stop = new Error('stop after the runtime step');
+    let options = null;
+    const logs = [];
+    const controller = Object.assign(Object.create(ProjectController.prototype), {
+        currentProject: { path: 'P' },
+        projectManager: { refreshReactorRuntime: async (projectPath, data, given) => { options = given; return { ok: true, updated: false, keptNewer: true }; } },
+        logProjectOpen: name => logs.push(name),
+        _notifyProjectChanged() { throw stop; },
+        _t: key => key === 'menu.installRuntime' ? 'Install Reactor Runtime...' : key
+    });
+    await assert.rejects(controller.populateProjectUI(), error => error === stop);
+    assert.deepEqual(logs, ['populate:runtime-kept-newer', 'populate:start']);
+    const answer = await options.confirmDowngrade({
+        project: { version: '0.99.6', revision: '20261117.1' }, editor: { version: '0.98.4', revision: '' }
+    });
+    assert.equal(answer, false);
+    assert.equal(dialogs.length, 1);
+    assert.equal(dialogs[0].message, "This project's runtime (0.99.6 · 20261117.1) is newer than this editor's (0.98.4). Replace it with the editor's older runtime?");
+    assert.equal(dialogs[0].options.title, 'Install Reactor Runtime');
+    assert.equal(dialogs[0].options.danger, true, 'the focus starts on Keep');
+    assert.equal(dialogs[0].options.cancel, 'Keep Project Runtime');
+    assert.equal(dialogs[0].options.ok, 'Replace with Older Runtime');
+});
+
 test('project population refreshes the runtime before loading game data', () => {
     const controller = fs.readFileSync(path.join(repoRoot, 'src', 'ProjectController.js'), 'utf8');
     const start = controller.indexOf('async populateProjectUI()');

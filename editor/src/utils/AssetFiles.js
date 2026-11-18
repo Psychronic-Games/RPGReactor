@@ -26,12 +26,12 @@
         '.svg_': '.svg', '.gif_': '.gif', '.apng_': '.apng',
         '.ogg_': '.ogg', '.rpgmvo': '.ogg',
         '.m4a_': '.m4a', '.rpgmvm': '.m4a',
-        '.mp3_': '.mp3', '.wav_': '.wav', '.flac_': '.flac'
+        '.mp3_': '.mp3', '.wav_': '.wav', '.flac_': '.flac', '.opus_': '.opus'
     };
 
     // Every format the runtime can play, in resolution priority order:
     // when the same name exists in several formats, the earliest wins.
-    const AUDIO_EXTENSIONS = ['.ogg', '.mp3', '.wav', '.flac', '.m4a'];
+    const AUDIO_EXTENSIONS = ['.ogg', '.mp3', '.wav', '.flac', '.m4a', '.opus'];
     const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.jxl', '.svg', '.gif', '.apng'];
 
     const list = (rootDir, extensions, options = {}) => {

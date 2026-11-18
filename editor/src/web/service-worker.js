@@ -43,6 +43,7 @@ function contentType(pathname) {
         mp3: 'audio/mpeg',
         wav: 'audio/wav',
         flac: 'audio/flac',
+        opus: 'audio/ogg',
         wasm: 'application/wasm',
     }[extension] || 'application/octet-stream';
 }

@@ -332,7 +332,7 @@
     // Sounds.
 
     const SOUND_SLOTS = ['engine', 'idle', 'accelerate', 'slowdown', 'start', 'stop', 'bump', 'land', 'scrape', 'skid'];
-    const AUDIO_EXTS = ['.ogg', '.m4a', '.mp3', '.wav', '.flac'];
+    const AUDIO_EXTS = ['.ogg', '.m4a', '.mp3', '.wav', '.flac', '.opus'];
 
     /**
      * Every sound a type names: `[{ slot, name, kind }]` (`kind` the audio

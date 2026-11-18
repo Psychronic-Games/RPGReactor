@@ -36,7 +36,7 @@ class AudioCommandEditor {
                 return normalized;
             }
         })();
-        return decodedName.replace(/\.(ogg|m4a|mp3|wav)$/i, '');
+        return decodedName.replace(/\.(ogg|m4a|mp3|wav|flac|opus)$/i, '');
     }
 
     getCurrentTrackName() {

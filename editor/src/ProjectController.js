@@ -763,10 +763,13 @@ class ProjectController {
     async populateProjectUI() {
         const runtimeRefresh = await this.projectManager.refreshReactorRuntime?.(
             this.currentProject.path,
-            this.currentProject
+            this.currentProject,
+            { confirmDowngrade: ({ project, editor }) => this._confirmRuntimeDowngrade(project, editor) }
         );
         if (runtimeRefresh?.updated) {
             this.logProjectOpen('populate:runtime-refreshed', runtimeRefresh);
+        } else if (runtimeRefresh?.keptNewer) {
+            this.logProjectOpen('populate:runtime-kept-newer', runtimeRefresh);
         } else if (runtimeRefresh && !runtimeRefresh.ok) {
             console.error('Could not refresh the project runtime:', runtimeRefresh.error);
             await RRDialog.alert(`${this._tt('Could not install the Reactor runtime:')}\n\n${runtimeRefresh.error}`, { title: this._runtimeInstallTitle(), kind: 'error' });
@@ -1562,6 +1565,19 @@ class ProjectController {
 
     _runtimeInstallTitle() {
         return this._t('menu.installRuntime').replace(/\.+$/, '');
+    }
+
+    /** Asked when the project's runtime is newer than this editor's; Enter and Escape keep it. */
+    _confirmRuntimeDowngrade(project, editor) {
+        const name = side => [side.version, side.revision].filter(Boolean).join(' · ') || '?';
+        const message = this._tt("This project's runtime ({project}) is newer than this editor's ({editor}). Replace it with the editor's older runtime?")
+            .split('{project}').join(name(project)).split('{editor}').join(name(editor));
+        return RRDialog.confirm(message, {
+            title: this._runtimeInstallTitle(),
+            ok: this._tt('Replace with Older Runtime'),
+            cancel: this._tt('Keep Project Runtime'),
+            danger: true
+        });
     }
 
     async installReactorRuntime() {

@@ -6,7 +6,7 @@ Changes belong in the editor changelog; behavior goes in the commit message and 
 
 ## Where things stand (2026-11-17)
 
-- **Development:** 0.99.7 is open since 2026-11-16 (runtime **20261117.10**, synced into all 17 bundled projects on 2026-11-17; NW.js **0.120.0** pinned and in `nwjs-win` and `nwjs-linux`; `nwjs-mac` still 0.107), committed on 2026-11-17 (`ff1a7339`), not pushed. 0.99.6 was released on 2026-11-16. CI is green on GitHub since 2026-11-16. What 0.99.6 still needs seen: [OPEN-ITEMS](OPEN-ITEMS.md) items 22, 24, 26 and 27. The Demo in the tree is single player with the creator off, its backend Auto (the owner's): say so before a deploy.
+- **Development:** 0.99.7 is open since 2026-11-16 (runtime **20261117.11**, synced into all 17 bundled projects on 2026-11-17; NW.js **0.120.0** pinned and in `nwjs-win` and `nwjs-linux`; `nwjs-mac` still 0.107), committed on 2026-11-17 (`ff1a7339`), not pushed. 0.99.6 was released on 2026-11-16. CI is green on GitHub since 2026-11-16. What 0.99.6 still needs seen: [OPEN-ITEMS](OPEN-ITEMS.md) items 22, 24, 26 and 27. The Demo in the tree is single player with the creator off, its backend Auto (the owner's): say so before a deploy.
 - **Windows machines:** two laptops work in this folder: the Iris Xe one (i5-1145G7) and an MSI with an RTX 3060 Laptop beside an Intel UHD (i5-10500H). Both now hold all 17 bundled projects, so the sync can run on either. The Iris Xe's games start on OpenGL by its own record (11-10); Vulkan shows there since 11-16, and on the RTX 3060 since 11-17.
 - **Published:** [0.99.6](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.6) is the Latest source release, with six pictures. Its itch.io devlog is drafted ([Markdown](posts/itch-devlog-0.99.6.md), [plain text](posts/itch-devlog-0.99.6-plain.txt)) and not posted: posting it is the owner's. Signed native binaries remain a separate pipeline.
 - **Verification:** the whole suite on the desktop on 2026-11-13, before the day's second commit: 9,793 of 9,804 passed, 11 skipped, none failed (5.8 minutes). Substantial checks go through `codex-check`.
@@ -14,6 +14,10 @@ Changes belong in the editor changelog; behavior goes in the commit message and 
 - **Forge:** Character Preview **98**, Props **62**, clothing Preview 61. Appearance remains under review. [Face handoff](HUMAN-FACE-HANDOFF.md#current-candidate--preview-98).
 - **Faces:** the owner works on them in a separate session with another model, which may edit this tree. Leave face code alone unless asked, and check `git status` before scripted edits.
 - **Resume:** use [OPEN-ITEMS.md](OPEN-ITEMS.md) and [STATUS.md](STATUS.md#open-work). Preserve fixed gameplay timing. V-Sync is on by default since 2026-11-17, a project setting; F2 still shows what the machine could draw.
+
+## 2026-11-17 (desktop) — Pull requests 87 and 88 merged
+
+Runtime **20261117.11**, synced into all 17. Xehanort88's `.opus` audio (87) and never downgrading a project's runtime unasked (88), merged from GitHub into the local work: the format lists keep both `.opus` and `.jxl`, and their entries moved from `editor/CHANGELOG.md` (now an index) into the 0.99.7 changelog, without a stray branch name line 88 left there. Not pushed.
 
 ## 2026-11-17 (desktop) — Event borders and names at every zoom
 
