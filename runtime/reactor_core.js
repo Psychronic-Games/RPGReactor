@@ -732,7 +732,7 @@ Utils.resolveFileCase = function(url, suffix) {
  *
  * @type string[]
  */
-Utils.AUDIO_EXTENSIONS = [".ogg", ".mp3", ".wav", ".flac", ".m4a"];
+Utils.AUDIO_EXTENSIONS = [".ogg", ".mp3", ".wav", ".flac", ".m4a", ".opus"];
 
 /**
  * Resolves an audio URL's extension against what actually exists on disk.

@@ -46,7 +46,7 @@ const describer = require('./describe-model.cjs');
 const round = (value, places = 2) => { const unit = Math.pow(10, places); const out = Math.round(Number(value) * unit) / unit; return Object.is(out, -0) ? 0 : out; };
 const percent = share => `${Math.round(Number(share) * 100)}%`;
 const LIMB_WORDS = { seat: 'seat', handL: 'left hand', handR: 'right hand', footL: 'left foot', footR: 'right foot' };
-const AUDIO_EXTS = ['.ogg', '.m4a', '.mp3', '.wav', '.flac'];
+const AUDIO_EXTS = ['.ogg', '.m4a', '.mp3', '.wav', '.flac', '.opus'];
 const FRONTS = ['-x', '+x', '-z', '+z'];
 
 /** A guessed block as a model's file keeps it: what the game cannot work out again, and `guessed` naming what nobody has confirmed. */

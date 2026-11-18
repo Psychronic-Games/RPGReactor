@@ -3,7 +3,7 @@
  */
 class ResourceManager {
     static folderDefinitions(audioExtensions = null) {
-        const audio = audioExtensions || ['.ogg', '.mp3', '.wav', '.flac', '.m4a'];
+        const audio = audioExtensions || ['.ogg', '.mp3', '.wav', '.flac', '.m4a', '.opus'];
         const images = typeof RRAssetFiles !== 'undefined' && RRAssetFiles.IMAGE_EXTENSIONS
             ? RRAssetFiles.IMAGE_EXTENSIONS : ['.png', '.jpg', '.jpeg', '.webp', '.svg', '.gif', '.apng'];
         const image = (id, label, path) => ({ id, label, path, extensions: images, preview: 'image', encryption: 'image' });
@@ -110,7 +110,7 @@ class ResourceManager {
             : value;
         const physicalAbsolutePath = replaceExtension(record.absolutePath);
         const physicalRelativePath = replaceExtension(record.relativePath);
-        const encrypted = /^(?:\.png_|\.jpg_|\.jpeg_|\.webp_|\.svg_|\.gif_|\.rpgmvp|\.ogg_|\.rpgmvo|\.m4a_|\.rpgmvm|\.mp3_|\.wav_|\.flac_)$/i
+        const encrypted = /^(?:\.png_|\.jpg_|\.jpeg_|\.webp_|\.svg_|\.gif_|\.rpgmvp|\.ogg_|\.rpgmvo|\.m4a_|\.rpgmvm|\.mp3_|\.wav_|\.flac_|\.opus_)$/i
             .test(sourceExtension);
         return {
             ...record,

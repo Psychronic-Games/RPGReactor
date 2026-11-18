@@ -1207,7 +1207,7 @@ PluginCommandEditor.extensionsForDir = function(dir) {
     const folder = String(dir || '').trim().replace(/^\.?[\\/]+/, '').replace(/[\\/]+$/, '').toLowerCase();
     const root = folder.split(/[\\/]/)[0];
     const images = RRAssetFiles.IMAGE_EXTENSIONS || ['.png', '.jpg', '.jpeg', '.webp'];
-    const audio = RRAssetFiles.AUDIO_EXTENSIONS || ['.ogg', '.mp3', '.wav', '.flac', '.m4a'];
+    const audio = RRAssetFiles.AUDIO_EXTENSIONS || ['.ogg', '.mp3', '.wav', '.flac', '.m4a', '.opus'];
     if (root === 'img') return images.slice();
     if (root === 'audio') return audio.slice();
     if (root === 'movies') return ['.webm', '.mp4'];
