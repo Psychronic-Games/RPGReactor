@@ -247,6 +247,8 @@ function loopComments(buffer) {
     return [...new Set(comments.map(comment => comment.toUpperCase()))];
 }
 
+// What the build re-encodes. Not .opus: Opus ships as it is (see reencodeAudioFile),
+// and codecArgs would hand an unlisted extension to the AAC encoder.
 const AUDIO_EXTENSIONS = ['.ogg', '.mp3', '.wav', '.flac', '.m4a'];
 
 // The shared 0-10 quality scale is Vorbis's (higher is better). LAME's VBR

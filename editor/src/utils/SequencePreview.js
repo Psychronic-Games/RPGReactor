@@ -28,7 +28,7 @@ class RRSequencePreview {
     /** How often the game's per-frame sequence step runs. */
     static TICK_MS = 50;
 
-    static AUDIO_EXTENSIONS = ['.ogg', '.mp3', '.wav', '.flac', '.m4a'];
+    static AUDIO_EXTENSIONS = ['.ogg', '.mp3', '.wav', '.flac', '.m4a', '.opus'];
 
     static current = null;
     static _engine = null;

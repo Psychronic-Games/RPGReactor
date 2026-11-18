@@ -2639,7 +2639,7 @@
         try {
             const fs = require('fs'), path = require('path');
             const base = path.join(path.dirname(process.mainModule.filename), 'audio', 'se');
-            return ['.ogg', '.m4a', '.mp3', '.wav'].some(ext => fs.existsSync(path.join(base, name + ext)));
+            return ['.ogg', '.m4a', '.mp3', '.wav', '.flac', '.opus'].some(ext => fs.existsSync(path.join(base, name + ext)));
         } catch (_) { return false; }
     };
     // $game_map.update_gtbs_scroll: the view follows the cursor past the screen's middle, a cursor step at

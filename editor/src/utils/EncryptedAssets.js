@@ -60,11 +60,12 @@
         '.m4a': ['.m4a_', '.rpgmvm'],
         '.mp3': ['.mp3_'],
         '.wav': ['.wav_'],
-        '.flac': ['.flac_']
+        '.flac': ['.flac_'],
+        '.opus': ['.opus_']
     };
     const MIME = {
         '.png': 'image/png', '.ogg': 'audio/ogg', '.m4a': 'audio/mp4',
-        '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.flac': 'audio/flac',
+        '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.flac': 'audio/flac', '.opus': 'audio/ogg',
         '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp',
         '.svg': 'image/svg+xml', '.gif': 'image/gif', '.apng': 'image/apng',
         '.webm': 'video/webm', '.mp4': 'video/mp4', '.woff': 'font/woff',
