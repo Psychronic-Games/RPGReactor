@@ -1892,14 +1892,7 @@ class ResourceManager {
             if (result) this.setStatus(this.countText(files.length, 'Exported 1 resource.', 'Exported {count} resources.'));
             return;
         }
-        const picker = document.createElement('input');
-        picker.type = 'file';
-        picker.style.display = 'none';
-        picker.setAttribute('nwdirectory', '');
-        picker.addEventListener('cancel', () => picker.remove());
-        picker.addEventListener('change', async () => {
-            const chosenRoot = picker.files?.[0]?.path;
-            picker.remove();
+        RRFolderPicker.pick({}).then(async chosenRoot => {
             if (!chosenRoot) return;
             try {
                 this.projectController.verifyProjectOwnership(ownership);
@@ -1918,8 +1911,6 @@ class ResourceManager {
                 this.setStatus(error.message, true);
             }
         });
-        document.body.appendChild(picker);
-        picker.click();
     }
 
     confirmReplaceExports(paths) {

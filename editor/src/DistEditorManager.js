@@ -340,18 +340,13 @@ class DistEditorManager {
         this.modal._rrModalKeys?.leave();
     }
 
-    selectOutputDirectory() {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.nwdirectory = true;
-        input.addEventListener('change', () => {
-            if (input.files.length > 0) {
-                const outputPath = document.getElementById('dist-output-path');
-                outputPath.value = input.files[0].path;
-                DeploymentPathPreferences.save('editor', outputPath.value);
-            }
-        });
-        input.click();
+    async selectOutputDirectory() {
+        const outputPath = document.getElementById('dist-output-path');
+        const folder = await RRFolderPicker.pick({ startIn: outputPath.value });
+        if (folder) {
+            outputPath.value = folder;
+            DeploymentPathPreferences.save('editor', outputPath.value);
+        }
     }
 
     clearLog() {

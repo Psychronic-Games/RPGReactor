@@ -331,13 +331,9 @@
                 if (previouslyFocused && previouslyFocused.isConnected !== false && typeof previouslyFocused.focus === 'function') previouslyFocused.focus();
                 resolve(value);
             };
-            const browse = (target, onPick) => {
-                const chooser = document.createElement('input');
-                chooser.type = 'file';
-                chooser.setAttribute('nwdirectory', '');
-                if (target.value && fs.existsSync(target.value)) chooser.setAttribute('nwworkingdir', target.value);
-                chooser.addEventListener('change', () => { const picked = chooser.files?.[0]?.path || chooser.value; if (picked) { target.value = picked; errorEl.textContent = ''; if (onPick) onPick(picked); } });
-                chooser.click();
+            const browse = async (target, onPick) => {
+                const picked = await RRFolderPicker.pick({ startIn: target.value && fs.existsSync(target.value) ? target.value : '' });
+                if (picked) { target.value = picked; errorEl.textContent = ''; if (onPick) onPick(picked); }
             };
             let probed = null;
             const showDetected = (info) => {
@@ -429,13 +425,9 @@
             };
             // Whatever the author points at: an RTP folder, a folder holding one or its installer, an installer or archive.
             const useRtp = (target) => rtpTask(progress => rtpManager().rtpFrom(target, progress), tt('No RTP there:'));
-            const pickRtpFolder = () => {
-                const chooser = document.createElement('input');
-                chooser.type = 'file';
-                chooser.setAttribute('nwdirectory', '');
-                if (rtpInput.value && fs.existsSync(rtpInput.value)) chooser.setAttribute('nwworkingdir', rtpInput.value);
-                chooser.addEventListener('change', () => { const picked = chooser.files?.[0]?.path || chooser.value; if (picked) useRtp(picked); });
-                chooser.click();
+            const pickRtpFolder = async () => {
+                const picked = await RRFolderPicker.pick({ startIn: rtpInput.value && fs.existsSync(rtpInput.value) ? rtpInput.value : '' });
+                if (picked) useRtp(picked);
             };
             const pickRtpFile = () => {
                 const chooser = document.createElement('input');

@@ -6,7 +6,7 @@ Changes belong in the editor changelog; behavior goes in the commit message and 
 
 ## Where things stand (2026-11-17)
 
-- **Development:** 0.99.7 is open since 2026-11-16 (runtime **20261117.11**, synced into all 17 bundled projects on 2026-11-17; NW.js **0.120.0** pinned and in `nwjs-win` and `nwjs-linux`; `nwjs-mac` still 0.107), committed on 2026-11-17 (`ff1a7339`), not pushed. 0.99.6 was released on 2026-11-16. CI is green on GitHub since 2026-11-16. What 0.99.6 still needs seen: [OPEN-ITEMS](OPEN-ITEMS.md) items 22, 24, 26 and 27. The Demo in the tree is single player with the creator off, its backend Auto (the owner's): say so before a deploy.
+- **Development:** 0.99.7 is open since 2026-11-16 (runtime **20261117.11**, synced into all 17 bundled projects on 2026-11-17; NW.js **0.120.0** pinned and in `nwjs-win` and `nwjs-linux`; `nwjs-mac` still 0.107), all committed on 2026-11-17, not pushed (local `main` four commits ahead). 0.99.6 was released on 2026-11-16. CI is green on GitHub since 2026-11-16. What 0.99.6 still needs seen: [OPEN-ITEMS](OPEN-ITEMS.md) items 22, 24, 26 and 27. The Demo in the tree is single player with the creator off, its backend Auto (the owner's): say so before a deploy.
 - **Windows machines:** two laptops work in this folder: the Iris Xe one (i5-1145G7) and an MSI with an RTX 3060 Laptop beside an Intel UHD (i5-10500H). Both now hold all 17 bundled projects, so the sync can run on either. The Iris Xe's games start on OpenGL by its own record (11-10); Vulkan shows there since 11-16, and on the RTX 3060 since 11-17.
 - **Published:** [0.99.6](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.6) is the Latest source release, with six pictures. Its itch.io devlog is drafted ([Markdown](posts/itch-devlog-0.99.6.md), [plain text](posts/itch-devlog-0.99.6-plain.txt)) and not posted: posting it is the owner's. Signed native binaries remain a separate pipeline.
 - **Verification:** the whole suite on the desktop on 2026-11-13, before the day's second commit: 9,793 of 9,804 passed, 11 skipped, none failed (5.8 minutes). Substantial checks go through `codex-check`.
@@ -15,23 +15,27 @@ Changes belong in the editor changelog; behavior goes in the commit message and 
 - **Faces:** the owner works on them in a separate session with another model, which may edit this tree. Leave face code alone unless asked, and check `git status` before scripted edits.
 - **Resume:** use [OPEN-ITEMS.md](OPEN-ITEMS.md) and [STATUS.md](STATUS.md#open-work). Preserve fixed gameplay timing. V-Sync is on by default since 2026-11-17, a project setting; F2 still shows what the machine could draw.
 
+## 2026-11-17 (desktop) — Choosing a folder closed the editor
+
+Editor only, committed. NW.js 0.117+ aborts when a folder is chosen through `<input nwdirectory>` (nwjs/nw.js#8393, open), so every folder picker now uses the editor's own browser, `RRFolderPicker` ([changelog](../editor/changelog/0.99.7.md)). Brought to the system dialogs' features (a folder tree that follows the list, places, bookmarks, recent, history, completion, dates, hidden, rename; SVG icons); seen on Linux (`picker/parity.cjs`) and on the Windows NW.js 0.120 under Wine; macOS not seen. To check on a Windows laptop: a pop-out panel window still appears (nwjs/nw.js#8385). Harness: `~/.cache/rr-tests/picker/editor-open.cjs` (Linux editor), `~/.cache/rr-tests/wine-editor/run.cjs` (Windows editor under Wine, prefix `wine-pwsh/prefix`).
+
 ## 2026-11-17 (desktop) — Pull requests 87 and 88 merged
 
 Runtime **20261117.11**, synced into all 17. Xehanort88's `.opus` audio (87) and never downgrading a project's runtime unasked (88), merged from GitHub into the local work: the format lists keep both `.opus` and `.jxl`, and their entries moved from `editor/CHANGELOG.md` (now an index) into the 0.99.7 changelog, without a stray branch name line 88 left there. Not pushed.
 
 ## 2026-11-17 (desktop) — Event borders and names at every zoom
 
-Editor only, not committed. Names are fitted to their square too (`eventNameText`): as large as the tile allows, smaller for long names, an ellipsis only past the smallest size; seen on the Demo's map 7 (`event-zoom.cjs --names`). The owner's report: zoomed out, event borders drew on some sides only. They are one screen pixel at any zoom now (`pixelLine`, as the grid). Measured before and after in the editor (`event-zoom.cjs`, `--old`). [Changelog](../editor/changelog/0.99.7.md).
+Editor only, committed in `13c31e64`. Names are fitted to their square too (`eventNameText`): as large as the tile allows, smaller for long names, an ellipsis only past the smallest size; seen on the Demo's map 7 (`event-zoom.cjs --names`). The owner's report: zoomed out, event borders drew on some sides only. They are one screen pixel at any zoom now (`pixelLine`, as the grid). Measured before and after in the editor (`event-zoom.cjs`, `--old`). [Changelog](../editor/changelog/0.99.7.md).
 
 ## 2026-11-17 (desktop) — Hendrix lighting stops the game
 
-Runtime **20261117.10**, synced into all 17, not committed. [Changelog](../editor/changelog/0.99.7.md).
+Runtime **20261117.10**, synced into all 17, committed in `13c31e64`. [Changelog](../editor/changelog/0.99.7.md).
 
 - **Players' report:** `Cannot read properties of null (reading 'indexOf')` from Hendrix 3D Light and Shadow's `_syncRim`. PIXI 8 throws when filters or a mask are set on a destroyed object; PIXI 5 did nothing. `pixi_compat.js` now does nothing too. Seen on a destroyed sprite in the game; not reproduced through the plugin (its rim light needs light shafts nearby).
 
 ## 2026-11-17 (desktop) — JPEG XL pictures
 
-Runtime **20261117.9**, synced into all 17, not committed. [Changelog](../editor/changelog/0.99.7.md).
+Runtime **20261117.9**, synced into all 17, committed in `13c31e64`. [Changelog](../editor/changelog/0.99.7.md).
 
 - **The owner's request:** `.jxl` usable now that NW.js decodes it, for the future (old plugins do not matter). Taken wherever `.webp` is, in the runtime, the editor and the builds; not for 3D model textures (GLB), materials or Effekseer.
 - **Seen:** a `.jxl` shown by Show Picture in a copy of the Demo, the same as its PNG. Lossless JXL is exact; Chromium rounds semi-transparent pixels by at most one level.
@@ -39,7 +43,7 @@ Runtime **20261117.9**, synced into all 17, not committed. [Changelog](../editor
 
 ## 2026-11-17 (desktop) — Rebellion's Moletown: drift, stray tiles, a slow map
 
-Runtime **20261117.8**, synced into all 17, not committed. Causes and numbers: [changelog](../editor/changelog/0.99.7.md).
+Runtime **20261117.8**, synced into all 17, committed in `ff1a7339`. Causes and numbers: [changelog](../editor/changelog/0.99.7.md).
 
 - **Events off their tiles** (the owner's report, back since the 11-01 fix): sprites are placed before the game moves, and the frames between updates moved them from the wrong place. Fixed (`FramePacing.posed`), with a one-pixel rounding fix in `screenX`/`screenY`. Measured: none off in about 7,000 frames.
 - **Stray and missing map pieces:** a likely cause found by reading and fixed (a tile block's buffer sent short); not reproduced, so the owner's play decides.
@@ -49,7 +53,7 @@ Runtime **20261117.8**, synced into all 17, not committed. Causes and numbers: [
 
 ## 2026-11-17 (desktop) — V-Sync as a project setting
 
-Runtime **20261117.7**, synced into all 17, not committed. [Changelog](../editor/changelog/0.99.7.md).
+Runtime **20261117.7**, synced into all 17, committed in `ff1a7339`. [Changelog](../editor/changelog/0.99.7.md).
 
 - **The owner's request:** players report tearing; vsync back without losing F2's count of what the machine could do. Built as Database > System 2 > Advanced Settings > V-Sync, **on by default** (the owner, after seeing it); with it on the frame limit's clock stands aside and F2 shows the capable figure.
 - **Seen by the owner** in Star Shift Rebellion on the desktop's 180 Hz monitor: more even, the real frames still on F2. Not seen: the Demo with it (its manifest's no-vsync switches taken out by hand, as the editor does at the next open), either laptop, a 3D map under load. Every project loses the switches at its next open or playtest unless V-Sync is unticked.
@@ -57,14 +61,14 @@ Runtime **20261117.7**, synced into all 17, not committed. [Changelog](../editor
 
 ## 2026-11-17 (desktop) — Rebellion stopped at start
 
-Runtime **20261117.5**, synced into all 17, not committed. [Changelog](../editor/changelog/0.99.7.md).
+Runtime **20261117.5**, synced into all 17, committed in `ff1a7339`. [Changelog](../editor/changelog/0.99.7.md).
 
 - **The owner's report:** Star Shift Rebellion stopped at its first Conditional Branch. YEP_CoreEngine calls the command it replaced with no arguments, and the vehicles' branch wrap read `params[0]`. Twelve Reactor command wraps now fall back to `this._params`. Not seen: Rebellion starting.
 - **Tests:** `vehicles-plugin-surface.test.cjs`.
 
 ## 2026-11-17 (RTX 3060 laptop) — mirrors, map loads, F2
 
-Runtime **20261117.4**, synced into all 17, not committed. Detail in the [changelog](../editor/changelog/0.99.7.md).
+Runtime **20261117.4**, synced into all 17, committed in `ff1a7339`. Detail in the [changelog](../editor/changelog/0.99.7.md).
 
 - **Mirrors (.3, .4):** the Mirror Room (map 2) now repeats without end, darkening each reflection; no sky or black walls. Past the depth, each mirror shows its last frame's whole picture; walls seen in a mirror get slots; the capture sees mirrors too. For the owner to see: the room in play, a mirror beside water, the Iris Xe.
 - **Map loads (.2):** a loading map's Builder characters send their texture layers 8 ms a frame instead of one a frame; they are done before the map shows. The load itself (8 s, North Haven) is its main thread's work; next to try: the warm-up's reflection captures (0.7 s).
@@ -85,7 +89,7 @@ The owner's request: the editor and games on the newest NW.js with its proprieta
 
 ## 2026-11-17 (RTX 3060 laptop) — Vulkan's black window on NVIDIA, and video decoding
 
-Editor and Demo manifest only, runtime unchanged (20261116.4), not committed. Causes, numbers and method: [changelog](../editor/changelog/0.99.7.md).
+Editor and Demo manifest only, runtime unchanged (20261116.4), since committed. Causes, numbers and method: [changelog](../editor/changelog/0.99.7.md).
 
 - **The owner's report:** the Demo on Vulkan, which had drawn on this machine, opened a black window. The graphics process crashed at the window's first resize (the game sizes its window at start) and could not take the window back. A bare WebGL page does the same; it is ANGLE's swapchain maintenance extension. A Vulkan manifest's switch is now `--disable-angle-features=supportsGraphicsPipelineLibrary,supportsSwapchainMaintenance1`, and yesterday's narrower switch is widened at the next playtest.
 - **Seen:** the Demo's manifest as it stands, on a copy: the title, the first map and a resize in play, on the real window, in three runs. Not seen: the Iris Xe with the wider switch, Linux, an editor set to Vulkan, the owner's own playtest.
@@ -95,7 +99,7 @@ Editor and Demo manifest only, runtime unchanged (20261116.4), not committed. Ca
 
 ## 2026-11-16 (laptop) — Vulkan shows on the laptop
 
-Runtime 20261116.4, synced into the laptop's Demo only (run the sync on the desktop), not committed. Causes, numbers and method: [changelog](../editor/changelog/0.99.7.md).
+Runtime 20261116.4, synced into the laptop's Demo only (run the sync on the desktop), since committed. Causes, numbers and method: [changelog](../editor/changelog/0.99.7.md).
 
 - **The owner's report:** the Demo set to Vulkan opened a blank window. Two causes. (1) Under Windows nothing of a Vulkan window reaches the screen through DirectComposition: a Vulkan project's manifest now carries `--disable-direct-composition` (`ProjectManager.WINDOW_PRESENT_ARG`; the editor's launcher too). (2) three.js's one upload of a mesh's morph targets lost the device: on Vulkan an array texture is filled a layer at a call (`Graphics.LayerUploads`, `reactor_core.js`). The Demo's setting is Vulkan (the owner's); the new switch in its manifest was written by hand, as the editor would.
 - **Then snow over the lights** (the owner, once the window showed): Vulkan's pipeline libraries fill the pixels on a shared triangle edge twice on this card, so the lights' glow, drawn small and blended, showed its triangles as blotches. A Vulkan manifest now also carries `--disable-angle-features=supportsGraphicsPipelineLibrary` (`ProjectManager.PIPELINE_LIBRARY_ARG`; the Demo's by hand): the glow's small picture then counts the same as OpenGL's, and the first room ran no slower. The desktop's Vulkan gets the switch too, not measured there.

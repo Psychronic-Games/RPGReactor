@@ -590,14 +590,9 @@ class ProjectController {
             const projectName = choice.name;
             const createOptions = { blank: !!choice.blank };
 
-            // Use NW.js chooser for directory selection
-            const chooser = document.createElement('input');
-            chooser.setAttribute('type', 'file');
-            chooser.setAttribute('nwdirectory', '');
-            chooser.setAttribute('nwworkingdir', require('os').homedir());
-
-            chooser.addEventListener('change', async (e) => {
-                const basePath = chooser.value;
+            // The folder the project goes in (RRFolderPicker: NW.js 0.117+ closes on a folder chosen in its own picker).
+            const pickFolder = async () => {
+                const basePath = await RRFolderPicker.pick({ title: this._t('menu.newProject'), startIn: require('os').homedir() });
                 if (basePath) {
                     // Create project in a subdirectory with the project name
                     const path = require('path');
@@ -627,9 +622,9 @@ class ProjectController {
                         RRDialog.alert(this._tt('Failed to create project. Check console for details.') + details, { title: this._t('menu.newProject'), kind: 'error' });
                     }
                 }
-            });
+            };
 
-            chooser.click();
+            await pickFolder();
         } else {
             // For testing without NW.js
             this.currentProject = { path: '/demo', name: 'Demo Project' };
@@ -646,15 +641,8 @@ class ProjectController {
         }
         if (!await this.confirmUnsavedChanges()) return;
         if (typeof nw !== 'undefined') {
-            const input = document.createElement('input');
-            input.setAttribute('type', 'file');
-            input.setAttribute('nwdirectory', '');
-            input.setAttribute('nwworkingdir', require('os').homedir());
-            input.addEventListener('change', async (e) => {
-                const projectPath = input.files?.[0]?.path || input.value || e.target.value;
-                if (projectPath) await this.openProjectAtPath(projectPath);
-            });
-            input.click();
+            const projectPath = await RRFolderPicker.pick({ title: this._t('menu.openProject'), startIn: require('os').homedir() });
+            if (projectPath) await this.openProjectAtPath(projectPath);
         } else {
             // For testing without NW.js
             this.currentProject = { path: '/demo', name: 'Demo Project', maps: [] };
@@ -725,15 +713,7 @@ class ProjectController {
                 : this._tt('Project name must be a safe single folder name.')
         });
         if (!choice) return;
-        const basePath = await new Promise(resolve => {
-            const chooser = document.createElement('input');
-            chooser.setAttribute('type', 'file');
-            chooser.setAttribute('nwdirectory', '');
-            chooser.setAttribute('nwworkingdir', path.dirname(sourcePath));
-            chooser.addEventListener('change', () => resolve(chooser.files?.[0]?.path || chooser.value || ''));
-            chooser.addEventListener('cancel', () => resolve(''));
-            chooser.click();
-        });
+        const basePath = await RRFolderPicker.pick({ title, startIn: path.dirname(sourcePath) });
         if (!basePath) return;
         const targetPath = path.join(basePath, choice.name);
         this._savingProjectAs = true;

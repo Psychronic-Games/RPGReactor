@@ -604,17 +604,13 @@ class BuildManager {
         return window.reactor?.databaseManager?.getOnlineSettings?.() || null;
     }
 
-    selectOnlineFolder() {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.nwdirectory = true;
-        input.addEventListener('change', () => {
-            if (input.files.length > 0) {
-                document.getElementById('build-online-folder').value = input.files[0].path;
-                DeploymentPathPreferences.save('onlineFolder', input.files[0].path);
-            }
-        });
-        input.click();
+    async selectOnlineFolder() {
+        const field = document.getElementById('build-online-folder');
+        const folder = await RRFolderPicker.pick({ startIn: field.value });
+        if (folder) {
+            field.value = folder;
+            DeploymentPathPreferences.save('onlineFolder', folder);
+        }
     }
 
     updateAppImageAvailability() {
@@ -686,18 +682,13 @@ class BuildManager {
         this.modal._rrModalKeys?.leave();
     }
 
-    selectOutputDirectory() {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.nwdirectory = true;
-        input.addEventListener('change', () => {
-            if (input.files.length > 0) {
-                const outputPath = document.getElementById('build-output-path');
-                outputPath.value = input.files[0].path;
-                DeploymentPathPreferences.save('game', outputPath.value);
-            }
-        });
-        input.click();
+    async selectOutputDirectory() {
+        const outputPath = document.getElementById('build-output-path');
+        const folder = await RRFolderPicker.pick({ startIn: outputPath.value });
+        if (folder) {
+            outputPath.value = folder;
+            DeploymentPathPreferences.save('game', outputPath.value);
+        }
     }
 
     clearLog() {

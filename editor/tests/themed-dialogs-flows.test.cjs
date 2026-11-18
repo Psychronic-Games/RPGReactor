@@ -229,11 +229,10 @@ test('Cancel keeps every window alive and a later accepted close quits the insta
 test('opening another project with unsaved changes: Cancel opens no folder chooser', async () => {
     for (const [decision, choosers] of [['cancel', 0], ['discard', 1]]) {
         const made = [];
-        const document = { createElement: tag => { const element = { tag, clicks: 0, setAttribute() {}, addEventListener() {}, click() { this.clicks++; } }; made.push(element); return element; } };
-        const { controller, done } = dirtyController(dialog(), { promptUnsavedChanges: async () => decision }, { nw: {}, document });
+        const RRFolderPicker = { pick: async options => { made.push(options); return ''; } };
+        const { controller, done } = dirtyController(dialog(), { promptUnsavedChanges: async () => decision }, { nw: {}, RRFolderPicker });
         await controller.openProject();
         assert.equal(made.length, choosers, `${decision}: ${choosers} chooser(s)`);
-        if (choosers) assert.equal(made[0].clicks, 1);
         assert.equal(done.projectSaves + done.mapSaves, 0);
         assert.equal(controller.currentProject.name, 'Fixture', 'the open project stays until another is chosen');
     }
