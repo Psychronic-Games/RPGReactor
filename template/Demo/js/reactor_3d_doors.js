@@ -567,6 +567,7 @@
         if (!doors.length || typeof THREE === "undefined") { this._syncDoorStates(mapData, doors); return; }
         const group = this._doorGroup = new THREE.Group();
         group.name = "doors";
+        R.StillGroup.hold(group);
         this.piecesGroup().add(group);
         this._doors = [];
         for (const piece of doors) {

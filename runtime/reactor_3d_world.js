@@ -2760,8 +2760,19 @@ Reactor3D.Arrival = {
      * map shows (Spriteset_Map.updateReactor3DWarm); 0 draws nothing before the map starts.
      */
     WARM_MS: 1500,
+    /**
+     * Past WARM_MS the unseen draws go on while what waits keeps getting fewer (`ShaderWarmup.lastHidden` fell
+     * within WARM_STALL_MS), up to WARM_HOLD_MS in all; the loading spinner turns meanwhile. A machine that builds
+     * its programs one at a time (no parallel compile: Intel's OpenGL on Windows) showed the first Reactor room
+     * after 1.5 s with most of its 87 programs still to build, and played it at 0 to 11 frames a second for about
+     * 25 s while they were built, a frame of up to 4 s now and then (the Iris Xe laptop, 2026-11-18). 0: WARM_MS alone.
+     */
+    WARM_HOLD_MS: 30000,
+    WARM_STALL_MS: 3000,
     /** Programs started a draw at most during those unseen draws (Reactor3D.ShaderWarmup.COMPILES_PER_FRAME in play). */
     WARM_COMPILES: 24,
+    /** The same for a driver that builds them one at a time (ShaderWarmup.SERIAL_COMPILES_PER_FRAME in play): nothing is seen to stop. */
+    WARM_SERIAL_COMPILES: 12,
     /**
      * The next of a staged scene's parts, within `budget` milliseconds: its pieces a few chunks at a
      * time, then its water, then what follows the water (followUp), a part a frame; then its models are
@@ -2838,6 +2849,7 @@ Reactor3D.MapScene.prototype.piecesGroup = function() {
     if (!this._piecesGroup) {
         this._piecesGroup = new THREE.Group();
         this._piecesGroup.name = "pieces";
+        Reactor3D.StillGroup.hold(this._piecesGroup);
         this._scene.add(this._piecesGroup);
     }
     return this._piecesGroup;

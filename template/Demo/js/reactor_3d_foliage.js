@@ -826,6 +826,7 @@
         if (!this._foliageGroup) {
             this._foliageGroup = new THREE.Group();
             this._foliageGroup.name = "foliage";
+            R.StillGroup.hold(this._foliageGroup);
             this.piecesGroup().add(this._foliageGroup);
             liveGroups.add(this._foliageGroup);
         }

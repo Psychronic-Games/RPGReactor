@@ -981,6 +981,25 @@ Reactor3D.Quality = {
         if (this._sorted[3] < this._refreshMs) this._refreshMs = this._sorted[3];
     },
 
+    /**
+     * Time kept spare: a window counts as holding its rate only if its frame's work (the main thread's, or the card's
+     * if longer) would allow this share more frames than it is asked for. Frames held to the monitor (V-Sync, the
+     * frame limit) all come at its rate, so the frames shown cannot tell a machine with time to spare from one that
+     * misses a refresh at the next hitch: on the Iris Xe laptop Auto settled where the first room's work was 14 to
+     * 20 ms of a 16.7 ms frame (the owner's sessions, 2026-11-18). 0.25: the work may fill four fifths of a frame. A
+     * machine whose work is far under the frame (any desktop card) is judged by its frames as before; 0 judges every
+     * machine by them alone, as before. Steps are weighed the same way (checkStep), so a step that frees time counts.
+     */
+    HEADROOM: 0.25,
+    /** The frames a second a window's work would allow: the longer of the main thread's and the card's ms a frame. */
+    capableRate(busyMs, gpuMs) {
+        const work = Math.max(busyMs > 0 ? busyMs : 0, gpuMs > 0 ? gpuMs : 0);
+        return work > 0 ? 1000 / work : Infinity;
+    },
+    /** The rate a window is judged by: its frames, or what its work allows less the headroom, whichever is less. */
+    ratedRate(perSecond, capable) {
+        return this.HEADROOM > 0 && capable < Infinity ? Math.min(perSecond, capable / (1 + this.HEADROOM)) : perSecond;
+    },
     /** The share of the frame limit's rate that Auto asks for where the limit is under its own target. */
     LIMIT_MET: 0.97,
     /** Auto's quality threshold, not a rendering cap: faster frames keep drawing. */
@@ -1074,24 +1093,26 @@ Reactor3D.Quality = {
         // shown twice as long: 35 to 47% "missed" at 77 to 93 frames a second on Open Road: Forest, and Auto walked
         // both ladders to the bottom, a third of the picture's size, for nothing (the Iris Xe laptop, 2026-11-11).
         this._missMs = 1900 / wanted;
-        let short = Math.max(0, 1 - perSecond / wanted);
-        if (missed > this.MISS_SHARE) short = Math.max(short, this.SLOW);
-        else if (missed > this.MISS_SHARE / 2) short = Math.max(short, (this.SLOW + this.CALM) / 2);
         const frameMs = this._draws ? this._elapsed / this._draws : 0, busyMs = this._busyTicks ? this._busy / this._busyTicks : 0;
         const gpuMs = this.plausibleGpu(this.GpuClock.take(), frameMs);
-        this.lastWindow = { perSecond, wanted, frameMs, busyMs, gpuMs, missed, g: this._gpu, c: this._cpu };
+        // What the window is judged by: the frames it showed, or what its work would allow less the headroom kept (HEADROOM).
+        const capable = this.capableRate(busyMs, gpuMs), rated = this.ratedRate(perSecond, capable);
+        let short = Math.max(0, 1 - rated / wanted);
+        if (missed > this.MISS_SHARE) short = Math.max(short, this.SLOW);
+        else if (missed > this.MISS_SHARE / 2) short = Math.max(short, (this.SLOW + this.CALM) / 2);
+        this.lastWindow = { perSecond, wanted, frameMs, busyMs, gpuMs, missed, capable, rated, g: this._gpu, c: this._cpu };
         // What this window says of the graphics backend the game is running on (reactor_main.js, ReactorBackend).
         if (typeof ReactorBackend !== "undefined" && ReactorBackend._live) ReactorBackend.note(this.lastWindow);
         this.clearWindow();
         // A card whose light split is not settled yet is tried with it and without before a level is given up
         // (Reactor3D.HalfLight.Trial): the levels stand still meanwhile.
         const splitTrial = Reactor3D.HalfLight && Reactor3D.HalfLight.Trial;
-        if (splitTrial && splitTrial.note(perSecond, short >= this.SLOW)) { this._slowRun = 0; return; }
-        if (this.spareGpu(perSecond, busyMs, gpuMs)) return;
+        if (splitTrial && splitTrial.note(rated, short >= this.SLOW)) { this._slowRun = 0; return; }
+        if (this.spareGpu(rated, busyMs, gpuMs)) return;
         // The last two windows' frames, for a step's before and after (checkStep).
         const recent = this._recent || (this._recent = []);
-        recent.push(perSecond); if (recent.length > this.CHECK_WINDOWS) recent.shift();
-        if (this.checkStep(perSecond)) return;
+        recent.push(rated); if (recent.length > this.CHECK_WINDOWS) recent.shift();
+        if (this.checkStep(rated)) return;
         const before = this._gpu + this._cpu;
         let kind = this.mainThreadBound(busyMs, gpuMs, frameMs, wanted) ? "cpu" : "gpu";
         // Its own ladder spent (stepped to the bottom, or a step that bought nothing): the other one is tried, and kept
@@ -1317,7 +1338,52 @@ Reactor3D.setShaderErrorChecks = function(renderer) {
     // The editor keeps them: it is where materials are authored.
     const editor = typeof window !== "undefined" && !!(window.reactor && window.reactor.projectController);
     const playtest = typeof Utils !== "undefined" && Utils.isOptionValid && Utils.isOptionValid("test");
-    renderer.debug.checkShaderErrors = editor || !!playtest || Reactor3D.checkShaderErrors === true;
+    const late = !!playtest && this.LateShaderChecks.enabled !== false && Reactor3D.checkShaderErrors !== true;
+    renderer.debug.checkShaderErrors = editor || (!!playtest && !late) || Reactor3D.checkShaderErrors === true;
+    renderer.__rrLateShaderChecks = late && !editor;
+};
+
+/**
+ * A playtest says why a shader broke without three's checks (`setShaderErrorChecks`). Those ask the driver for
+ * the program's and both shaders' logs at each program's first use, three answers from the GPU process that wait
+ * behind whatever it is doing: on the Iris Xe laptop (OpenGL, programs kept from the run before) a map's arrival
+ * took 10.0 and 10.6 s with them and 7.5 and 7.9 s without (the first Reactor room, turn about, 2026-11-18).
+ * Here each new program is asked only whether it linked, DELAY_MS after it appeared: by then its first use has
+ * read its uniforms and the browser answers from what it holds, without asking the GPU process. One that did not
+ * link is reported with its log, as three would. `enabled = false` (or `Reactor3D.checkShaderErrors = true`):
+ * three's own checks in a playtest, as before.
+ */
+Reactor3D.LateShaderChecks = {
+    enabled: true,
+    DELAY_MS: 3000,
+    /** Programs asked about a frame at most. */
+    PER_FRAME: 4,
+    _frame: -1,
+    tick(renderer) {
+        if (!renderer || !renderer.__rrLateShaderChecks || !renderer.info || !renderer.info.programs) return;
+        const frame = typeof Graphics !== "undefined" && Graphics ? Graphics.frameCount : 0;
+        if (frame === this._frame) return;
+        this._frame = frame;
+        const programs = renderer.info.programs, now = typeof performance !== "undefined" ? performance.now() : Date.now();
+        const state = renderer.__rrLateChecks || (renderer.__rrLateChecks = { length: -1, waiting: [], known: new WeakSet() });
+        if (programs.length !== state.length) {
+            state.length = programs.length;
+            for (const program of programs) if (!state.known.has(program)) { state.known.add(program); state.waiting.push({ program, at: now }); }
+        }
+        for (let n = 0; n < this.PER_FRAME && state.waiting.length && now - state.waiting[0].at >= this.DELAY_MS; n++) this.check(renderer, state.waiting.shift().program);
+    },
+    /** Whether `program` linked; one that did not is reported (true), with its log. */
+    check(renderer, program) {
+        const gl = renderer.getContext && renderer.getContext();
+        if (!gl || !program || !program.program || (gl.isContextLost && gl.isContextLost())) return false;
+        try {
+            if (gl.getProgramParameter(program.program, gl.LINK_STATUS) !== false) return false;
+            console.error("Reactor3D: a shader did not build. Material: " + (program.name || "?") + " (" + (program.type || "?") + ")\n"
+                + String(gl.getProgramInfoLog(program.program) || "").trim()
+                + "\nSet Reactor3D.checkShaderErrors = true before the map for three's full report.");
+            return true;
+        } catch (error) { return false; }
+    }
 };
 
 /**
@@ -1698,6 +1764,12 @@ Reactor3D.GeometryDetail = {
      * out every session, as before.
      */
     KEEP_LEVELS: true,
+    /**
+     * Whether the worker hands back each level, and the whole mesh as a first level of its own, with its triangles in
+     * vertex cache order (reactor_geometry_worker.js `cacheOrder`). False: the levels in the simplifier's order and
+     * the mesh drawn as loaded, as before.
+     */
+    CACHE_ORDER: true,
     // A pixel: beside 0.35 on the start map only single texels on the
     // characters moved (a mean difference of 0.09 of a level), for 0.85 ms
     // of an integrated GPU's frame.
@@ -1776,7 +1848,7 @@ Reactor3D.GeometryDetail = {
     },
     release(state) {
         state.dead = true;
-        for (const level of state.levels) level.geometry.dispose();
+        for (const level of state.levels) { level.geometry.dispose(); if (level.compact) { level.compact.dispose(); level.compact = null; } }
         state.levels.length = 0;
         for (const [g, onDispose] of state.users) { g.removeEventListener('dispose', onDispose); if (this._states.get(g) === state) this._states.delete(g); }
         state.users.clear();
@@ -1822,6 +1894,91 @@ Reactor3D.GeometryDetail = {
         return state;
     },
     _kept: new WeakMap(),
+    /**
+     * Whether a state has a level with fewer triangles than the mesh: its first may be the whole mesh in vertex cache
+     * order (`whole`, the worker's `cacheOrder`), which is the mesh as it is for everything but the card's cache.
+     */
+    simplified(state) {
+        if (!state || !state.levels) return false;
+        for (const level of state.levels) if (!level.whole) return true;
+        return false;
+    },
+    /**
+     * A level drawn from vertex buffers of its own. A level is an index list over the whole mesh's buffers, and on the
+     * Iris Xe laptop (OpenGL) a draw cost what its buffers held, not what it used: three rigid parts of 301k vertices
+     * drawn at a 23.6k-triangle level took 308 to 521 µs of the card each, a body of 142k vertices at 15.7k triangles
+     * 737; the same levels on buffers holding only their own vertices 188 to 191 and 316 (timed per draw, turn about,
+     * the first Reactor room at Low, 2026-11-18). So a level the view picks, using under COMPACT_SHARE of a buffer of
+     * COMPACT_MIN_VERTICES or more, is given its own: its vertices gathered a slice at a time (COMPACT_MS of a frame,
+     * `pumpCompact`), drawn from the shared buffers until they are. Only a level drawn is copied: all of the first
+     * room's levels at once were 4 million vertices. `COMPACT = false`: every level draws from the shared buffers.
+     */
+    COMPACT: true,
+    COMPACT_SHARE: 0.6,
+    COMPACT_MIN_VERTICES: 16384,
+    COMPACT_MS: 1.5,
+    _compactQueue: [],
+    _compactFrame: -1,
+    /** The geometry `level` of `state` is drawn with now: its own buffers once they are made, and asked for if it has none. */
+    drawn(state, level) {
+        if (level.compact) return level.compact;
+        if (this.COMPACT && !level.whole && !level.compactAsked && !state.dead && state.source && state.source.attributes && state.source.attributes.position && level.geometry.index) {
+            level.compactAsked = true;
+            const source = state.source, count = source.attributes.position.count;
+            let plain = count >= this.COMPACT_MIN_VERTICES && !source.morphAttributes?.position?.length;
+            for (const k in source.attributes) if (source.attributes[k].isInterleavedBufferAttribute) plain = false;
+            if (plain) this._compactQueue.push({ state, level, step: 0, at: 0, n: 0 });
+        }
+        return level.geometry;
+    },
+    /** Levels' own buffers made a slice at a time, `ms` at most (once a frame). */
+    pumpCompact(ms) {
+        const queue = this._compactQueue;
+        if (!queue.length) return;
+        const frame = typeof Graphics !== "undefined" && Graphics ? Graphics.frameCount : 0;
+        if (frame === this._compactFrame) return;
+        this._compactFrame = frame;
+        const clock = () => (typeof performance !== "undefined" ? performance.now() : Date.now()), until = clock() + (ms === undefined ? this.COMPACT_MS : ms);
+        while (queue.length && clock() < until) {
+            const job = queue[0], { state, level } = job;
+            if (state.dead || !this.fresh(state) || !state.levels.includes(level)) { queue.shift(); continue; }
+            const source = state.source, count = source.attributes.position.count, index = level.geometry.index.array;
+            if (job.step === 0) {
+                // The vertices the level uses, numbered in the order its triangles first use them.
+                if (!job.map) { job.map = new Int32Array(count).fill(-1); job.indices = new Uint32Array(index.length); }
+                const map = job.map, out = job.indices, end = Math.min(index.length, job.at + 60000);
+                let n = job.n;
+                for (let i = job.at; i < end; i++) { const v = index[i]; let to = map[v]; if (to < 0) to = map[v] = n++; out[i] = to; }
+                job.n = n; job.at = end;
+                if (end < index.length) continue;
+                if (n > count * this.COMPACT_SHARE) { queue.shift(); continue; }
+                job.keep = new Uint32Array(n);
+                for (let v = 0; v < count; v++) if (map[v] >= 0) job.keep[map[v]] = v;
+                job.map = null; job.step = 1; job.names = Object.keys(source.attributes); job.arrays = {}; job.name = 0; job.at = 0;
+                continue;
+            }
+            if (job.step === 1) {
+                // An attribute's values for those vertices, a slice at a time.
+                if (job.name >= job.names.length) { job.step = 2; continue; }
+                const attribute = source.attributes[job.names[job.name]], size = attribute.itemSize, from = attribute.array;
+                const into = job.arrays[job.names[job.name]] || (job.arrays[job.names[job.name]] = new from.constructor(job.n * size));
+                const keep = job.keep, end = Math.min(job.n, job.at + 20000);
+                for (let j = job.at; j < end; j++) { const o = keep[j] * size, t = j * size; for (let k = 0; k < size; k++) into[t + k] = from[o + k]; }
+                job.at = end;
+                if (end >= job.n) { job.name++; job.at = 0; }
+                continue;
+            }
+            const g = new THREE.BufferGeometry();
+            for (const name of job.names) { const a = source.attributes[name]; g.setAttribute(name, new THREE.BufferAttribute(job.arrays[name], a.itemSize, a.normalized)); }
+            g.setIndex(new THREE.BufferAttribute(job.n < 65536 ? Uint16Array.from(job.indices) : job.indices, 1));
+            g.boundingBox = level.geometry.boundingBox ? level.geometry.boundingBox.clone() : null;
+            g.boundingSphere = level.geometry.boundingSphere ? level.geometry.boundingSphere.clone() : null;
+            g.userData = Object.assign({}, level.geometry.userData, { rrCompact: true });
+            level.compact = g;
+            this.compacted = (this.compacted || 0) + 1;
+            queue.shift();
+        }
+    },
     /** A state's levels from the worker's index lists: each shares the source's vertex buffers. */
     lay(state, levels) {
         for (const level of levels) {
@@ -1830,15 +1987,41 @@ Reactor3D.GeometryDetail = {
             // attributes, bone data or the authored GLB on disk.
             for (const [key, value] of Object.entries(state.source.attributes)) g.setAttribute(key, value);
             g.setIndex(new THREE.BufferAttribute(level.indices, 1));
+            // (The whole mesh in vertex cache order is marked: what a probe or a later rule may tell from a simplified level.)
+            if (level.whole) g.userData.rrWholeOrder = true;
             g.boundingBox = state.source.boundingBox?.clone() || null;
             g.boundingSphere = state.source.boundingSphere?.clone() || null;
             // `loose`: made across texture seams (the worker's Permissive levels); see `begin`.
-            state.levels.push({ geometry: g, error: level.error, loose: level.loose === true });
+            state.levels.push({ geometry: g, error: level.error, loose: level.loose === true, whole: level.whole === true });
         }
         this.levelsReady++;
     },
+    /**
+     * A mesh kept out of the levels by its shape keys (a built character's face and body, 20 to 30k triangles with 24
+     * to 28 shapes) has its own triangle list put in vertex cache order instead, in place: its vertices, and so its
+     * shapes, stay as they are. Opaque and cut-out meshes only (a see-through one blends in the order it is drawn).
+     * Asked for as the view first meets the mesh (`begin`), worked out in the geometry worker between its other jobs.
+     */
+    ORDER_SHAPED: true,
+    _orderQueue: [],
+    orderable(object) {
+        const g = object.geometry, m = object.material;
+        if (!this.ORDER_SHAPED || this.CACHE_ORDER === false || !object.isMesh || object.isInstancedMesh || !g || !g.index) return false;
+        if (g.userData.rrOrderAsked || g.index.count < this.SKINNED_MIN_INDICES || g.groups.length || g.drawRange.start !== 0 || g.drawRange.count < g.index.count) return false;
+        if (!m || Array.isArray(m) || m.transparent || !m.__reactorModel) return false;
+        const shapes = g.morphAttributes; let shaped = false;
+        for (const k in shapes) if (shapes[k] && shapes[k].length) shaped = true;
+        return shaped;
+    },
+    askOrder(object) {
+        const g = object.geometry;
+        g.userData.rrOrderAsked = true;
+        this._orderQueue.push({ order: true, geometry: g, index: g.index, version: g.index.version, id: ++this._serial });
+        this.dispatch();
+    },
     dispatch() {
-        if (this._busy || this._failed || !this._queue.length) return;
+        if (this._busy || this._failed) return;
+        if (!this._queue.length) return this.dispatchOrder();
         const state = this._queue.shift();
         if (!this.fresh(state)) return this.dispatch();
         try {
@@ -1867,15 +2050,48 @@ Reactor3D.GeometryDetail = {
             }
             this._busy = state;
             this._worker.postMessage({ id: state.id, positions, indices, attributes: packed, stride,
-                weights: new Array(stride).fill(1), keep: this.KEEP_LEVELS }, [positions.buffer, indices.buffer, packed.buffer]);
+                weights: new Array(stride).fill(1), keep: this.KEEP_LEVELS, order: this.CACHE_ORDER !== false }, [positions.buffer, indices.buffer, packed.buffer]);
             // Not through fail(): that switches detail levels off for the session.
             Reactor3D.IdleWorkers.touch("geometry", () => !!this._busy || this._queue.length > 0, () => { const idle = this._worker; this._worker = null; if (idle) idle.terminate(); });
         } catch (error) { this.fail(); }
+    },
+    /** The next shaped mesh's triangle list to the worker (`orderable`), once no level is waiting. */
+    dispatchOrder() {
+        const job = this._orderQueue.shift();
+        if (!job) return;
+        const g = job.geometry;
+        if (g.index !== job.index || g.index.version !== job.version) return this.dispatchOrder();
+        try {
+            this.worker();
+            const indices = new Uint32Array(g.index.array);
+            this._busy = job;
+            this._worker.postMessage({ id: job.id, orderOnly: true, indices, vertices: g.attributes.position.count }, [indices.buffer]);
+            Reactor3D.IdleWorkers.touch("geometry", () => !!this._busy || this._queue.length > 0 || this._orderQueue.length > 0, () => { const idle = this._worker; this._worker = null; if (idle) idle.terminate(); });
+        } catch (error) { this._busy = null; }
+    },
+    /** The worker, made on first use. */
+    worker() {
+        if (this._worker) return this._worker;
+        const url = Reactor3D.workerUrl('reactor_geometry_worker.js');
+        this._worker = new Worker(url, { type: 'module', name: 'Reactor geometry' });
+        this._worker.onmessage = event => this.receive(event.data);
+        this._worker.onerror = () => this.fail();
+        this._worker.onmessageerror = () => this.fail();
+        return this._worker;
     },
     receive(message) {
         const state = this._busy;
         this._busy = null;
         if (!state || message.id !== state.id) return this.fail();
+        if (state.order) {
+            // A shaped mesh's triangles in cache order, laid into its own list if that list is still the one sent.
+            const g = state.geometry, order = message.order;
+            if (!message.error && order && g.index === state.index && g.index.version === state.version && order.length === g.index.array.length) {
+                g.index.array.set(order); g.index.needsUpdate = true; g.userData.rrCacheOrdered = true;
+                this.ordered = (this.ordered || 0) + 1;
+            }
+            return this.dispatch();
+        }
         if (message.error) return this.fail();
         if (this.fresh(state)) {
             const index = state.source.index;
@@ -1996,7 +2212,7 @@ Reactor3D.GeometryDetail = {
         // A character's shadow is its outline, not its surface: the
         // coarsest level (a fiftieth of a tile off, on the Demo's party)
         // wherever the light stands. Only the outline reaches the face.
-        if (object.isSkinnedMesh && this.silhouetteShadows) return state.levels[state.levels.length - 1].geometry;
+        if (object.isSkinnedMesh && this.silhouetteShadows) return this.drawn(state, state.levels[state.levels.length - 1]);
         const center = this._shadowCenter || (this._shadowCenter = new THREE.Vector3());
         let perUnit;
         if (object.isSkinnedMesh) {
@@ -2014,9 +2230,9 @@ Reactor3D.GeometryDetail = {
             center.copy(g.boundingSphere.center).applyMatrix4(object.matrixWorld);
             perUnit = focal * scale / Math.max(near, (origin ? center.distanceTo(origin) : distance) - g.boundingSphere.radius * scale);
         }
-        let selected = null;
-        for (const level of state.levels) if (level.error * perUnit <= this.SHADOW_TEXEL_ERROR) selected = level.geometry;
-        return selected;
+        let pick = null;
+        for (const level of state.levels) if (level.error * perUnit <= this.SHADOW_TEXEL_ERROR) pick = level;
+        return pick ? this.drawn(state, pick) : null;
     },
     /** What a caster puts into one shadow face, a light `distance` tiles off: the levels it would take. */
     shadowTriangles(root, size, distance, near) {
@@ -2044,6 +2260,8 @@ Reactor3D.GeometryDetail = {
     begin(scene, camera, height, keep) {
         const swapped = [];
         if (!this.enabled || this._failed || scene.overrideMaterial || typeof Worker === 'undefined' || !this.wanted(scene)) return swapped;
+        // Levels picked before and still drawn from the shared buffers get theirs a slice at a time (`drawn`).
+        this.pumpCompact();
         const allowed = this.pixelError * Reactor3D.Quality.detail();
         // A level made across texture seams is right only where its error is under a pixel: a Quality level's
         // several pixels are for the levels that keep every seam (`looseAllowed`).
@@ -2070,13 +2288,14 @@ Reactor3D.GeometryDetail = {
             kept.picks.length = 0;
         } else if (keyed && all.has(keep)) all.delete(keep);
         Reactor3D.SceneWalk.each(scene, object => {
-            if (!this.eligible(object)) return;
+            if (!this.eligible(object)) { if (object.isMesh && object.geometry && !object.geometry.userData.rrOrderAsked && this.orderable(object)) this.askOrder(object); return; }
             const state = this.state(object.geometry);
             if (!state.levels.length) return;
             const pixels = this.pixelsPerUnit(object, camera, height);
-            let selected = null;
-            for (const level of state.levels) if (level.error * pixels <= (level.loose ? looseAllowed : allowed)) selected = level.geometry;
-            if (!selected) return;
+            let pick = null;
+            for (const level of state.levels) if (level.error * pixels <= (level.loose ? looseAllowed : allowed)) pick = level;
+            if (!pick) return;
+            const selected = this.drawn(state, pick);
             if (kept) kept.picks.push(object, object.geometry, selected, state);
             swapped.push([object, object.geometry]);
             object.geometry = selected;
@@ -2262,6 +2481,37 @@ Reactor3D.SceneWalk = {
     }
 };
 
+/**
+ * A group that stands still (a map scene's root, its pieces, plants and doors) and holds thousands of things that
+ * stand still too. three recomposes a group's matrix on every walk and, having done so, takes every world matrix
+ * under it as changed: in North Haven 2,006 of the scene's 2,901 world matrices were worked out again each frame,
+ * every map piece, plant and door among them, though each says itself when it moves (`updateMatrix`). A held group
+ * says it changed only when it did: its own place, or where its parent puts it (a world under a neighbour's offset
+ * that becomes the map played). Its matrix still follows its position, rotation and scale; what under it moves
+ * still moves. `enabled = false`: every walk works them all out, as before.
+ */
+Reactor3D.StillGroup = {
+    enabled: true,
+    _matrix: null,
+    _world: null,
+    hold(group) {
+        if (!group || group.__rrStill || typeof THREE === "undefined" || !THREE.Matrix4) return group;
+        group.__rrStill = true;
+        const S = this, own = group.updateMatrix;
+        group.updateMatrix = function() {
+            if (!S.enabled) return own.apply(this, arguments);
+            const m = S._matrix || (S._matrix = new THREE.Matrix4()), w = S._world || (S._world = new THREE.Matrix4());
+            m.compose(this.position, this.quaternion, this.scale);
+            if (this.pivot !== null && this.pivot !== undefined) return own.apply(this, arguments);
+            if (!m.equals(this.matrix)) { this.matrix.copy(m); this.matrixWorldNeedsUpdate = true; return; }
+            // Unchanged here; changed where it hangs (taken out of a neighbour's offset group, or put in one).
+            if (this.parent) w.multiplyMatrices(this.parent.matrixWorld, this.matrix); else w.copy(this.matrix);
+            if (!w.equals(this.matrixWorld)) this.matrixWorldNeedsUpdate = true;
+        };
+        return group;
+    }
+};
+
 /** A cleared shared target can be reused while a pass has nothing to draw. */
 Reactor3D.EmptyPass = {
     enabled: true,
@@ -2308,6 +2558,8 @@ Reactor3D.EmptyPass = {
 
 /** The game, editor map and model previews use the same colour-draw path. */
 Reactor3D.renderScene = function(renderer, scene, camera) {
+    // A playtest's programs asked whether they linked, once they have been read (LateShaderChecks).
+    if (renderer && renderer.__rrLateShaderChecks) this.LateShaderChecks.tick(renderer);
     // One walk of the scene for everything below that reads it (SceneWalk).
     const held = this.SceneWalk.hold(scene);
     let hidden = null, warming = null;
@@ -2905,6 +3157,9 @@ Reactor3D.ShaderWarmup = {
      */
     readEarly: true,
     _toRead: [],
+    /** Until when (performance.now) nothing drawn is seen (Spriteset_Map.updateReactor3DWarm): reads go UNSEEN_READS at a time. */
+    unseenUntil: 0,
+    UNSEEN_READS: 12,
     /** Queues a linked program's read; true once it has been read (or there is nothing to read). */
     readSoon(program) {
         if (!this.readEarly || !program || program.__rrUniformsRead || !program.program || typeof program.getUniforms !== "function") return true;
@@ -2923,8 +3178,9 @@ Reactor3D.ShaderWarmup = {
                 if (clock() - this._readHeldFrom <= this.QUIET_WAIT_MS) { later(run); return; }
             }
             this._readHeldFrom = 0;
-            // A few at a time, while the frame's idle time lasts.
-            for (let n = 0; list.length && n < 4 && (!deadline || deadline.didTimeout || deadline.timeRemaining() > 3); n++) {
+            // A few at a time, while the frame's idle time lasts; more while nothing is seen (a map's unseen draws).
+            const unseen = clock() < this.unseenUntil, most = unseen ? this.UNSEEN_READS : 4;
+            for (let n = 0; list.length && n < most && (unseen || !deadline || deadline.didTimeout || deadline.timeRemaining() > 3); n++) {
                 const program = list.shift();
                 // A program destroyed while it waited has nothing to read.
                 if (!program.program || program.__rrUniformsRead) continue;
@@ -7671,6 +7927,8 @@ Reactor3D.MapScene.prototype.initialize = function(mapData, bitmaps, options) {
     // ground's grain and wandering edges are the world's, the same whichever map of it is being played.
     this._groundFrame = { shift: new THREE.Vector3(), place: new THREE.Vector3(this._surroundOrigin ? this._surroundOrigin.x : 0, 0, this._surroundOrigin ? this._surroundOrigin.z : 0) };
     this._scene = new THREE.Scene();
+    // Its own place never moves: what under it stands still is not worked out again each frame (StillGroup).
+    Reactor3D.StillGroup.hold(this._scene);
     this._materials = [];
     this._meshes = [];
     this._textures = [];

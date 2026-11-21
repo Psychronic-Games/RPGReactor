@@ -2540,7 +2540,23 @@ JsonEx.maxDepth = 100;
  * @returns {string} The JSON string.
  */
 JsonEx.stringify = function(object) {
-    return JSON.stringify(this._encode(object, 0));
+    this._sawLiveObject = false;
+    const encoded = this._encode(object, 0);
+    if (!this._sawLiveObject) return JSON.stringify(encoded);
+    // A sprite, picture or texture a plugin keeps on a game object (Hendrix Action Engine's target-lock marker on
+    // $gamePlayer) is left out of the file: nothing in a save can bring one back, and walking into it stopped every
+    // save while the marker showed (RPG Maker's own code fails there too). The live object is not touched.
+    return JSON.stringify(encoded, (key, value) => (value && typeof value === "object" && JsonEx._isLiveObject(value) ? undefined : value));
+};
+
+/** A display object, picture or GPU texture: the screen's, not the game's state. */
+JsonEx._isLiveObject = function(value) {
+    if (typeof PIXI !== "undefined") {
+        if (PIXI.Container && value instanceof PIXI.Container) return true;
+        if (PIXI.Texture && value instanceof PIXI.Texture) return true;
+        if (PIXI.TextureSource && value instanceof PIXI.TextureSource) return true;
+    }
+    return typeof Bitmap === "function" && value instanceof Bitmap;
 };
 
 /**
@@ -2571,7 +2587,12 @@ JsonEx._encode = function(value, depth) {
     }
     const type = Object.prototype.toString.call(value);
     if (type === "[object Object]" || type === "[object Array]") {
-        const constructorName = value.constructor.name;
+        if (this._isLiveObject(value)) {
+            this._sawLiveObject = true;
+            return value;
+        }
+        // An object made with Object.create(null) (a plugin's lookup table) has no constructor: saved as a plain one.
+        const constructorName = value.constructor ? value.constructor.name : "Object";
         if (constructorName !== "Object" && constructorName !== "Array") {
             value["@"] = constructorName;
         }

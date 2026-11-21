@@ -4814,7 +4814,7 @@ Reactor3D.CasterMerge = {
             const count = g.index ? g.index.count : position.count;
             if (g.drawRange.start !== 0 || g.drawRange.count < count) return;
             const state = detail && detail._states && detail._states.get(g);
-            if (state && state.levels && state.levels.length) return;
+            if (state && detail.simplified(state)) return;
             const own = child.customDepthMaterial && child.customDepthMaterial.__rrCaster ? child.customDepthMaterial : null;
             const caster = own && (own.__rrCutout || !own.__rrPooled) ? own : shadows.casterMaterialFor(child.material, false);
             if (caster.__rrCutout && !g.attributes.uv) return;
@@ -4901,7 +4901,7 @@ Reactor3D.CasterMerge = {
             if (g.drawRange.start !== 0 || g.drawRange.count < count) return;
             // One drawn at a distance level in rows keeps its own draw.
             const state = detail && detail._states && detail._states.get(g);
-            if (state && state.levels && state.levels.length) return;
+            if (state && detail.simplified(state)) return;
             const own = child.customDepthMaterial && child.customDepthMaterial.__rrCaster ? child.customDepthMaterial : null;
             const caster = own && (own.__rrCutout || !own.__rrPooled) ? own : shadows.casterMaterialFor(child.material, true);
             if (caster.__rrCutout && !g.attributes.uv) return;
@@ -5391,7 +5391,7 @@ Reactor3D.CasterCrowd = {
                     const count = g.index ? g.index.count : position.count;
                     if (g.drawRange.start !== 0 || g.drawRange.count < count) return;
                     const state1 = detail && detail._states && detail._states.get(g);
-                    if (state1 && state1.levels && state1.levels.length) return;   // its level is picked per face
+                    if (state1 && detail.simplified(state1)) return;   // its level is picked per face
                     take(this.skinnedTwin(caster, shadows), part, root, part, pool => this.append(pool, part, root, g, this.selfSkin(part), 0, null));
                     return;
                 }
@@ -5400,7 +5400,7 @@ Reactor3D.CasterCrowd = {
                 if (part.bindMode !== THREE.AttachedBindMode || !part.skeleton) return;
                 let g = part.geometry;
                 const state0 = detail && detail._states && detail._states.get(g);
-                if (state0 && state0.levels && state0.levels.length) {
+                if (state0 && detail.simplified(state0)) {
                     // Drawn at a level in the faces: only the coarsest (a skin's silhouette), and only once it is made.
                     if (!detail.silhouetteShadows || !detail.skinned || part.userData.rrNoDetail || !detail.fresh(state0)) return;
                     g = state0.levels[state0.levels.length - 1].geometry;
@@ -5686,6 +5686,19 @@ Reactor3D._lodSwaps = 0;
 /** Whether this map wants shadows at all: the engine switch, the mode, the sidecar. */
 Reactor3D.shadowsWanted = function(mapData) {
     if (this.SHADOWS === "off" || (this.Quality && !this.Quality.shadows())) return false;
+    return this.shadowsBuilt(mapData);
+};
+
+/**
+ * Whether this map's lit programs carry the shadow lookup: the engine switch, the mode and the sidecar, but not the
+ * Quality levels. Auto's levels turn shadows off and on as a machine falls short or recovers; when that changed the
+ * programs, every lit one was built again at the step, on the machine least able to afford it: on the Iris Xe laptop
+ * (OpenGL, programs kept from the run before) 32 programs and 12 s of frames of 0.7 to 2.4 s as the first room
+ * stepped from GPU 4 to GPU 5 (2026-11-18). A level without shadows now keeps the programs and only stops drawing
+ * and reading the rows (`Shadows.render`, `held`): no light reads a row, which the shader skips before any lookup.
+ */
+Reactor3D.shadowsBuilt = function(mapData) {
+    if (this.SHADOWS === "off") return false;
     if (this.lightModeFor(mapData) !== "volume") return false;
     const map = mapData || (typeof $dataMap !== "undefined" ? $dataMap : null);
     const lighting = map && map.reactor3d && map.reactor3d.lighting;
@@ -5749,6 +5762,10 @@ Reactor3D.Shadows = {
     /** When `render` last ran, for owners taking turns (`Reactor3D.claimShadows`). */
     lastRenderAt: 0,
     backlog: 0,
+    /** Whether a Quality level without shadows holds them (`render`): the programs kept, no row drawn or read. */
+    held: false,
+    /** The kill switch: false builds every lit program again without shadows when a Quality level turns them off, as before. */
+    keepPrograms: true,
 
     quality() {
         if (this._quality) return this._quality;
@@ -6701,7 +6718,9 @@ Reactor3D.Shadows = {
         const uniforms = Reactor3D.lightUniforms();
         this._lightSet = options && options.lights || null;
         this.lastRenderAt = typeof performance !== "undefined" ? performance.now() : Date.now();
-        const want = Reactor3D.shadowsWanted(mapData);
+        // A Quality level without shadows keeps the shadow programs (`Reactor3D.shadowsBuilt`) and stops here, below.
+        const keep = this.keepPrograms !== false;
+        const want = keep ? Reactor3D.shadowsBuilt(mapData) : Reactor3D.shadowsWanted(mapData);
         if (!want) {
             this._sun = null;
             if (this._active) {
@@ -6718,6 +6737,16 @@ Reactor3D.Shadows = {
         // Shadows come on here, before the pass, with the atlas made and bound (`_ensureAtlas`), and not at the
         // first rows' draw inside it (`activate`).
         this.activate(scene);
+        // Held by the Quality levels: the programs stay as they are, no light reads a row and none is drawn. The rows
+        // hold what they held; once shadows are back every static row is drawn again at its own pace (what moved while
+        // held is not tracked), and the moving rows at their next draw.
+        if (keep && Reactor3D.Quality && !Reactor3D.Quality.shadows()) {
+            if (!this.held) { this.held = true; this._sun = null; }
+            (this._lightSet || uniforms).rrLightShadow.value.fill(-1);
+            if (this._sentinel.parent) this._sentinel.parent.remove(this._sentinel);
+            return;
+        }
+        if (this.held) { this.held = false; this._generation++; }
         if (scene.matrixWorldAutoUpdate !== false) scene.updateMatrixWorld();
         const quality = this.quality();
         const tiles = this._tiles;
@@ -7594,7 +7623,7 @@ Reactor3D.Shadows = {
      */
     prime(renderer, scene, mapData) {
         if (typeof THREE === "undefined" || !renderer || typeof renderer.setRenderTarget !== "function") return false;
-        if (!Reactor3D.shadowsWanted(mapData)) return false;
+        if (!(this.keepPrograms !== false ? Reactor3D.shadowsBuilt(mapData) : Reactor3D.shadowsWanted(mapData))) return false;
         // Another renderer's rows (a battle room's, an editor preview's) are theirs until the map claims them by drawing.
         if (this._renderer && this._renderer !== renderer && !(Reactor3D.claimShadows && Reactor3D.claimShadows(renderer))) return false;
         this._ensureAtlas(renderer);

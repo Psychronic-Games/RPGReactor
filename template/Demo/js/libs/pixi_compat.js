@@ -623,7 +623,11 @@
                     }
                 } else if (PIXI.Text && instance instanceof PIXI.Text && (typeof first === "string" || typeof first === "number")) {
                     instance.text = String(first);
-                    if (args[1]) instance.style = args[1];
+                    if (args[1]) instance.style = rrLegacyTextStyle(args[1], true);
+                } else if (PIXI.Text && instance instanceof PIXI.Text && first && typeof first === "object" && first.__rrLegacyText) {
+                    // The callable wrapper already turned (text, style) into options.
+                    instance.text = first.text;
+                    if (first.style) instance.style = first.style;
                 }
             } catch (e) { /* the legacy initialize usually sets these itself */ }
             return instance;
@@ -724,8 +728,10 @@
             let isClass = false;
             try { isClass = /^class[\s{]/.test(Function.prototype.toString.call(Real)); } catch (e) { isClass = false; }
             if (!isClass) continue;
+            const legacyText = name === "Text" || name === "HTMLText";
             const Wrapper = function() {
-                const args = Array.prototype.slice.call(arguments);
+                let args = Array.prototype.slice.call(arguments);
+                if (legacyText) args = rrLegacyTextArgs(args);
                 if (new.target) {
                     return Reflect.construct(Real, args, new.target === Wrapper ? Real : new.target);
                 }
@@ -785,6 +791,116 @@
             POW2: true,
             ON: true,
             ON_MANUAL: true
+        };
+    }
+    // A legacy plugin may hand a base texture v5's numbers (SCALE_MODES 0/1,
+    // MIPMAP_MODES 0-3, WRAP_MODES as GL enums) where v8 wants strings and a
+    // boolean. Unknown values pass through for v8 to judge.
+    function rrScaleMode(value) {
+        if (value === 0) return "nearest";
+        if (value === 1) return "linear";
+        return value;
+    }
+    function rrMipmap(value) {
+        return typeof value === "number" ? value > 0 : !!value;
+    }
+    function rrWrapMode(value) {
+        if (value === 33071) return "clamp-to-edge";
+        if (value === 10497) return "repeat";
+        if (value === 33648) return "mirror-repeat";
+        return value;
+    }
+    // v5's BaseTexture.setStyle(scaleMode, mipmap): plugins call it to switch a
+    // picture to hard pixels (Hendrix HUD Designer, on every loaded picture).
+    // v8 has no such method; it changes the source's style the same way.
+    function rrSetSourceStyle(source, scaleMode, mipmap) {
+        if (!source || source.destroyed) return;
+        if (scaleMode !== undefined && scaleMode !== null) {
+            try { source.scaleMode = rrScaleMode(scaleMode); } catch (e) {}
+        }
+        if (mipmap !== undefined && mipmap !== null && "autoGenerateMipmaps" in source) {
+            source.autoGenerateMipmaps = rrMipmap(mipmap);
+        }
+    }
+    // v5 text styles had the outline width apart from its colour:
+    // { stroke: "#000", strokeThickness: 4 }, with no outline at all when the
+    // thickness was left out (its default was 0) and black when the colour was.
+    // v8 takes { stroke: { color, width } }, warns on strokeThickness, throws
+    // when strokeThickness comes without a stroke colour, and draws a colour
+    // given alone one pixel wide. `positional` is set for the v5 constructor
+    // form new Text(text, style), where a bare colour can only be v5's.
+    function rrLegacyTextStyle(style, positional) {
+        if (!style || typeof style !== "object") return style;
+        if (PIXI.TextStyle && style instanceof PIXI.TextStyle) return style;
+        const hasThickness = style.strokeThickness !== undefined && style.strokeThickness !== null;
+        const stroke = style.stroke;
+        const colorLike = typeof stroke === "string" || typeof stroke === "number";
+        if (!hasThickness && !(positional && colorLike)) return style;
+        const out = Object.assign({}, style);
+        delete out.strokeThickness;
+        const width = hasThickness ? (Number(style.strokeThickness) || 0) : 0;
+        if (stroke === undefined || stroke === null) {
+            out.stroke = { color: "black", width: width };
+        } else if (colorLike) {
+            out.stroke = { color: stroke, width: width };
+        } else if ((PIXI.FillGradient && stroke instanceof PIXI.FillGradient) ||
+                   (PIXI.FillPattern && stroke instanceof PIXI.FillPattern)) {
+            out.stroke = { fill: stroke, width: width };
+        } else if (typeof stroke === "object") {
+            out.stroke = Object.assign({}, stroke, { width: width });
+        }
+        return out;
+    }
+    // new Text(text, style) and new Text(5): v8 still takes the first (with a
+    // warning) but reads a number as an options object and shows nothing.
+    function rrLegacyTextArgs(args) {
+        const first = args[0];
+        if (typeof first !== "string" && typeof first !== "number") return args;
+        const options = { text: String(first) };
+        if (args[1]) options.style = rrLegacyTextStyle(args[1], true);
+        Object.defineProperty(options, "__rrLegacyText", { value: true });
+        return [options];
+    }
+    if (_isV8Pixi && PIXI.Text && PIXI.Text.prototype) {
+        // `text.style = { ..., strokeThickness }` after construction, and the
+        // options form new Text({ text, style }) with a v5 style, go through
+        // the same setter.
+        let proto = PIXI.Text.prototype, desc = null;
+        while (proto && !(desc = Object.getOwnPropertyDescriptor(proto, "style"))) proto = Object.getPrototypeOf(proto);
+        if (desc && desc.set && desc.configurable && !desc.set.__rrLegacyStyle) {
+            const setStyle = desc.set;
+            const set = function(value) { setStyle.call(this, rrLegacyTextStyle(value, false)); };
+            set.__rrLegacyStyle = true;
+            Object.defineProperty(proto, "style", { get: desc.get, set: set, configurable: true, enumerable: desc.enumerable });
+        }
+    }
+    if (_isV8Pixi && PIXI.TextStyle && PIXI.TextStyle.prototype &&
+        !("strokeThickness" in PIXI.TextStyle.prototype)) {
+        // `text.style.strokeThickness = 4` on a v8 style was a dead write.
+        Object.defineProperty(PIXI.TextStyle.prototype, "strokeThickness", {
+            configurable: true,
+            get: function() { return this._stroke ? (this._stroke.width || 0) : 0; },
+            set: function(value) {
+                const width = Number(value) || 0;
+                const current = this._originalStroke;
+                if (current === undefined || current === null) {
+                    this.stroke = { color: "black", width: width };
+                } else if (typeof current === "string" || typeof current === "number") {
+                    this.stroke = { color: current, width: width };
+                } else if ((PIXI.FillGradient && current instanceof PIXI.FillGradient) ||
+                           (PIXI.FillPattern && current instanceof PIXI.FillPattern)) {
+                    this.stroke = { fill: current, width: width };
+                } else if (typeof current === "object") {
+                    this.stroke = Object.assign({}, current, { width: width });
+                }
+            }
+        });
+    }
+    if (_isV8Pixi && PIXI.TextureSource && PIXI.TextureSource.prototype &&
+        typeof PIXI.TextureSource.prototype.setStyle !== "function") {
+        PIXI.TextureSource.prototype.setStyle = function(scaleMode, mipmap) {
+            rrSetSourceStyle(this, scaleMode, mipmap);
+            return this;
         };
     }
     if (_isV8Pixi || !PIXI.DRAW_MODES) {
@@ -974,6 +1090,17 @@
     if (!PIXI.utils.rgb2hex) {
         PIXI.utils.rgb2hex = function(rgb) {
             return ((rgb[0] * 255) << 16) + ((rgb[1] * 255) << 8) + (rgb[2] * 255 | 0);
+        };
+    }
+    // v5's batch helper, read by plugins that pack their own vertices
+    // (Hendrix 3D Light and Shadow): a tint with its alpha multiplied in.
+    if (!PIXI.utils.premultiplyTint) {
+        PIXI.utils.premultiplyTint = function(tint, alpha) {
+            if (alpha === 1) return (alpha * 255 << 24) + tint;
+            if (alpha === 0) return 0;
+            let r = (tint >> 16) & 0xff, g = (tint >> 8) & 0xff, b = tint & 0xff;
+            r = (r * alpha + 0.5) | 0; g = (g * alpha + 0.5) | 0; b = (b * alpha + 0.5) | 0;
+            return (alpha * 255 << 24) + (r << 16) + (g << 8) + b;
         };
     }
 
@@ -1825,8 +1952,12 @@
                     ? { source: this._rawResource, update: () => this.update() }
                     : null;
                 if (this.resource && ArrayBuffer.isView(this._rawResource)) this.resource.data = this._rawResource;
-                this.scaleMode = options.scaleMode || "linear";
-                this.mipmap = options.mipmap || false;
+                // Held here until the v8 source exists; after that the
+                // accessors below read and write the source itself.
+                this._scaleMode = rrScaleMode(options.scaleMode) ||
+                    (existingSource ? existingSource.scaleMode : "linear");
+                this._mipmap = options.mipmap !== undefined ? rrMipmap(options.mipmap)
+                    : (existingSource ? !!existingSource.autoGenerateMipmaps : false);
                 this.valid = false;
                 this.width = 1;
                 this.height = 1;
@@ -1893,6 +2024,39 @@
                 }
             }
             get source() { return this._textureSource; }
+            // v5 plugins (and the corescript's Bitmap.smooth) change these
+            // after the texture exists; a plain field left the GPU picture on
+            // the mode it was made with, so `bitmap.smooth = false` did nothing.
+            get scaleMode() {
+                const src = this._textureSource;
+                return src && !src.destroyed ? src.scaleMode : this._scaleMode;
+            }
+            set scaleMode(value) {
+                this._scaleMode = rrScaleMode(value);
+                rrSetSourceStyle(this._textureSource, this._scaleMode);
+            }
+            get mipmap() {
+                const src = this._textureSource;
+                return src && !src.destroyed && "autoGenerateMipmaps" in src ? !!src.autoGenerateMipmaps : this._mipmap;
+            }
+            set mipmap(value) {
+                this._mipmap = rrMipmap(value);
+                rrSetSourceStyle(this._textureSource, undefined, this._mipmap);
+            }
+            get wrapMode() {
+                const src = this._textureSource;
+                return src && !src.destroyed ? src.addressMode : this._wrapMode;
+            }
+            set wrapMode(value) {
+                this._wrapMode = rrWrapMode(value);
+                const src = this._textureSource;
+                if (src && !src.destroyed) { try { src.addressMode = this._wrapMode; } catch (e) {} }
+            }
+            setStyle(scaleMode, mipmap) {
+                if (scaleMode !== undefined && scaleMode !== null) this.scaleMode = scaleMode;
+                if (mipmap !== undefined && mipmap !== null) this.mipmap = mipmap;
+                return this;
+            }
             update() {
                 deferTextureUpload(this._textureSource);
             }
@@ -2132,17 +2296,21 @@
                         },
                         get scaleMode() { return src.scaleMode; },
                         set scaleMode(v) {
-                            try { src.scaleMode = v; } catch (e) {}
+                            rrSetSourceStyle(src, v);
                         },
                         get mipmap() { return src.autoGenerateMipmaps; },
                         set mipmap(v) {
-                            src.autoGenerateMipmaps = !!v;
+                            rrSetSourceStyle(src, undefined, v);
                         },
                         get wrapMode() {
-                            return src.wrapMode;
+                            return src.addressMode;
                         },
                         set wrapMode(v) {
-                            try { src.wrapMode = v; } catch (e) {}
+                            try { src.addressMode = rrWrapMode(v); } catch (e) {}
+                        },
+                        setStyle(scaleMode, mipmap) {
+                            rrSetSourceStyle(src, scaleMode, mipmap);
+                            return this;
                         },
                         get autoUpdate() {
                             return "autoUpdate" in src ? src.autoUpdate : undefined;

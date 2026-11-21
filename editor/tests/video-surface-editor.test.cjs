@@ -701,7 +701,7 @@ test('culled character sprites keep updating, three gets a clean unpack state, a
     const sprites = fs.readFileSync(path.join(editorRoot, '..', 'runtime', 'reactor_sprites.js'), 'utf8');
     const r3d = source3D();
     const compat = fs.readFileSync(path.join(editorRoot, '..', 'runtime', 'libs', 'pixi_compat.js'), 'utf8');
-    assert.match(sprites, /for \(const sprite of this\._rrCullHolder\.children\) \{\n\s+if \(typeof sprite\.update === "function"\) sprite\.update\(\);/, 'detached sprites are still updated');
+    assert.match(sprites, /const parked = this\._rrCullHolder\.children;[\s\S]{0,700}for \(const sprite of parked\) \{\n\s+if \(typeof sprite\.update === "function"\) sprite\.update\(\);/, 'detached sprites are still updated');
     assert.match(sprites, /if \(this\._rrCulled\) \{\n\s+this\.visible = false;\n(?:\s+\/\/.*\n)*\s+this\.updatePosition\(\);\n\s+return;/, 'and a culled sprite keeps its position current for plugins that read it');
     assert.match(r3d, /Reactor3D\.clearUnpackState = function\(gl\)/);
     assert.match(r3d, /Reactor3D\.clearUnpackState\(pixi\.gl\);\n\s+this\._renderer = new THREE\.WebGLRenderer\(\{\n\s+canvas: pixi\.canvas/, 'cleared before three initialises on PIXI\'s context');

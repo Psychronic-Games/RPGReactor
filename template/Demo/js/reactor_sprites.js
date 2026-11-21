@@ -5923,6 +5923,7 @@ Spriteset_Map.prototype.updateOffscreenCulling = function() {
     // updates would land the update count on the same beat every time, so half or more of the sprites were never asked.
     const tick = (this._rrCullPass = ((this._rrCullPass || 0) + 1) & 0xffff);
     for (const sprite of this._characterSprites) {
+        sprite._rrCullPassSeen = tick;
         const character = sprite._character;
         // A sprite its model draws is never shown either way: whether it is parked is asked every fourth update, not
         // every one (each asks where the character stands on screen, a 3D projection: 0.5 ms an update for the
@@ -5973,7 +5974,20 @@ Spriteset_Map.prototype.updateOffscreenCulling = function() {
     // (lights, shadows, labels) elsewhere in the tree and steer them from
     // Sprite_Character.update, and those would otherwise freeze at the last
     // on-screen position. Only the drawing is saved, which is the expensive part.
-    for (const sprite of this._rrCullHolder.children) {
+    // A sprite a plugin took out of the map while it was parked is let go: the plugin removed it from the tilemap
+    // and from _characterSprites, as it would on RPG Maker, but it was here and not on the tilemap, so it stayed and
+    // went on being updated, often with its character cleared (Hendrix Action Engine removing a defeated event:
+    // "Cannot read properties of null (reading 'screenX')" every frame from then on).
+    const parked = this._rrCullHolder.children;
+    for (let i = parked.length - 1; i >= 0; i--) {
+        const sprite = parked[i];
+        if (sprite instanceof Sprite_Character && (sprite._rrCullPassSeen !== tick || !sprite._character)) {
+            this._rrCullHolder.removeChild(sprite);
+            sprite._rrCulled = false;
+            sprite._rrCullParent = null;
+        }
+    }
+    for (const sprite of parked) {
         if (typeof sprite.update === "function") sprite.update();
     }
     // Reattachment appends at the end of the tilemap's children — AFTER
@@ -6512,13 +6526,24 @@ Spriteset_Map.prototype.updateReactor3DWarm = function(job) {
     if (!A.WARM_MS) return true;
     // Nothing is seen yet: more programs are started a draw than a frame of play allows (a map opened again,
     // its programs built already, has hundreds of new materials to ask about and nothing to build).
-    const warmup = Reactor3D.ShaderWarmup, pace = warmup ? warmup.COMPILES_PER_FRAME : 0;
+    const warmup = Reactor3D.ShaderWarmup, pace = warmup ? warmup.COMPILES_PER_FRAME : 0, serial = warmup ? warmup.SERIAL_COMPILES_PER_FRAME : 0;
     if (warmup && A.WARM_COMPILES) warmup.COMPILES_PER_FRAME = Math.max(pace, A.WARM_COMPILES);
+    if (warmup && A.WARM_SERIAL_COMPILES) warmup.SERIAL_COMPILES_PER_FRAME = Math.max(serial, A.WARM_SERIAL_COMPILES);
+    // (And the reads between these draws go more at a time: `ShaderWarmup.readSoon`. It lapses by itself.)
+    if (warmup) warmup.unseenUntil = performance.now() + 250;
     state.warming = true;
-    try { this.updateReactor3D(); } finally { state.warming = false; if (warmup) warmup.COMPILES_PER_FRAME = pace; }
+    try { this.updateReactor3D(); } finally { state.warming = false; if (warmup) { warmup.COMPILES_PER_FRAME = pace; warmup.SERIAL_COMPILES_PER_FRAME = serial; } }
     // (The wait is counted from the end of the first draw, which builds what cannot be built in the background.)
-    if (!job.drawn++) job.warmFrom = performance.now();
-    return job.drawn > 1 && (!warmup || !warmup.lastHidden || performance.now() - job.warmFrom >= A.WARM_MS);
+    const now = performance.now();
+    if (!job.drawn++) job.warmFrom = now;
+    if (job.drawn <= 1) return false;
+    const hidden = warmup ? warmup.lastHidden : 0;
+    if (!hidden) return true;
+    const spent = now - job.warmFrom;
+    if (spent < A.WARM_MS) return false;
+    // Still getting fewer: held on (WARM_HOLD_MS), unless it has stood still a while.
+    if (!(job.fewest <= hidden)) { job.fewest = hidden; job.fellAt = now; }
+    return !A.WARM_HOLD_MS || spent >= A.WARM_HOLD_MS || now - job.fellAt >= (A.WARM_STALL_MS || 0);
 };
 
 /**

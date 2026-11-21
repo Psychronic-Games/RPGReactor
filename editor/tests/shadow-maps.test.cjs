@@ -500,7 +500,7 @@ test('both viewports render the maps once a frame before the first pass, and the
     const flush = three.slice(three.indexOf('    _flushRows() {'), three.indexOf('     * Shadows on: every lit program'));
     assert.ok(flush.length > 500 && !/refreshMaterials|this\._active = true/.test(flush), 'nothing is switched on from the sentinel\'s hook');
     // A map that wants them has them on before its first lit program is built, and the sentinel is not queued behind the map's programs.
-    assert.match(three, /prime\(renderer, scene, mapData\) \{[\s\S]{0,700}?if \(!Reactor3D\.shadowsWanted\(mapData\)\) return false;[\s\S]{0,500}?this\._ensureAtlas\(renderer\);\n\s*this\.activate\(scene \|\| null\);/);
+    assert.match(three, /prime\(renderer, scene, mapData\) \{[\s\S]{0,700}?if \(!\(this\.keepPrograms !== false \? Reactor3D\.shadowsBuilt\(mapData\) : Reactor3D\.shadowsWanted\(mapData\)\)\) return false;[\s\S]{0,500}?this\._ensureAtlas\(renderer\);\n\s*this\.activate\(scene \|\| null\);/);
     assert.match(read('runtime/reactor_sprites.js'), /const viewport = Reactor3D\.acquireViewport\(\);\n\s*if \(!viewport\) return;[^\n]*\n[\s\S]{0,400}?Reactor3D\.Shadows\.prime\(viewport\._renderer, null, \$dataMap\);/);
     assert.match(three, /material\.__rrUrgent = true;\n\s*const mesh = new THREE\.Mesh\(geometry, material\);\n\s*mesh\.name = "shadow-sentinel";/);
     assert.match(three, /if \(!material\.__rrUrgent && \(this\._startedThisFrame >= this\.COMPILES_PER_FRAME \|\| this\.readsOwed\(\)\)\) return false;/);
@@ -706,6 +706,49 @@ test('a held mesh attached after caster registration gets a depth material befor
         if (swapped) S._unswap(swapped);
         S._dynamic.delete(root); S._static.delete(root); S._casting?.delete(root);
         mesh.geometry.dispose(); lit.dispose();
+        if (savedThree === undefined) delete global.THREE; else global.THREE = savedThree;
+    }
+});
+
+test('a Quality level without shadows keeps the shadow programs and only stops drawing and reading the rows', () => {
+    const S = Reactor3D.Shadows, Q = Reactor3D.Quality;
+    const savedThree = global.THREE, saved = { ensure: S._ensureAtlas, sentinel: S._sentinel, active: S._active, renderer: S._renderer, atlas: S._atlas, held: S.held, gen: S._generation, shadows: Q.shadows, refresh: S.refreshMaterials };
+    global.THREE = {};
+    const sentinel = { parent: null };
+    const scene = { add(o) { o.parent = this; }, remove(o) { o.parent = null; }, matrixWorldAutoUpdate: false };
+    const renderer = { setRenderTarget() {} };
+    let refreshed = 0;
+    try {
+        S._ensureAtlas = function(r) { this._renderer = r; this._atlas = {}; };
+        S._sentinel = sentinel; S._active = false; S.held = false; S.refreshMaterials = () => { refreshed++; };
+        Q.shadows = () => false;
+        const uniforms = Reactor3D.lightUniforms();
+        uniforms.rrLightShadow.value.fill(3);
+        S.render(renderer, scene, {});
+        assert.equal(S._active, true, 'the shadow programs are built (or kept)');
+        assert.equal(refreshed, 1, 'once, as shadows first come on, not again for the level');
+        assert.equal(S.held, true);
+        assert.ok(uniforms.rrLightShadow.value.every(v => v === -1), 'no light reads a row');
+        assert.equal(sentinel.parent, null, 'no row is drawn');
+        S.render(renderer, scene, {});
+        assert.equal(refreshed, 1, 'held frame after frame with no program changed');
+        // Back on: the rows are drawn again (every static row, at its pace); nothing is recompiled.
+        const generation = S._generation;
+        Q.shadows = () => true;
+        try { S.render(renderer, scene, {}); } catch (error) { /* the row planning needs the real atlas: past what is tested here */ }
+        assert.equal(S.held, false);
+        assert.equal(S._generation, generation + 1);
+        assert.equal(refreshed, 1);
+        // The kill switch: the level turns the programs over, as before.
+        S.held = false; S.keepPrograms = false; Q.shadows = () => false;
+        S.render(renderer, scene, {});
+        assert.equal(S._active, false);
+        assert.equal(refreshed, 2);
+    } finally {
+        S.keepPrograms = true;
+        S._ensureAtlas = saved.ensure; S._sentinel = saved.sentinel; S._active = saved.active; S._renderer = saved.renderer; S._atlas = saved.atlas;
+        S.held = saved.held; S._generation = saved.gen; S.refreshMaterials = saved.refresh; Q.shadows = saved.shadows;
+        Reactor3D.lightUniforms().rrLightShadow.value.fill(-1);
         if (savedThree === undefined) delete global.THREE; else global.THREE = savedThree;
     }
 });

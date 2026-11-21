@@ -440,9 +440,11 @@ test('levels another machine settled on are not taken: a shared project folder c
 });
 
 test('a main thread that each level speeds up is stepped down until it holds; a step that makes it slower is taken back', () => {
+    const headroom = Q.HEADROOM; Q.HEADROOM = 0;
+    try {
     inGame({}, () => {
         Q.mapOpened(5);
-        // No vsync: a frame is as long as its work. 30, 24, 20, 16 ms: the fourth level holds 60.
+        // No vsync: a frame is as long as its work. 30, 24, 20, 16 ms: the fourth level holds 60 (no headroom asked).
         play(60, q => { const busy = [30, 24, 20, 16, 15.5][q.c]; return { frame: busy, busy }; });
         assert.equal(Q.c, 3, 'down to the level that holds 60 and no further');
     });
@@ -455,6 +457,36 @@ test('a main thread that each level speeds up is stepped down until it holds; a 
         Q.mapOpened(6);
         assert.equal(Q._spent.cpu, false, 'another map is judged afresh');
     });
+    } finally { Q.HEADROOM = headroom; }
+});
+
+test('frames held to the monitor are judged by what their work allows, less the headroom: time to spare is kept', () => {
+    assert.equal(Q.HEADROOM, 0.25);
+    assert.equal(Q.capableRate(12.5, 8), 80);
+    assert.equal(Q.capableRate(10, 20), 50, 'the longer of the two');
+    assert.equal(Q.ratedRate(60, 80), 60, 'work that allows 80: 64 less the headroom, more than the 60 shown');
+    assert.equal(Q.ratedRate(60, 70), 56);
+    assert.equal(Q.ratedRate(60, Infinity), 60, 'nothing measured: the frames shown');
+    inGame({}, () => {
+        Q.mapOpened(5);
+        // V-Sync holds every frame to 16.7 ms whatever its work: 30, 22, 16, 14.5, 12.5, 11 ms of it (14 ms would pass: SLOW's margin).
+        play(200, q => { const busy = [30, 22, 16, 14.5, 12.5, 11][q.c]; return { frame: Math.max(1000 / 60, busy), busy }; });
+        assert.equal(Q.c, 4, 'down to the level whose work fills four fifths of a frame: ' + JSON.stringify({ c: Q._cpu, g: Q._gpu, spent: Q._spent, taken: Q._taken, last: Q.lastWindow }));
+    });
+    inGame({}, () => {
+        Q.mapOpened(5);
+        // A machine with time to spare (4 ms of work a 16.7 ms frame) is left at the whole picture.
+        play(40, () => ({ frame: 1000 / 60, busy: 4 }));
+        assert.deepEqual([Q._gpu, Q._cpu], [0, 0]);
+    });
+    const headroom = Q.HEADROOM; Q.HEADROOM = 0;
+    try {
+        inGame({}, () => {
+            Q.mapOpened(5);
+            play(60, q => { const busy = [30, 22, 16, 14.5, 12.5, 11][q.c]; return { frame: Math.max(1000 / 60, busy), busy }; });
+            assert.equal(Q.c, 2, 'HEADROOM 0: judged by the frames shown, as before');
+        });
+    } finally { Q.HEADROOM = headroom; }
 });
 
 test('with the GPU\'s own time the longer of the two is what the frame waits for, and a near tie goes to the GPU', () => {

@@ -130,7 +130,7 @@ npm ci
 cd ..
 ```
 
-3. Download NW.js for your platform from <https://dl.nwjs.io/>. Use the normal or SDK build for your OS and CPU architecture.
+3. Download NW.js for your platform from <https://dl.nwjs.io/>. Use the normal or SDK build for your OS and CPU architecture, at the version this checkout is built and tested with: **0.120.0** (`NW_VERSION` in `editor/build-scripts/release-config.cjs`). Another version may break the editor: before 0.99.7, choosing a folder (Open, New or Import Project) closed the editor on NW.js 0.117 and later.
 
 4. Extract NW.js and rename/place the extracted folder at the repository root:
 

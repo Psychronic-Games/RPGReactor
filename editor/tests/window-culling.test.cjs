@@ -55,7 +55,7 @@ test('a wide window that still overlaps the viewport is not parked', () => {
 
 test('the extent test matches the character-sprite branch it was modelled on', () => {
     const at = spritesSource.indexOf('for (const sprite of this._characterSprites)');
-    const block = spritesSource.slice(at, at + 900);
+    const block = spritesSource.slice(at, at + 1100);
     assert.match(block, /Cull on the drawn extent, not the anchor point/,
         'the character branch documents the same correction');
     const predicateAt = spritesSource.indexOf('_rrWindowDormant = function');

@@ -151,7 +151,10 @@ test('the real worker reduces dense geometry without changing source vertex data
     vm.runInNewContext(code, { self, MeshoptSimplifier, Float32Array, Uint32Array, Error });
     await self.onmessage({ data: { id: 7, positions, indices: new Uint32Array(geometry.index.array), attributes, stride: 2, weights: [1, 1] } });
     assert.equal(result.id, 7); assert.equal(result.error, undefined); assert.ok(result.levels.length);
-    assert.ok(result.levels[0].indices.length < geometry.index.count / 2);
+    // The first level is the whole mesh in vertex cache order (runtime 20261118.2); the simplified ones follow.
+    assert.equal(result.levels[0].whole, true); assert.equal(result.levels[0].error, 0);
+    assert.equal(result.levels[0].indices.length, geometry.index.count);
+    assert.ok(result.levels.find(level => !level.whole).indices.length < geometry.index.count / 2);
     for (const level of result.levels) for (const index of level.indices) assert.ok(index < positions.length / 3);
     assert.deepEqual(positions, beforeP); assert.deepEqual(attributes, beforeUV);
 });
@@ -411,14 +414,14 @@ test('the worker keeps a mesh\'s levels between sessions and reads them back ins
     await first.onmessage(job(1));
     assert.ok(first.posted.levels.length && !first.posted.kept && simplified > 0);
     assert.equal(held.size, 1, 'kept under one key');
-    assert.match(Array.from(held.keys())[0], /^levels-4:chained:/, 'the recipe is part of the key');
+    assert.match(Array.from(held.keys())[0], /^levels-5:chained:[^|]*:vcache32|/, 'the recipe is part of the key');
     // Each level says whether it was made across texture seams; the view draws such a one only under the levels' own
     // pixel, whatever a Quality level allows the others (runtime 20261115.2: brown patches on the Demo's first actor).
     assert.ok(first.posted.levels.every(level => typeof level.loose === 'boolean'));
     const view = fs.readFileSync(path.join(repo, 'runtime/reactor_3d.js'), 'utf8');
     assert.match(view, /const looseAllowed = Math\.min\(allowed, this\.pixelError \* this\.LOOSE_DETAIL\);/);
-    assert.match(view, /if \(level\.error \* pixels <= \(level\.loose \? looseAllowed : allowed\)\) selected = level\.geometry;/);
-    assert.match(view, /state\.levels\.push\(\{ geometry: g, error: level\.error, loose: level\.loose === true \}\);/);
+    assert.match(view, /if \(level\.error \* pixels <= \(level\.loose \? looseAllowed : allowed\)\) pick = level;\n\s*if \(!pick\) return;\n\s*const selected = this\.drawn\(state, pick\);/);
+    assert.match(view, /state\.levels\.push\(\{ geometry: g, error: level\.error, loose: level\.loose === true, whole: level\.whole === true \}\);/);
     // Each level is made from the one before: smaller every time, its error the sum so far (never under the last).
     for (let i = 1; i < first.posted.levels.length; i++) {
         assert.ok(first.posted.levels[i].indices.length < first.posted.levels[i - 1].indices.length);
@@ -446,5 +449,5 @@ test('the worker keeps a mesh\'s levels between sessions and reads them back ins
     held.set(Array.from(held.keys())[0], { levels: [{ indices: new Uint32Array(1e6), error: 0.1 }] });
     await second.onmessage(job(5));
     assert.ok(!second.posted.kept && second.posted.levels.length);
-    assert.match(fs.readFileSync(path.join(repo, 'runtime/reactor_3d.js'), 'utf8'), /weights: new Array\(stride\)\.fill\(1\), keep: this\.KEEP_LEVELS \}/);
+    assert.match(fs.readFileSync(path.join(repo, 'runtime/reactor_3d.js'), 'utf8'), /weights: new Array\(stride\)\.fill\(1\), keep: this\.KEEP_LEVELS, order: this\.CACHE_ORDER !== false \}/);
 });

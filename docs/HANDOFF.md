@@ -4,16 +4,37 @@ Read [STATUS.md](STATUS.md) for open work. Earlier: [archive/handoff](archive/ha
 
 Changes belong in the editor changelog; behavior goes in the commit message and the guides. Size limits and the rollover are in [README.md](README.md#keeping-status-and-handoff-short); `docs-budget.test.cjs` enforces them.
 
-## Where things stand (2026-11-17)
+## Where things stand (2026-11-20)
 
-- **Development:** 0.99.7 is open since 2026-11-16 (runtime **20261117.11**, synced into all 17 bundled projects on 2026-11-17; NW.js **0.120.0** pinned and in `nwjs-win` and `nwjs-linux`; `nwjs-mac` still 0.107), all committed on 2026-11-17, not pushed (local `main` four commits ahead). 0.99.6 was released on 2026-11-16. CI is green on GitHub since 2026-11-16. What 0.99.6 still needs seen: [OPEN-ITEMS](OPEN-ITEMS.md) items 22, 24, 26 and 27. The Demo in the tree is single player with the creator off, its backend Auto (the owner's): say so before a deploy.
-- **Windows machines:** two laptops work in this folder: the Iris Xe one (i5-1145G7) and an MSI with an RTX 3060 Laptop beside an Intel UHD (i5-10500H). Both now hold all 17 bundled projects, so the sync can run on either. The Iris Xe's games start on OpenGL by its own record (11-10); Vulkan shows there since 11-16, and on the RTX 3060 since 11-17.
-- **Published:** [0.99.6](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.6) is the Latest source release, with six pictures. Its itch.io devlog is drafted ([Markdown](posts/itch-devlog-0.99.6.md), [plain text](posts/itch-devlog-0.99.6-plain.txt)) and not posted: posting it is the owner's. Signed native binaries remain a separate pipeline.
+- **Development:** 0.99.7 open since 2026-11-16, runtime **20261120.1**, synced into all 17 on the desktop (with the Iris Xe laptop's 20261118 work). The owner's next upload: the end of the weekend of 2026-11-22; GitHub issue 90 is commented as fixed for it, to close when it is out. NW.js **0.120.0** in `nwjs-win` and `nwjs-linux`; `nwjs-mac` still 0.107. Committed to 2026-11-20, not pushed (`main` five ahead). CI green since 2026-11-16. 0.99.6 still to see: [OPEN-ITEMS](OPEN-ITEMS.md) 22, 24, 26, 27. The Demo: single player, creator off, backend Vulkan since 2026-11-18 (the owner's, uncommitted): say so before a deploy.
+- **Windows machines:** the Iris Xe laptop (i5-1145G7), which holds only the Demo in `template/` (2026-11-18), and an MSI, RTX 3060 Laptop and Intel UHD (i5-10500H), which held all 17 on 11-17. The Iris Xe's games start on OpenGL by its record; Vulkan shows on both.
+- **Published:** [0.99.6](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.6), the Latest source release. Its itch.io devlog is drafted ([Markdown](posts/itch-devlog-0.99.6.md), [plain text](posts/itch-devlog-0.99.6-plain.txt)); posting it is the owner's.
 - **Verification:** the whole suite on the desktop on 2026-11-13, before the day's second commit: 9,793 of 9,804 passed, 11 skipped, none failed (5.8 minutes). Substantial checks go through `codex-check`.
 - **Live demo:** demo.rpgreactor.org is the owner's new VPS since 2026-11-15 (Debian 13, Node and `proxy_wstunnel` on: the live Engine runs), at runtime 20261115.12, a fresh world: the owner's account and one kept test account, `E2EChat1`. Admin: `/reactor-online/admin`, password in the server's `reactor-online/config.php`. Deploy from the desktop: `deploy-vps.cjs`, about a minute.
 - **Forge:** Character Preview **98**, Props **62**, clothing Preview 61. Appearance remains under review. [Face handoff](HUMAN-FACE-HANDOFF.md#current-candidate--preview-98).
 - **Faces:** the owner works on them in a separate session with another model, which may edit this tree. Leave face code alone unless asked, and check `git status` before scripted edits.
 - **Resume:** use [OPEN-ITEMS.md](OPEN-ITEMS.md) and [STATUS.md](STATUS.md#open-work). Preserve fixed gameplay timing. V-Sync is on by default since 2026-11-17, a project setting; F2 still shows what the machine could draw.
+
+## 2026-11-20 (desktop) — Hendrix plugins on PIXI 8
+
+Runtime **20261120.1**, synced into all 17; not committed. [Changelog](../editor/changelog/0.99.7.md).
+
+- **Players' report:** Hendrix HUD Designer (v200) stopped on `setStyle is not a function`; v5's `setStyle` is back. v200 is not in the tree: to see on a laptop that has it.
+- **Found and fixed, not reported:** a removed event's sprite parked off screen stopped the game ("reading 'screenX'"); saves failed with Target Lock on; `Bitmap.smooth` and `baseTexture.scaleMode`/`wrapMode` never reached the GPU (pixelated-rendering projects draw nearest now); v5 text strokes.
+- **Hendrix's bug, same on MZ:** Target Lock on an enemy spawned that update stops the game in `patternHeight`. Not ours to fix; worth telling Sang Hendrix.
+- **Harness, new:** `~/.cache/rr-tests/hendrix-action.cjs` (`RR_PROJECT="Hendrix RPG Maker Action Combat MZ (v166a)" RR_RUNTIME=1 node nw-hidden.cjs hendrix-action.cjs`; `RR_MAPS`, `RR_EVAL`, `RR_MZ=1`). The Demo on Vulkan loses its context on the hidden display, with or without this change.
+
+## 2026-11-18 (Iris Xe laptop) — Stalls on the laptop
+
+Runtimes **20261118.1** to **.3**, synced into the Demo here only; not committed. Causes, numbers and method: [changelog](../editor/changelog/0.99.7.md).
+
+- **The owner's report:** "still not feeling very playable" on this laptop. Their playtests that day: the first room at 0 to 11 frames a second for about 25 s after it showed (NW.js 0.120's new profile), then 45 to 58.
+- **Fixed:** the map waits unseen while its programs are still being built and built faster (`Arrival.WARM_HOLD_MS`); shadows turned off by Auto keep the lit programs (`Shadows.held`, `shadowsBuilt`); a playtest drops three's per-program checks for a late link check (`LateShaderChecks`); still groups (`StillGroup`, within the noise). First room and North Haven: no frame over 0.25 s after the map shows, new profile or kept; the black wait 7 to 17 s.
+- **Not a cause:** V-Sync (A/B, no difference), the party's distance levels (they have them).
+- **Next to try:** fewer lit program variants (the black wait is their building: 70 to 120 a map); the models' wait in the arrival (2.2 s); North Haven's main thread walking (three's two walks of 2,900 objects a frame, `syncCharacterModels`, 1 to 2 ms each).
+- **For the owner:** a playtest on the laptop (the first room, North Haven, Low and back in Options).
+- **Then .2 (the owner: run fast with time to spare):** the frame measured by pass; the party's skinned bodies are the card's largest cost, and their triangles now go in vertex cache order (`cacheOrder`); Auto keeps a quarter of the frame spare (`Quality.HEADROOM`). The light split measured and kept. **.3:** a level's draw cost what its whole mesh's buffers held: levels picked now get buffers of their own (`GeometryDetail.drawn`), and shaped meshes' triangles go in cache order in place; measured per draw (`per-draw*.js`), the only way that held on this hot laptop.
+- **Harness, new:** `cold.cjs --cpuprofile`, `prof-sum.cjs`, `prof-callers.cjs`, `gpu-bins.cjs` in `%LOCALAPPDATA%\rr-tests\harness`; probes `breakdown.js`, `gpu-ablate.js`, `abab.js`, `acmr.js`. Uncapped here also needs `Graphics.GpuPace.enabled = false` and `Graphics.FrameGovernor.enabled = false`.
 
 ## 2026-11-17 (desktop) — Choosing a folder closed the editor
 

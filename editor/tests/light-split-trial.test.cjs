@@ -105,9 +105,9 @@ test('only a card the name leaves out is tried, and the switch stands', () => {
 
 test('the pass asks the trial, and Auto gives no level up while one is under way', () => {
     assert.match(lighting, /if \(this\.SKIP_ON_FAST_SHADING && Reactor3D\.fastShading && Reactor3D\.fastShading\(\) && !\(this\.Trial && this\.Trial\.use\(\)\)\) return null;/);
-    const at = core.indexOf('if (splitTrial && splitTrial.note(perSecond, short >= this.SLOW)) { this._slowRun = 0; return; }');
+    const at = core.indexOf('if (splitTrial && splitTrial.note(rated, short >= this.SLOW)) { this._slowRun = 0; return; }');
     assert.ok(at > 0, 'Auto hands each judged window to the trial');
-    assert.ok(at < core.indexOf('if (this.spareGpu(perSecond, busyMs, gpuMs)) return;', at - 400) + 400 && core.indexOf('if (this.checkStep(perSecond)) return;') > at, 'before any step is weighed');
+    assert.ok(at < core.indexOf('if (this.spareGpu(rated, busyMs, gpuMs)) return;', at - 400) + 400 && core.indexOf('if (this.checkStep(rated)) return;') > at, 'before any step is weighed');
     // The depth laid first stays by the name (it bought nothing when tried).
     assert.match(core, /if \(this\.SKIP_ON_FAST_SHADING && Reactor3D\.fastShading && Reactor3D\.fastShading\(\)\) return false;/);
 });

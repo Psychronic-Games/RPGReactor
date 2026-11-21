@@ -293,14 +293,38 @@ test('the loading wait lays the world a part a frame, then draws it unseen until
         assert.equal(set._reactor3d.arrival, null);
         assert.equal(draws.length, 3);
         assert.equal(frame(), true, 'and is not held again');
-        // The wait for programs is spent: the map starts with what is ready.
+        // Past WARM_MS the wait holds on while what sits out gets fewer, and ends once that stands still a while.
         set._reactor3d = { scene: {}, arrival: { stage: 9, frame: -1, drawn: 0 } };
         R.ShaderWarmup.lastHidden = 50;
         partsLeft = 0;
         ctx.Graphics.frameCount++; frame();
-        set._reactor3d.arrival.warmFrom -= A.WARM_MS + 1;
+        const held = set._reactor3d.arrival;
+        held.warmFrom -= A.WARM_MS + 1;
+        ctx.Graphics.frameCount++;
+        assert.equal(frame(), false, 'past WARM_MS with meshes still compiling: held on');
+        R.ShaderWarmup.lastHidden = 30; held.fellAt -= A.WARM_STALL_MS - 500;
+        ctx.Graphics.frameCount++;
+        assert.equal(frame(), false, 'fewer than before: still held');
+        assert.equal(held.fewest, 30);
+        held.fellAt -= A.WARM_STALL_MS + 1;
+        ctx.Graphics.frameCount++;
+        assert.equal(frame(), true, 'the count stood still for WARM_STALL_MS: the map starts with what is ready');
+        // And never past WARM_HOLD_MS, however it falls.
+        set._reactor3d = { scene: {}, arrival: { stage: 9, frame: -1, drawn: 0 } };
+        R.ShaderWarmup.lastHidden = 50;
+        ctx.Graphics.frameCount++; frame();
+        set._reactor3d.arrival.warmFrom -= A.WARM_HOLD_MS + 1;
+        R.ShaderWarmup.lastHidden = 10;
         ctx.Graphics.frameCount++;
         assert.equal(frame(), true);
+        // The serial driver's pace and the reads are raised for the unseen draw only.
+        const W = R.ShaderWarmup, serial = W.SERIAL_COMPILES_PER_FRAME, pace = W.COMPILES_PER_FRAME;
+        let during = null;
+        set.updateReactor3D = function() { during = [W.SERIAL_COMPILES_PER_FRAME, W.COMPILES_PER_FRAME, W.unseenUntil > performance.now()]; };
+        set._reactor3d = { scene: {}, arrival: { stage: 9, frame: -1, drawn: 0 } };
+        ctx.Graphics.frameCount++; frame();
+        assert.deepEqual(during, [A.WARM_SERIAL_COMPILES, A.WARM_COMPILES, true]);
+        assert.deepEqual([W.SERIAL_COMPILES_PER_FRAME, W.COMPILES_PER_FRAME], [serial, pace], 'put back after the draw');
         // A failure part way lets the map start.
         A.step = () => { throw new Error('broken'); };
         set._reactor3d = { scene: { _followUps: [] }, arrival: { stage: 1, frame: -1, drawn: -1 } };
