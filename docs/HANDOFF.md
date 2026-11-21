@@ -6,7 +6,7 @@ Changes belong in the editor changelog; behavior goes in the commit message and 
 
 ## Where things stand (2026-11-20)
 
-- **Development:** 0.99.7 open since 2026-11-16, runtime **20261120.1**, synced into all 17 on the desktop (with the Iris Xe laptop's 20261118 work). The owner's next upload: the end of the weekend of 2026-11-22; GitHub issue 90 is commented as fixed for it, to close when it is out. NW.js **0.120.0** in `nwjs-win` and `nwjs-linux`; `nwjs-mac` still 0.107. Committed to 2026-11-20, not pushed (`main` five ahead). CI green since 2026-11-16. 0.99.6 still to see: [OPEN-ITEMS](OPEN-ITEMS.md) 22, 24, 26, 27. The Demo: single player, creator off, backend Vulkan since 2026-11-18 (the owner's, uncommitted): say so before a deploy.
+- **Development:** 0.99.7 open since 2026-11-16, runtime **20261120.1**, synced into all 17 on the desktop (with the Iris Xe laptop's 20261118 work). The owner's next upload: the end of the weekend of 2026-11-22; GitHub issue 90 is commented as fixed for it, to close when it is out. NW.js **0.120.0** in `nwjs-win` and `nwjs-linux`; `nwjs-mac` still 0.107. Committed to 2026-11-20 (`836929ce`), not pushed (`main` five ahead). CI: the GUI smokes left the push CI for a workflow started by hand (2026-11-21); main's next run is the proof. 0.99.6 still to see: [OPEN-ITEMS](OPEN-ITEMS.md) 22, 24, 26, 27. The Demo: single player, creator off, its committed Graphics Backend is Auto (`System.json`): say so before a deploy.
 - **Windows machines:** the Iris Xe laptop (i5-1145G7), which holds only the Demo in `template/` (2026-11-18), and an MSI, RTX 3060 Laptop and Intel UHD (i5-10500H), which held all 17 on 11-17. The Iris Xe's games start on OpenGL by its record; Vulkan shows on both.
 - **Published:** [0.99.6](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.6), the Latest source release. Its itch.io devlog is drafted ([Markdown](posts/itch-devlog-0.99.6.md), [plain text](posts/itch-devlog-0.99.6-plain.txt)); posting it is the owner's.
 - **Verification:** the whole suite on the desktop on 2026-11-13, before the day's second commit: 9,793 of 9,804 passed, 11 skipped, none failed (5.8 minutes). Substantial checks go through `codex-check`.
@@ -17,7 +17,7 @@ Changes belong in the editor changelog; behavior goes in the commit message and 
 
 ## 2026-11-20 (desktop) — Hendrix plugins on PIXI 8
 
-Runtime **20261120.1**, synced into all 17; not committed. [Changelog](../editor/changelog/0.99.7.md).
+Runtime **20261120.1**, synced into all 17, committed in `836929ce`. [Changelog](../editor/changelog/0.99.7.md).
 
 - **Players' report:** Hendrix HUD Designer (v200) stopped on `setStyle is not a function`; v5's `setStyle` is back. v200 is not in the tree: to see on a laptop that has it.
 - **Found and fixed, not reported:** a removed event's sprite parked off screen stopped the game ("reading 'screenX'"); saves failed with Target Lock on; `Bitmap.smooth` and `baseTexture.scaleMode`/`wrapMode` never reached the GPU (pixelated-rendering projects draw nearest now); v5 text strokes.

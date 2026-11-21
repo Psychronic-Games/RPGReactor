@@ -151,7 +151,7 @@ node editor/build-scripts/sync-runtime.cjs --check
 ```
 
 Run the real editor smokes with matching browser and SDK drivers before the
-candidate is cut. CI performs persistence, interaction-order, keyboard-navigation, menu and event double-click checks in its `gui-smokes` job;
+candidate is cut. The `GUI smokes` workflow (run by hand from Actions; not on every push since 2026-11-21) performs persistence, interaction-order, keyboard-navigation, menu and event double-click checks;
 the UI-layout smoke remains a local release gate:
 
 ```bash
@@ -167,7 +167,7 @@ smoke launches the actual editor and verifies a native project save without
 initializing map rendering. The read-only NW.js UI smoke opens the tracked Demo
 without saving, verifies the closed contained Inspector drawer at 1280x720, and
 checks the three-column layouts at 1600x900, 1920x1080, and 2560x1440. The first
-two smokes and `smoke:nw-interactions` run in CI's `gui-smokes` job with
+two smokes and `smoke:nw-interactions` run in the hand-started `GUI smokes` workflow with
 `smoke:nw-keyboard`, `smoke:nw-menus` and `smoke:nw-event-double-click`;
 `smoke:nw-interactions` checks rapid navigation, keyboard ownership, retired dialogs and delayed map
 loads using a disposable project, with replayable seeds and failure artifacts.
