@@ -1213,6 +1213,9 @@ class TilemapManager {
                 canvasContainer.removeEventListener('wheel', canvasContainer.__rrWheelZoomHandler);
             }
             canvasContainer.__rrWheelZoomHandler = (event) => {
+                // The Build bar and its side panel sit over the map in this container: a wheel there scrolls their
+                // lists (a page of blueprints), it does not zoom the map under them.
+                if (event.target && event.target.closest && event.target.closest('#build-panel, #build-hotbar, .rr-build-floating-dock')) return;
                 event.preventDefault();
                 if (!this.currentMap) return;
 

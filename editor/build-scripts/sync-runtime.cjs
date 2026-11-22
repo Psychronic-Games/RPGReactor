@@ -34,8 +34,8 @@ const repoRoot = path.resolve(__dirname, '..', '..');
 const runtimeRoot = path.join(repoRoot, 'runtime');
 const templateRoot = path.join(repoRoot, 'template');
 
-/** Files a project owns rather than inherits. */
-const PER_PROJECT = new Set(['reactor_plugins.js']);
+/** Files a project owns rather than inherits: its game plugin list and its editor plugin list (EditorPlugins.js). */
+const PER_PROJECT = new Set(['reactor_plugins.js', 'reactor_editor_plugins.js']);
 
 const checkOnly = process.argv.includes('--check');
 

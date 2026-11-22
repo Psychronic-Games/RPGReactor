@@ -506,6 +506,8 @@ class ProjectController {
         if (!await this.confirmUnsavedChanges()) return;
 
         if (typeof window !== 'undefined') window.reactor?.claimMapTool?.('none');
+        // Its editor plugins are told first, while the project is still there to read.
+        if (typeof window !== 'undefined') await window.RREditorPlugins?.unloadAll?.();
         this.mediaSurfacePreviewManager?.beforeMapChange?.();
         if (typeof this.disableMap3DView === 'function') await this.disableMap3DView();
         this.modelPropsManager?.preview2D?.destroy();
@@ -967,6 +969,8 @@ class ProjectController {
         if (window.reactor && window.reactor.audioPlayer) {
             window.reactor.audioPlayer.setCurrentProject(this.currentProject);
         }
+        // The project's editor plugins (editor-plugins/, turned on in the Plugin Manager's Editor Plugins tab).
+        window.RREditorPlugins?.loadForProject?.(this.currentProject.path)?.catch?.(error => console.error('[Editor plugins]', error));
     }
 
     // Set up map search functionality
@@ -1468,6 +1472,7 @@ class ProjectController {
 
     async saveAll() {
         if (!this.projectLoaded || !this.currentProject) return false;
+        if (typeof window !== 'undefined') window.RREditorPlugins?.emit?.('beforeSave', { path: this.currentProject.path });
 
         // The individual synchronous writers advance their own dirty-state
         // baselines. Keep the old baselines until the whole save, including
@@ -1541,6 +1546,7 @@ class ProjectController {
 
         this.captureProjectSavedState();
         this.updateWindowTitle();
+        if (typeof window !== 'undefined') window.RREditorPlugins?.emit?.('saved', { path: this.currentProject.path });
         return true;
     }
 

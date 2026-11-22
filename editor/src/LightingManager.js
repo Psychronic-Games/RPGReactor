@@ -1556,15 +1556,17 @@ class LightingManager {
             if (workspace && !workspace.style.position) workspace.style.position = 'relative';
         }
 
-        const header = this._el('div');
-        header.style.cssText = 'display:flex;align-items:center;gap:8px;';
-        const title = this._el('div', '', this._k('lit.title'));
-        title.style.cssText = 'font-weight:700;font-size:13px;flex:1;';
+        // The dock's panel header: an accent strip, the tool's icon, its name and the close button (as Media Surfaces).
+        const header = this._el('div', 'rr-modal-header rr-dock-head');
+        const icon = this._el('img', 'rr-dock-head-icon');
+        icon.src = 'images/icon-lighting.svg'; icon.alt = '';
+        header.appendChild(icon);
+        const title = this._el('div', 'rr-modal-title rr-dock-head-title', this._k('lit.title'));
         header.appendChild(title);
         this._titleHost = title;
-        const close = this._el('button', 'rr-btn-secondary', '×');
+        const close = this._el('button', 'rr-modal-close', '×');
         close.type = 'button';
-        close.style.cssText = 'width:24px;height:24px;padding:0;line-height:1;';
+        close.setAttribute('aria-label', window.I18n ? window.I18n.tText('Close') : 'Close');
         close.addEventListener('click', () => this.setActive(false));
         header.appendChild(close);
         panel.appendChild(header);

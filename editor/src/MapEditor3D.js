@@ -2503,13 +2503,30 @@ class MapEditor3D {
     settleSelectClick(across, clientX, clientY) {
         const hit = across.hit || this.selectHitAt(clientX, clientY);
         if (across.from === 'build') return hit?.kind === 'water' && this.selectAcrossGroups(hit, clientX, clientY);
-        if (across.from === 'models') return !!hit && hit.kind !== 'model' && this.selectAcrossGroups(hit, clientX, clientY);
+        if (across.from === 'models') {
+            // A media surface under the click: Objects' Select picks it up too, in its own editor (owner, 2026-11-22).
+            if (hit?.kind !== 'model' && this.selectMediaSurfaceAt(clientX, clientY)) return true;
+            return !!hit && hit.kind !== 'model' && this.selectAcrossGroups(hit, clientX, clientY);
+        }
         const terrain = this.terrainManager();
         if (!terrain) return false;
         if (hit?.kind === 'water') { terrain.selectWater(hit.water); return true; }
         if (this.selectAcrossGroups(hit, clientX, clientY)) return true;
         if (terrain.selectedWater && (!hit || hit.kind === 'ground')) { terrain.selectWater(null); return true; }
         return false;
+    }
+
+    /**
+     * The media surface under a point of the view, opened in its editor (a map surface: the Media Surfaces panel and
+     * its window; one an event's command shows: that command, as a right-click on it does). Answers whether one was.
+     */
+    selectMediaSurfaceAt(clientX, clientY) {
+        const preview = window.reactor?.projectController?.mediaSurfacePreviewManager || null;
+        if (!preview || preview.authoring || typeof preview._threeOwnerAt !== 'function') return false;
+        const record = preview._threeOwnerAt(clientX, clientY)?.record;
+        if (!record?.source || record.authoring || Number(record.source.mapId) !== Number(preview.map?.id)) return false;
+        preview.navigateTo(record.source);
+        return true;
     }
 
     /** The selected sheet outlined at its level (the Look panel edits it); null takes the outline away. */

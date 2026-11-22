@@ -333,6 +333,7 @@ class PlaytestManager {
     }
 
     launchPlaytestWindow(projectPath, mode) {
+        if (typeof window !== 'undefined') window.RREditorPlugins?.emit?.('playtest', { path: projectPath, mode: mode || 'test' });
         if (mode === undefined) mode = 'test';
         const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
 

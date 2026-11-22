@@ -62,9 +62,9 @@ class ForgeWorkshop {
         this.root.innerHTML = `
             <div class="rr-workshop">
                 <div class="rr-workshop-status${note.ok ? ' is-ok' : ''}">${this._esc(note.text)}</div>
-                <div class="rr-workshop-bar">
-                    <button type="button" class="rr-workshop-tab${this.tab === 'share' ? ' is-active' : ''}" data-tab="share">${this._esc(this._t('Share'))}</button>
-                    <button type="button" class="rr-workshop-tab${this.tab === 'subscribed' ? ' is-active' : ''}" data-tab="subscribed">${this._esc(this._t('From the Workshop'))}</button>
+                <div class="rr-workshop-bar rr-plugin-tabs" role="tablist">
+                    <button type="button" role="tab" aria-selected="${this.tab === 'share'}" class="rr-plugin-tab rr-workshop-tab${this.tab === 'share' ? ' is-active' : ''}" data-tab="share">${this._esc(this._t('Share'))}</button>
+                    <button type="button" role="tab" aria-selected="${this.tab === 'subscribed'}" class="rr-plugin-tab rr-workshop-tab${this.tab === 'subscribed' ? ' is-active' : ''}" data-tab="subscribed">${this._esc(this._t('From the Workshop'))}</button>
                     <span class="rr-workshop-spacer"></span>
                     <button type="button" class="rr-button" data-act="browse">${this._esc(this._t('Browse the Workshop'))}</button>
                 </div>

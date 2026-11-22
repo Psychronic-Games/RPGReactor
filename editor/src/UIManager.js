@@ -162,6 +162,8 @@ class UIManager {
     }
 
     handleHtmlMenuAction(action) {
+        // An entry an editor plugin added under Plugins (EditorPlugins.js).
+        if (typeof action === 'string' && action.startsWith('editor-plugin:')) { window.RREditorPlugins?.runMenuAction?.(action); return; }
         switch(action) {
             case 'new-project':
                 this.callbacks.newProject();
@@ -215,6 +217,7 @@ class UIManager {
                 }
                 break;
             // The map tools open from the menu exactly as from the toolbar.
+            case 'build-group':
             case 'terrain-tool':
             case 'foliage-tool':
             case 'models-tool':
@@ -1516,6 +1519,9 @@ class UIManager {
             // Media Surfaces and Lighting are Build bar slots: from the menu they open in the bar too, and so do its groups.
             case 'media-surfaces':
                 if (!window.reactor?.buildHotbar?.openTool('screen')) window.reactor?.mediaSurfaceManager?.toggle();
+                break;
+            case 'build-group':
+                window.reactor?.buildHotbar?.openTool('build');
                 break;
             case 'terrain-tool':
             case 'foliage-tool':

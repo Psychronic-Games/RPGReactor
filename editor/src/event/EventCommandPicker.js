@@ -387,7 +387,7 @@ class EventCommandPicker {
         const container = document.createElement('div');
         container.className = 'command-picker-container';
         container.style.cssText = `
-            background-color: var(--color-bg-surface);
+            background-color: var(--color-bg-panel);
             border: 1px solid var(--color-border);
             border-radius: 6px;
             width: min(850px, calc(100vw - 24px));
@@ -415,7 +415,9 @@ class EventCommandPicker {
 
         // Header
         const header = document.createElement('div');
-        header.className = 'rr-modal-header';
+        // The dialog's frame in the theme (owner, 2026-11-22): the header's accent strip, tabs like the Plugin Manager's
+        // and the Character Builder's, a themed search and scrollbar, each section a card under an accent header.
+        header.className = 'rr-modal-header ecp-head';
         header.innerHTML = `
             <div class="rr-modal-title">${this._t('event.selectCommand')}</div>
             <button class="rr-modal-close close-btn" type="button">×</button>
@@ -426,28 +428,17 @@ class EventCommandPicker {
 
         // Tabs
         const tabBar = document.createElement('div');
-        tabBar.style.cssText = `
-            display: flex;
-            background-color: var(--color-bg-list-item);
-            border-bottom: 1px solid var(--color-border);
-            gap: 2px;
-            padding: 4px;
-        `;
+        tabBar.className = 'rr-plugin-tabs ecp-tabs';
+        tabBar.setAttribute('role', 'tablist');
 
         const tabs = ['tab1', 'tab2', 'tab3', 'tab4'];
         tabs.forEach((tabKey, index) => {
             const tab = document.createElement('button');
+            tab.type = 'button';
+            tab.className = 'rr-plugin-tab' + (index === this.currentTab && !this.query ? ' is-active' : '');
+            tab.setAttribute('role', 'tab');
+            tab.setAttribute('aria-selected', String(index === this.currentTab && !this.query));
             tab.textContent = this._sectionName(this.commandData[tabKey].name);
-            tab.style.cssText = `
-                padding: 8px 16px;
-                background-color: ${index === this.currentTab ? 'var(--color-accent-bright)' : 'var(--color-bg-input-alt)'};
-                color: ${index === this.currentTab ? 'var(--color-accent-bright-on)' : 'var(--color-text-strong)'};
-                border: none;
-                border-radius: 3px;
-                cursor: pointer;
-                font-size: 12px;
-                transition: background-color 0.15s;
-            `;
 
             tab.dataset.commandTab = String(index);
             tab.addEventListener('click', () => {
@@ -459,30 +450,26 @@ class EventCommandPicker {
                 this.modal.querySelector(`[data-command-tab="${index}"]`)?.focus({ preventScroll: true });
             });
 
-            tab.addEventListener('mouseenter', () => {
-                if (index !== this.currentTab) {
-                    tab.style.backgroundColor = 'var(--color-bg-hover)';
-                }
-            });
-
-            tab.addEventListener('mouseleave', () => {
-                if (index !== this.currentTab) {
-                    tab.style.backgroundColor = 'var(--color-bg-input-alt)';
-                }
-            });
-
             tabBar.appendChild(tab);
         });
 
         // Find a command by name across every tab: the list has grown past a glance.
         const search = document.createElement('input');
         search.type = 'search';
-        search.className = 'command-picker-search rr-input';
+        search.className = 'command-picker-search ecp-search';
         search.placeholder = this._text('Search commands');
         search.setAttribute('aria-label', this._text('Search commands'));
         search.value = this.query || '';
-        search.style.cssText = 'margin-left: auto; width: 220px; padding: 6px 8px; font-size: 12px;';
-        search.addEventListener('input', () => { this.query = search.value; this._fillCommands(contentArea); });
+        search.addEventListener('input', () => {
+            this.query = search.value;
+            this._fillCommands(contentArea);
+            // A search shows every tab's matches: no tab is the one shown while it lasts.
+            tabBar.querySelectorAll('.rr-plugin-tab').forEach(tab => {
+                const on = !this.query && Number(tab.dataset.commandTab) === this.currentTab;
+                tab.classList.toggle('is-active', on);
+                tab.setAttribute('aria-selected', String(on));
+            });
+        });
         search.addEventListener('keydown', e => {
             if (e.key !== 'Enter') return;
             const first = contentArea.querySelector('[data-command-pick]');
@@ -494,13 +481,7 @@ class EventCommandPicker {
 
         // Content area with columns
         const contentArea = document.createElement('div');
-        contentArea.style.cssText = `
-            flex: 1;
-            overflow-y: auto;
-            padding: 12px;
-            display: flex;
-            gap: 12px;
-        `;
+        contentArea.className = 'ecp-content rr-accent-scrollbar';
 
         this._fillCommands(contentArea);
 
@@ -508,12 +489,7 @@ class EventCommandPicker {
 
         // Footer
         const footer = document.createElement('div');
-        footer.style.cssText = `
-            padding: 12px 16px;
-            border-top: 1px solid var(--color-border);
-            display: flex;
-            justify-content: flex-end;
-        `;
+        footer.className = 'rr-modal-footer ecp-foot';
         footer.innerHTML = `
             <button class="cancel-btn rr-btn-secondary">${this._t('common.cancel')}</button>
         `;
@@ -563,12 +539,7 @@ class EventCommandPicker {
         }
         columns.forEach(column => {
             const columnDiv = document.createElement('div');
-            columnDiv.style.cssText = `
-                flex: 1;
-                display: flex;
-                flex-direction: column;
-                gap: 12px;
-            `;
+            columnDiv.className = 'ecp-column';
             column.sections.forEach(section => columnDiv.appendChild(this.createSection(section)));
             contentArea.appendChild(columnDiv);
         });
@@ -579,46 +550,21 @@ class EventCommandPicker {
      */
     createSection(section) {
         const sectionDiv = document.createElement('div');
-        sectionDiv.style.cssText = `
-            background-color: var(--color-bg-panel);
-            border-radius: 4px;
-            padding: 8px;
-        `;
+        sectionDiv.className = 'lit-section ecp-section';
 
         const title = document.createElement('div');
+        title.className = 'lit-section-header';
         title.textContent = this._sectionName(section.title);
-        title.style.cssText = `
-            font-weight: bold;
-            font-size: 13px;
-            margin-bottom: 6px;
-            color: var(--color-text-strong);
-        `;
         sectionDiv.appendChild(title);
+        const body = document.createElement('div');
+        body.className = 'lit-section-body ecp-section-body';
+        sectionDiv.appendChild(body);
 
         section.commands.filter(command => this._available(command)).forEach(command => {
             const commandBtn = document.createElement('button');
+            commandBtn.type = 'button';
+            commandBtn.className = 'ecp-command';
             commandBtn.textContent = this._commandName(command.name);
-            commandBtn.style.cssText = `
-                width: 100%;
-                padding: 6px 10px;
-                margin-bottom: 4px;
-                background-color: var(--color-bg-surface);
-                color: var(--color-text);
-                border: 1px solid var(--color-border-input);
-                border-radius: 3px;
-                cursor: pointer;
-                font-size: 12px;
-                text-align: left;
-                transition: background-color 0.15s;
-            `;
-
-            commandBtn.addEventListener('mouseenter', () => {
-                commandBtn.style.backgroundColor = 'var(--color-bg-hover)';
-            });
-
-            commandBtn.addEventListener('mouseleave', () => {
-                commandBtn.style.backgroundColor = 'var(--color-bg-surface)';
-            });
 
             commandBtn.dataset.commandPick = String(command.code);
             commandBtn.addEventListener('click', () => {
@@ -628,7 +574,7 @@ class EventCommandPicker {
                 this.close();
             });
 
-            sectionDiv.appendChild(commandBtn);
+            body.appendChild(commandBtn);
         });
 
         return sectionDiv;

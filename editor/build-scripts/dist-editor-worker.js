@@ -895,12 +895,17 @@ function trimWebProject(projectRoot, log, leaveOutUnused = true) {
     log(`Left out ${removed} unused files (${(analysis.unusedBytes / 1048576).toFixed(1)} MB) from the bundled web project.`);
 }
 
+/** The project's own files among js/reactor_*.js: its game plugin list and its editor plugin list (EditorPlugins.js). */
+const STARTER_OWN_LISTS = ['reactor_plugins.js', 'reactor_editor_plugins.js'];
+
 function refreshStarterRuntime(runtimeRoot, projectRoot) {
     const jsRoot = path.join(projectRoot, 'js');
-    const pluginConfigPath = path.join(jsRoot, 'reactor_plugins.js');
-    const pluginConfig = fs.existsSync(pluginConfigPath)
-        ? fs.readFileSync(pluginConfigPath)
-        : Buffer.from('var $plugins = [];\n');
+    const kept = new Map();
+    for (const name of STARTER_OWN_LISTS) {
+        const file = path.join(jsRoot, name);
+        if (fs.existsSync(file)) kept.set(name, fs.readFileSync(file));
+    }
+    if (!kept.has('reactor_plugins.js')) kept.set('reactor_plugins.js', Buffer.from('var $plugins = [];\n'));
 
     for (const entry of fs.readdirSync(jsRoot, { withFileTypes: true })) {
         if ((entry.isFile() && /^reactor_.*\.js$/.test(entry.name)) || entry.name === 'libs') {
@@ -908,7 +913,7 @@ function refreshStarterRuntime(runtimeRoot, projectRoot) {
         }
     }
     copyDirRecursive(runtimeRoot, jsRoot);
-    fs.writeFileSync(pluginConfigPath, pluginConfig);
+    for (const [name, data] of kept) fs.writeFileSync(path.join(jsRoot, name), data);
 }
 
 function prepareBundledStarter(stageRoot) {

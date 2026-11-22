@@ -79,8 +79,9 @@ test('a native workspace first appears themed, clipped and at its final size', a
     f.tick(500);
     assert.equal(f.calls.some(call => call[0] === 'show'), false, 'raising an opening window cannot expose unstyled content');
     await f.styled();
+    // Sized before it is moved: moved first at the editor's size to a place near a screen's edge, NW refused it.
     assert.deepEqual(f.calls.filter(call => ['minimum', 'move', 'resize'].includes(call[0])), [
-        ['minimum', 900, 560], ['move', 320, 100], ['resize', 1920, 1200]
+        ['minimum', 900, 560], ['resize', 1920, 1200], ['move', 320, 100]
     ]);
     assert.equal(f.doc.documentElement.classList.contains('rr-detached-window'), true);
     assert.equal(f.calls.some(call => call[0] === 'show'), false, 'native geometry settles while still hidden');

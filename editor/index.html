@@ -116,7 +116,8 @@
                 <div class="html-submenu" id="submenu-tools" style="display: none; position: absolute; top: 100%; left: 0; background-color: var(--color-bg-toolbar); color: var(--color-text); border: 1px solid var(--color-border); min-width: 200px; z-index: 10000; box-shadow: var(--shadow-popup);">
                     <div class="html-menu-option" data-action="toggle-event-mode" data-i18n="menu.eventManager" style="padding: 8px 16px; cursor: pointer;">Event Manager</div>
                     <div class="html-menu-option" data-action="battle-setup" data-i18n="battleSetup.title" style="padding: 8px 16px; cursor: pointer;">Battle Setup</div>
-                    <div class="html-menu-option" data-action="build-tool" data-i18n="menu.buildInWorld" style="padding: 8px 16px; cursor: pointer;">Build in the World</div>
+                    <div class="html-menu-option html-menu-section" data-action="build-tool" data-i18n="menu.buildInWorld" style="padding: 8px 16px; cursor: pointer;">Build in the World</div>
+                    <div class="html-menu-option" data-action="build-group" data-i18n="build.group.build" style="padding: 8px 16px 8px 28px; cursor: pointer;">Build</div>
                     <div class="html-menu-option" data-action="terrain-tool" data-i18n="build.group.terrain" style="padding: 8px 16px 8px 28px; cursor: pointer;">Terrain</div>
                     <div class="html-menu-option" data-action="foliage-tool" data-i18n="build.group.foliage" style="padding: 8px 16px 8px 28px; cursor: pointer;">Foliage</div>
                     <div class="html-menu-option" data-action="models-tool" data-i18n="build.group.models" style="padding: 8px 16px 8px 28px; cursor: pointer;">Objects</div>
@@ -1420,6 +1421,7 @@
     <script src="src/event/commands/ShowBattleAnimationEditor.js"></script>
     <script src="src/event/commands/ForceActionEditor.js"></script>
     <script src="src/event/commands/MediaSurfaceEditor.js"></script>
+    <script src="src/event/commands/MediaSurfaceWindow.js"></script>
     <script src="src/MediaSurfacePreviewManager.js"></script>
     <script src="src/MediaSurfaceManager.js"></script>
     <!-- Image Layers tool: its rules and words, then the panel and the map drawing. The game's own rules
@@ -1430,6 +1432,7 @@
     <script src="src/event/EventCommandList.js"></script>
     <!-- Plugin Manager -->
     <script src="src/PluginManager.js"></script>
+    <script src="src/EditorPlugins.js"></script>
     <script src="src/ResourceManager.js"></script>
     <!-- Refactored modules -->
     <script src="src/UIManager.js"></script>

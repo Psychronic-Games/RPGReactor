@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- RR_MapStats' own toolbar icon: a map tile with a bar chart, in the editor's gold. Any SVG in a plugin's own folder can be its icon. -->
+  <defs>
+    <linearGradient id="g" x1="8" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff3a0"/><stop offset=".35" stop-color="#ffd529"/><stop offset=".8" stop-color="#f08a0c"/><stop offset="1" stop-color="#a94d08"/>
+    </linearGradient>
+    <linearGradient id="b" x1="0" y1="20" x2="0" y2="56" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7fe8ff"/><stop offset="1" stop-color="#1563d6"/>
+    </linearGradient>
+  </defs>
+  <path d="M8 14l16-6 16 6 16-6v42l-16 6-16-6-16 6z" fill="#101a3a" stroke="#010718" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M8 14l16-6 16 6 16-6v42l-16 6-16-6-16 6z" fill="none" stroke="url(#g)" stroke-width="2.6" stroke-linejoin="round"/>
+  <g stroke="#010718" stroke-width="3" stroke-linejoin="round">
+    <rect x="15" y="34" width="7" height="14" rx="1.5" fill="url(#b)"/>
+    <rect x="28.5" y="24" width="7" height="24" rx="1.5" fill="url(#g)"/>
+    <rect x="42" y="29" width="7" height="19" rx="1.5" fill="url(#b)"/>
+  </g>
+</svg>

@@ -87,7 +87,9 @@ test('media surface history steps from the shortcut and syncs the buttons while 
 test('tool buttons light in the toolbar, not on the Tools menu entries of the same action', () => {
     const html = read('index.html');
     for (const action of ['build-tool']) {
-        assert.ok(html.indexOf(`html-menu-option" data-action="${action}"`) >= 0 && html.indexOf(`html-menu-option" data-action="${action}"`) < html.indexOf(`tool-button" data-action="${action}"`), `the menu entry for ${action} comes first, so a bare selector finds it`);
+        // The menu entry may carry more classes (Build in the World is also a section heading, html-menu-section).
+        const menu = html.search(new RegExp(`class="html-menu-option[^"]*" data-action="${action}"`));
+        assert.ok(menu >= 0 && menu < html.indexOf(`tool-button" data-action="${action}"`), `the menu entry for ${action} comes first, so a bare selector finds it`);
     }
     assert.doesNotMatch(read('src/main.js'), /\['\[data-action=/);
     assert.doesNotMatch(read('src/LightingManager.js'), /querySelector\('\[data-action="lighting-tool"\]'\)/);

@@ -226,7 +226,7 @@ test('the layout trims: Lighting and Media Surfaces leave the toolbar, an idle M
     assert.match(html, /class="html-menu-option" data-action="lighting-tool"/);
     assert.match(html, /class="html-menu-option" data-action="media-surfaces"/);
     const props = read('editor/src/ModelPropsManager.js');
-    assert.match(props, /const idle = this\.tool === 'select' && !shown;/);
+    assert.match(props, /const idle = \(this\.tool === 'select' \|\| erasing\) && !shown;/);
     assert.match(read('editor/css/styles.css'), /\.mp-panel\.is-select-idle > :not\(\.mp-select-hint\) \{ display: none; \}/);
     const media = read('editor/src/event/commands/MediaSurfaceEditor.js');
     assert.match(media, /this\._section\(parent, 'Binding & Position', 'binding'\)/);

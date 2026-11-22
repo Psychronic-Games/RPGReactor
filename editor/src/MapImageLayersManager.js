@@ -372,15 +372,18 @@
             panel.replaceChildren();
             const is3D = this.is3DMap(map), files = this.files();
 
-            const head = this._el('div', 'rr-image-layers-head');
-            const title = this._el('div', 'rr-image-layers-title', keyed('menu.imageLayers'));
+            // The dock's panel header: an accent strip, the tool's icon, its name and the close button (as Media Surfaces).
+            const head = this._el('div', 'rr-modal-header rr-dock-head rr-image-layers-head');
+            const icon = this._el('img', 'rr-dock-head-icon');
+            icon.src = 'images/icon-image-layers.svg'; icon.alt = '';
+            const title = this._el('div', 'rr-modal-title rr-dock-head-title rr-image-layers-title', keyed('menu.imageLayers'));
             title.id = 'rr-image-layers-title';
-            const close = this._el('button', 'rr-btn-secondary rr-image-layers-close', '×');
+            const close = this._el('button', 'rr-modal-close rr-image-layers-close', '×');
             close.type = 'button';
             close.setAttribute('aria-label', tt('Close'));
             close.setAttribute('data-rr-i18n-skip', '');
             close.addEventListener('click', () => this.close());
-            head.append(title, close);
+            head.append(icon, title, close);
             panel.append(head);
             panel.append(this._el('div', 'lit-note rr-image-layers-about', tt('Pictures drawn with this map: a painted map, fog, clouds, a far background, a screen overlay.')));
 

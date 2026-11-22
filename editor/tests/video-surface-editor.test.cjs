@@ -461,7 +461,11 @@ test('map previews keep the placeholder until a movie frame is decoded and let P
     assert.match(manager, /revealAuthoringSurface\(\) \{/);
     assert.match(editor, /_previewManager\(\)\?\.revealAuthoringSurface\?\.\(\)/, 'reveal happens after the live panel exists');
     assert.match(editor, /livePanelRect\(\) \{/);
-    assert.match(editor, /_makePanelDraggable\(header, dialog, closeButton\)/);
+    // Live on the map, the editor is a window like the Forge's and the Database's (MediaSurfaceWindow.js), kept between surfaces.
+    assert.match(editor, /overlay\.id = 'media-surface-editor-modal';/);
+    assert.match(editor, /frame\.install\(overlay\); frame\.open\(overlay, \{ shownBefore \}\);/);
+    assert.doesNotMatch(editor, /_makePanelDraggable|_button\('\\u29c9'/, 'no drag or pop-out button of its own');
+    assert.match(read('src/event/commands/MediaSurfaceWindow.js'), /overlayId: 'media-surface-editor-modal'/);
     assert.match(editor, /edge handle to resize it/);
 });
 

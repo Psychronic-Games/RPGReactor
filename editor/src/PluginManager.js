@@ -24,7 +24,10 @@ class PluginManager {
         this.projectController = projectController;
         this.container = null;
         this.plugins = []; // Array of plugin objects with {name, status, description, parameters}
-        this.availablePlugins = []; // All plugins found in js/plugins folder
+        this.availablePlugins = []; // All plugins found in js/plugins folder (or editor-plugins, the Editor Plugins tab)
+        // Which list the manager shows: the game's plugins (js/plugins, reactor_plugins.js) or the editor's own
+        // for this project (js/editor-plugins, js/reactor_editor_plugins.js; EditorPlugins.js runs them). One window, two tabs.
+        this.scope = 'game';
         this.selectedPluginIndex = -1;
         this.selectedPluginIndices = new Set();
         this.lastSelectedPluginIndex = -1;
@@ -241,7 +244,7 @@ class PluginManager {
         if (!structDefinitions && plugin.name) {
             const currentProject = this.projectController.getCurrentProject();
             const projectPath = currentProject.path;
-            const pluginPath = this.path.join(projectPath, 'js', 'plugins', `${plugin.name}.js`);
+            const pluginPath = this.path.join(this.pluginDir(projectPath), `${plugin.name}.js`);
             const pluginSource = this.fs.readFileSync(pluginPath, 'utf8');
             structDefinitions = this.parseStructDefinitions(pluginSource);
             if (Object.keys(structDefinitions).length === 0) {
@@ -647,7 +650,7 @@ class PluginManager {
             const projectPath = currentProject.path;
             for (const pluginName of this.availablePlugins) {
                 try {
-                    const pluginPath = this.path.join(projectPath, 'js', 'plugins', `${pluginName}.js`);
+                    const pluginPath = this.path.join(this.pluginDir(projectPath), `${pluginName}.js`);
                     if (this.fs.existsSync(pluginPath)) {
                         const defs = this.parseStructDefinitions(this.fs.readFileSync(pluginPath, 'utf8'));
                         if (defs[structName]) {
@@ -1903,6 +1906,42 @@ class PluginManager {
         header.appendChild(buttonContainer);
         this.container.appendChild(header);
 
+        // Two lists, one window: the game's plugins and the editor's own for this project (owner, 2026-11-22).
+        const tabs = document.createElement('div');
+        tabs.className = 'rr-plugin-tabs';
+        tabs.setAttribute('role', 'tablist');
+        for (const [scope, label] of [['game', 'Game Plugins'], ['editor', 'Editor Plugins']]) {
+            const tab = document.createElement('button');
+            tab.type = 'button';
+            tab.className = 'rr-plugin-tab';
+            tab.dataset.scope = scope;
+            tab.setAttribute('role', 'tab');
+            tab.textContent = this._tt(label);
+            tab.addEventListener('click', () => this.switchScope(scope));
+            tabs.appendChild(tab);
+        }
+        this.container.appendChild(tabs);
+        const notice = document.createElement('div');
+        notice.className = 'rr-plugin-scope-note';
+        const noticeText = document.createElement('span');
+        noticeText.textContent = this._tt("Editor plugins change RPG Reactor's editor for this project, not the game. They run with the editor's full access: turn on only the ones you trust. Saving the list runs them again.");
+        const openFolder = document.createElement('button');
+        openFolder.type = 'button';
+        openFolder.className = 'rr-btn-secondary rr-plugin-open-folder';
+        openFolder.textContent = this._tt('Open Folder');
+        openFolder.addEventListener('click', () => {
+            const project = this.projectController.getCurrentProject();
+            if (!project?.path) return;
+            const dir = this.pluginDir(project.path);
+            try { this.fs.mkdirSync(dir, { recursive: true }); } catch (_) {}
+            if (typeof nw !== 'undefined' && nw.Shell?.openItem) nw.Shell.openItem(dir);
+        });
+        notice.append(noticeText, openFolder);
+        this.container.appendChild(notice);
+        this._scopeTabs = tabs;
+        this._scopeNote = notice;
+        this._syncScopeTabs();
+
         // Main content area - split into list and details
         const mainContent = document.createElement('div');
         mainContent.style.cssText = `
@@ -1995,7 +2034,7 @@ class PluginManager {
         this._pluginListSearch = pluginSearchInput;
 
         this.pluginListContainer = document.createElement('div');
-        this.pluginListContainer.className = 'rr-accent-scrollbar';
+        this.pluginListContainer.className = 'rr-accent-scrollbar rr-plugin-list';
         // Focusable from the first open; the list binding that arrives with
         // the scanned plugins only re-applies this.
         this.pluginListContainer.tabIndex = 0;
@@ -2076,7 +2115,43 @@ class PluginManager {
      * If the project uses the Reactor corescript (has reactor_main.js), use reactor_plugins.js.
      * Otherwise use plugins.js (standard MV/MZ projects).
      */
+    _syncScopeTabs() {
+        this._scopeTabs?.querySelectorAll('.rr-plugin-tab').forEach(tab => {
+            const on = tab.dataset.scope === this.scope;
+            tab.classList.toggle('is-active', on);
+            tab.setAttribute('aria-selected', String(on));
+        });
+        if (this._scopeNote) this._scopeNote.hidden = this.scope !== 'editor';
+    }
+
+    /** Show the other list. Unsaved edits to this one are saved first, or dropped, as the person says. */
+    async switchScope(scope) {
+        if (scope === this.scope || !['game', 'editor'].includes(scope)) return;
+        if (this.isDirty()) {
+            const save = await RRDialog.confirm(this._tt('The plugin list has changes that are not saved. Save them before switching?'),
+                { title: this._tt('Plugin Manager'), ok: this._tt('Save') });
+            if (save && !await this.savePlugins({ quiet: true })) return;
+        }
+        this.scope = scope;
+        this._syncScopeTabs();
+        await this.loadPlugins();
+    }
+
+    /** The folder the shown list's plugin files are in: js/plugins, or js/editor-plugins for the editor's own. */
+    pluginDir(projectPath) {
+        return this.path.join(projectPath, 'js', this.scope === 'editor' ? 'editor-plugins' : 'plugins');
+    }
+
+    /** The folder, as the project names it (for messages). */
+    pluginDirLabel() {
+        return this.scope === 'editor' ? 'js/editor-plugins' : 'js/plugins';
+    }
+
     resolvePluginsPath(projectPath) {
+        if (this.scope === 'editor') {
+            const listPath = this.path.join(projectPath, 'js', 'reactor_editor_plugins.js');
+            return this.fs.existsSync(listPath) ? listPath : null;
+        }
         const usesReactorCorescript = this.fs.existsSync(this.path.join(projectPath, 'js', 'reactor_main.js'));
         const pluginsFile = usesReactorCorescript ? 'reactor_plugins.js' : 'plugins.js';
         const pluginsPath = this.path.join(projectPath, 'js', pluginsFile);
@@ -2110,7 +2185,9 @@ class PluginManager {
                 const usesReactor = this.fs.existsSync(this.path.join(projectPath, 'js', 'reactor_main.js'));
                 const defaultFile = usesReactor ? 'reactor_plugins.js' : 'plugins.js';
                 console.warn(`No plugins file found; ${defaultFile} will be created on first save`);
-                this._pluginsFilePath = this.path.join(projectPath, 'js', defaultFile);
+                this._pluginsFilePath = this.scope === 'editor'
+                    ? this.path.join(projectPath, 'js', 'reactor_editor_plugins.js')
+                    : this.path.join(projectPath, 'js', defaultFile);
                 this.plugins = [];
                 this._markPluginsSaved();
                 this.clearPluginSelection();
@@ -2135,7 +2212,7 @@ class PluginManager {
                 // manager open)
                 for (const plugin of this.plugins) {
                     try {
-                        const pluginPath = this.path.join(projectPath, 'js', 'plugins', `${plugin.name}.js`);
+                        const pluginPath = this.path.join(this.pluginDir(projectPath), `${plugin.name}.js`);
                         const meta = this.getPluginMetadata(pluginPath);
                         if (meta) {
                             plugin.description = meta.description || plugin.description || '';
@@ -2226,7 +2303,7 @@ class PluginManager {
      */
     async scanAvailablePlugins(projectPath) {
         try {
-            const pluginsDir = this.path.join(projectPath, 'js', 'plugins');
+            const pluginsDir = this.pluginDir(projectPath);
 
             if (!this.fs.existsSync(pluginsDir)) {
                 this.availablePlugins = [];
@@ -2420,16 +2497,18 @@ class PluginManager {
         }
 
         // Add "Add Plugin" button at the bottom
-        const addBtn = document.createElement('div');
-        addBtn.style.cssText = `
-            padding: 12px;
-            color: var(--color-accent-bright);
-            cursor: pointer;
-            text-align: center;
-            border-top: 1px solid var(--color-border);
-            background-color: var(--color-bg-list-item);
-        `;
-        addBtn.textContent = this._tt('+ Add Plugin');
+        // A button in the theme (owner, 2026-11-22: it was grey on grey, with nothing on hover): the accent's border
+        // and tint, lit brighter on hover, pressed on a click (CSS: .rr-plugin-add-button).
+        const addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.className = 'rr-plugin-add-button';
+        const plus = document.createElement('span');
+        plus.className = 'rr-plugin-add-plus';
+        plus.setAttribute('aria-hidden', 'true');
+        plus.textContent = '+';
+        const addLabel = document.createElement('span');
+        addLabel.textContent = this._tt('Add Plugin');
+        addBtn.append(plus, addLabel);
         addBtn.addEventListener('click', () => this.showAddPluginDialog());
         addBtn.addEventListener('contextmenu', (e) => {
             e.preventDefault();
@@ -2887,146 +2966,149 @@ class PluginManager {
      * Show dialog to add a new plugin
      */
     showAddPluginDialog() {
-        // Get plugins not already in the list
-        const unusedPlugins = this.availablePlugins.filter(name =>
-            !this.plugins.find(p => p.name === name)
-        );
+        // The plugins in the folder not yet in the list, each with the line its header describes it by.
+        const project = this.projectController.getCurrentProject();
+        const unusedPlugins = this.availablePlugins.filter(name => !this.plugins.find(p => p.name === name));
+        const describe = name => {
+            try { return project?.path ? (this.getPluginMetadata(this.path.join(this.pluginDir(project.path), `${name}.js`))?.description || '') : ''; }
+            catch (_) { return ''; }
+        };
+        const entries = unusedPlugins.map(name => ({ name, description: describe(name) }));
 
-        if (unusedPlugins.length === 0) {
-            RRDialog.alert(this._tt('All available plugins are already added!'), { title: this._tt('Add Plugin') });
-            return;
-        }
-
-        // Create simple selection dialog
+        // In the theme (owner, 2026-11-22): the header's accent strip, a themed search, rows that light in the
+        // accent, the footer; with nothing left to add, it says where new plugins go instead of a bare alert.
         const modal = document.createElement('div');
-        modal.className = 'plugin-manager-child-modal';
-        modal.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.7);
-            z-index: 10000;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        `;
-
+        modal.className = 'plugin-manager-child-modal rr-plugin-add-modal';
         const dialog = document.createElement('div');
-        dialog.style.cssText = `
-            background-color: var(--color-bg-surface);
-            border: 1px solid var(--color-border);
-            border-radius: 6px;
-            width: 400px;
-            max-height: 600px;
-            display: flex;
-            flex-direction: column;
-        `;
+        dialog.className = 'rr-plugin-add-dialog';
+        dialog.setAttribute('role', 'dialog');
+        dialog.setAttribute('aria-label', this._tt('Add Plugin'));
 
         const header = document.createElement('div');
-        header.className = 'rr-modal-header rr-plugin-dialog-header';
-        header.style.cssText = `
-            padding: 12px 16px;
-            border-bottom: 1px solid var(--color-border);
-            color: var(--color-text-strong);
-            font-weight: bold;
-        `;
-        header.textContent = this._tt('Add Plugin');
+        header.className = 'rr-modal-header rr-plugin-dialog-header rr-plugin-add-head';
+        const title = document.createElement('div');
+        title.className = 'rr-modal-title';
+        title.textContent = this._tt('Add Plugin');
+        const close = document.createElement('button');
+        close.type = 'button';
+        close.className = 'rr-modal-close';
+        close.textContent = '×';
+        close.setAttribute('aria-label', this._tt('Close'));
+        close.addEventListener('click', () => modal.remove());
+        header.append(title, close);
         dialog.appendChild(header);
 
+        const folderLabel = this.pluginDirLabel();
         const searchInput = document.createElement('input');
-        searchInput.type = 'text';
-        searchInput.className = 'plugin-add-search-input';
+        searchInput.type = 'search';
+        searchInput.className = 'plugin-add-search-input rr-plugin-add-search';
         searchInput.placeholder = this._tt('Search...');
         searchInput.setAttribute('aria-label', `${this._tt('Add Plugin')} ${this._tt('Search...')}`);
         searchInput.autocomplete = 'off';
         searchInput.spellcheck = false;
-        searchInput.style.cssText = `
-            margin: 8px 8px 0;
-            padding: 6px 8px;
-            background-color: var(--color-bg-input);
-            color: var(--color-text);
-            border: 1px solid var(--color-border-input);
-            border-radius: var(--radius-md);
-            outline: none;
-            font-size: 12px;
-        `;
-        searchInput.addEventListener('focus', () => {
-            searchInput.style.borderColor = 'var(--color-accent-border-strong)';
-        });
-        searchInput.addEventListener('blur', () => {
-            searchInput.style.borderColor = 'var(--color-border-input)';
-        });
-        dialog.appendChild(searchInput);
 
         const listContainer = document.createElement('div');
-        listContainer.className = 'rr-accent-scrollbar';
-        listContainer.style.cssText = `
-            flex: 1;
-            overflow-y: auto;
-            padding: 8px;
-        `;
+        listContainer.className = 'rr-accent-scrollbar rr-plugin-add-list';
+
+        const openFolder = () => {
+            if (!project?.path) return;
+            const dir = this.pluginDir(project.path);
+            try { this.fs.mkdirSync(dir, { recursive: true }); } catch (_) {}
+            if (typeof nw !== 'undefined' && nw.Shell?.openItem) nw.Shell.openItem(dir);
+        };
+
+        if (!entries.length) {
+            const empty = document.createElement('div');
+            empty.className = 'rr-plugin-add-empty';
+            const text = document.createElement('p');
+            text.textContent = this._tt('Every plugin in {folder} is already in the list. Put a new plugin\'s .js file in that folder and it shows here.').replace('{folder}', folderLabel);
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'rr-btn-secondary';
+            button.textContent = this._tt('Open Folder');
+            button.addEventListener('click', openFolder);
+            empty.append(text, button);
+            dialog.appendChild(empty);
+        } else {
+            const searchRow = document.createElement('div');
+            searchRow.className = 'rr-plugin-add-searchrow';
+            const count = document.createElement('span');
+            count.className = 'rr-plugin-add-count';
+            searchRow.append(searchInput, count);
+            dialog.appendChild(searchRow);
+            dialog.appendChild(listContainer);
+        }
 
         const renderUnusedPlugins = () => {
             listContainer.innerHTML = '';
-            const query = searchInput.value.trim().toLocaleLowerCase();
-            const matches = unusedPlugins.filter(name => name.toLocaleLowerCase().includes(query));
+            const words = searchInput.value.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+            const matches = entries.filter(entry => {
+                const text = (entry.name + ' ' + entry.description).toLocaleLowerCase();
+                return words.every(word => text.includes(word));
+            });
+            const countEl = dialog.querySelector('.rr-plugin-add-count');
+            if (countEl) countEl.textContent = `${matches.length} / ${entries.length}`;
             if (matches.length === 0) {
-                const empty = document.createElement('div');
-                empty.style.cssText = 'padding:16px 10px;color:var(--color-text-muted);font-size:12px;text-align:center;';
-                empty.textContent = this._tt('No matches');
-                listContainer.appendChild(empty);
+                const none = document.createElement('div');
+                none.className = 'rr-plugin-add-none';
+                none.textContent = this._tt('No matches');
+                listContainer.appendChild(none);
                 return;
             }
-            matches.forEach(name => {
-                const item = document.createElement('div');
-                item.style.cssText = `
-                    padding: 8px 12px;
-                    color: var(--color-text);
-                    cursor: pointer;
-                    border-radius: 3px;
-                `;
-                item.textContent = name;
-                item.addEventListener('mouseenter', () => {
-                    item.style.backgroundColor = 'var(--color-bg-input)';
-                });
-                item.addEventListener('mouseleave', () => {
-                    item.style.backgroundColor = 'transparent';
-                });
+            matches.forEach(entry => {
+                const item = document.createElement('button');
+                item.type = 'button';
+                item.className = 'rr-plugin-add-item';
+                item.dataset.plugin = entry.name;
+                const name = document.createElement('span');
+                name.className = 'rr-plugin-add-name';
+                name.textContent = entry.name;
+                item.appendChild(name);
+                if (entry.description) {
+                    const desc = document.createElement('span');
+                    desc.className = 'rr-plugin-add-desc';
+                    desc.textContent = entry.description;
+                    item.appendChild(desc);
+                }
                 item.addEventListener('click', () => {
-                    this.addPlugin(name);
+                    this.addPlugin(entry.name);
                     modal.remove();
                 });
                 listContainer.appendChild(item);
             });
         };
         searchInput.addEventListener('input', renderUnusedPlugins);
-        renderUnusedPlugins();
-
-        dialog.appendChild(listContainer);
+        // Enter adds the first match; the arrows walk the list.
+        searchInput.addEventListener('keydown', event => {
+            if (event.key === 'Enter') { const first = listContainer.querySelector('.rr-plugin-add-item'); if (first) { event.preventDefault(); first.click(); } }
+            else if (event.key === 'ArrowDown') { const first = listContainer.querySelector('.rr-plugin-add-item'); if (first) { event.preventDefault(); first.focus(); } }
+        });
+        listContainer.addEventListener('keydown', event => {
+            const item = event.target.closest?.('.rr-plugin-add-item');
+            if (!item) return;
+            if (event.key === 'ArrowDown' && item.nextElementSibling) { event.preventDefault(); item.nextElementSibling.focus(); }
+            if (event.key === 'ArrowUp') { event.preventDefault(); (item.previousElementSibling || searchInput).focus(); }
+        });
+        modal.addEventListener('keydown', event => { if (event.key === 'Escape') { event.stopPropagation(); modal.remove(); } });
+        if (entries.length) renderUnusedPlugins();
 
         const footer = document.createElement('div');
-        footer.style.cssText = `
-            padding: 12px 16px;
-            border-top: 1px solid var(--color-border);
-            background-color: var(--color-bg-panel);
-            display: flex;
-            justify-content: flex-end;
-        `;
-
+        footer.className = 'rr-modal-footer rr-plugin-add-foot';
+        const folderNote = document.createElement('span');
+        folderNote.className = 'rr-plugin-add-folder';
+        folderNote.textContent = folderLabel;
         const cancelBtn = document.createElement('button');
         cancelBtn.textContent = this._tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
-        cancelBtn.addEventListener('click', () => {
-            modal.remove();
-        });
-        footer.appendChild(cancelBtn);
-
+        cancelBtn.addEventListener('click', () => modal.remove());
+        footer.append(folderNote, cancelBtn);
         dialog.appendChild(footer);
+
         modal.appendChild(dialog);
-        document.body.appendChild(modal);
-        searchInput.focus();
+        // In the manager's own window when it has one (it is a window of its own), else the editor's.
+        const host = this.container?.ownerDocument?.body || document.body;
+        host.appendChild(modal);
+        (entries.length ? searchInput : cancelBtn).focus();
     }
 
     /**
@@ -3036,7 +3118,7 @@ class PluginManager {
         try {
             const currentProject = this.projectController.getCurrentProject();
             const projectPath = currentProject.path;
-            const pluginPath = this.path.join(projectPath, 'js', 'plugins', `${pluginName}.js`);
+            const pluginPath = this.path.join(this.pluginDir(projectPath), `${pluginName}.js`);
 
             // Read plugin file to extract metadata and parameters
             const pluginSource = this.fs.readFileSync(pluginPath, 'utf8');
@@ -3534,7 +3616,7 @@ class PluginManager {
         // those entries removable instead of aborting the details panel render.
         const currentProject = this.projectController.getCurrentProject();
         const projectPath = currentProject.path;
-        const pluginPath = this.path.join(projectPath, 'js', 'plugins', `${plugin.name}.js`);
+        const pluginPath = this.path.join(this.pluginDir(projectPath), `${plugin.name}.js`);
         const pluginFileExists = this.fs.existsSync(pluginPath);
         const pluginSource = pluginFileExists ? this.fs.readFileSync(pluginPath, 'utf8') : '';
         const paramMetadata = pluginFileExists ? this.parsePluginParameterMetadata(pluginSource) : {};
@@ -3551,7 +3633,7 @@ class PluginManager {
                 font-size: 12px;
                 line-height: 1.4;
             `;
-            missingFile.textContent = `${this._tt('Plugin file missing:')} js/plugins/${plugin.name}.js. ${this._tt('This entry can be removed and saved.')}`;
+            missingFile.textContent = `${this._tt('Plugin file missing:')} ${this.pluginDirLabel()}/${plugin.name}.js. ${this._tt('This entry can be removed and saved.')}`;
             paramsContainer.appendChild(missingFile);
         }
 
@@ -4213,7 +4295,7 @@ class PluginManager {
     /** What a save would write, to tell an edited list from the one on disk. */
     _pluginsSignature() {
         const file = this._pluginsFilePath ? this.path.basename(this._pluginsFilePath) : '';
-        return JSON.stringify(file === 'plugins.js' ? this.serializeRpgMakerPlugins(this.plugins) : this.serializeReactorPlugins(this.plugins));
+        return JSON.stringify(file === 'plugins.js' && this.scope !== 'editor' ? this.serializeRpgMakerPlugins(this.plugins) : this.serializeReactorPlugins(this.plugins));
     }
 
     _markPluginsSaved() {
@@ -4252,13 +4334,17 @@ class PluginManager {
             }
             // Use the path we loaded from, or default to reactor_plugins.js
             const pluginsPath = this._pluginsFilePath || this.path.join(projectPath, 'js', 'reactor_plugins.js');
-            const isRpgMakerPluginsFile = this.path.basename(pluginsPath) === 'plugins.js';
+            const editorList = this.scope === 'editor';
+            const isRpgMakerPluginsFile = !editorList && this.path.basename(pluginsPath) === 'plugins.js';
             const pluginsToWrite = isRpgMakerPluginsFile
                 ? this.serializeRpgMakerPlugins(this.plugins)
                 : this.serializeReactorPlugins(this.plugins);
-            const header = isRpgMakerPluginsFile
+            const header = editorList
+                ? '// RPG Reactor editor plugins for this project (Plugin Manager › Editor Plugins)\n// Do not edit this file directly - use the Plugin Manager instead\n'
+                : isRpgMakerPluginsFile
                 ? '// Generated by RPG Maker.\n// Do not edit this file directly.\n'
                 : '// Generated by RPG Reactor Plugin Manager\n// Do not edit this file directly - use the Plugin Manager instead\n';
+            if (editorList) this.fs.mkdirSync(this.path.dirname(pluginsPath), { recursive: true });
 
             // Generate the file content
             const content = `${header}
@@ -4268,6 +4354,8 @@ ${JSON.stringify(pluginsToWrite, null, 4)};
 
             this._writeFileAtomic(this.fs, pluginsPath, content, 'utf8');
             this._markPluginsSaved();
+            // The editor's own plugins take effect at once: the list is run again (each is told it is going first).
+            if (editorList && typeof window !== 'undefined' && window.RREditorPlugins) await window.RREditorPlugins.loadForProject(projectPath);
             if (!quiet) await RRDialog.alert(this._tt('Plugins saved successfully!'), { title: this._tt('Plugin Manager') });
             return true;
         } catch (err) {

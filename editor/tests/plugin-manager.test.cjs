@@ -135,7 +135,7 @@ test('Plugin Manager opens plugin URLs externally and themes its scroll regions'
     assert.match(source, /urlLink\.rel = 'noreferrer'/);
     assert.match(uiSource, /closest\('a\.external-link'\)/);
     assert.match(uiSource, /nw\.Shell\.openExternal\(href\)/);
-    assert.match(source, /pluginListContainer\.className = 'rr-accent-scrollbar'/);
+    assert.match(source, /pluginListContainer\.className = 'rr-accent-scrollbar rr-plugin-list'/);
     assert.match(source, /detailsContainer\.classList\.add\('rr-accent-scrollbar'\)/);
     assert.match(source, /helpContent\.classList\.add\('rr-accent-scrollbar'\)/);
     assert.match(styles, /\.rr-accent-scrollbar\s*\{[^}]*scrollbar-color:[^}]*var\(--color-accent-muted\)[^}]*var\(--color-bg-deep\)/s);
@@ -272,7 +272,7 @@ test('complex plugin lists use themed draggable rows and aligned parameter grids
     assert.match(source, /background-color: var\(--color-bg-toolbar\)/);
     assert.doesNotMatch(source, /#2a3a4a|#262626|#7cb8e4/);
     assert.match(source, /className = 'plugin-list-search-input'/);
-    assert.match(source, /className = 'plugin-add-search-input'/);
+    assert.match(source, /className = 'plugin-add-search-input rr-plugin-add-search'/);
     assert.match(source, /getFilteredPluginEntries\(this\._pluginFilterQuery\)/);
     assert.match(source, /okBtn\.textContent = this\._tt\('OK'\)/);
     assert.match(source, /className = 'plugin-manager-action-footer'/);

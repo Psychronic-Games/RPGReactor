@@ -160,6 +160,8 @@ const NEVER_SHIPPED = new Set(['.git', '.svn', '.hg', '.vscode', '.idea', '.DS_S
 function isStagingExcluded(relPath) {
     if (EXCLUDED.has(relPath)) return true;
     const parts = relPath.split(path.sep);
+    // The editor's own plugins for this project (EditorPlugins.js), beside the game's in js/: never part of the game.
+    if (parts[0] === 'js' && (parts[1] === 'editor-plugins' || parts[1] === 'reactor_editor_plugins.js')) return true;
     if (NEVER_SHIPPED.has(parts[0]) || NEVER_SHIPPED.has(parts[parts.length - 1])) return true;
     // The editor's own half-written files (a save or import interrupted).
     if (/\.tmp-rr-|\.partial-/.test(parts[parts.length - 1])) return true;

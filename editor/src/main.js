@@ -169,6 +169,7 @@ class RPGReactor {
 
         // Set up callback for when maps are loaded
         this.projectController.onMapLoaded = () => {
+            window.RREditorPlugins?.emit?.('mapLoaded', { map: this.projectController.getTilemapManager?.()?.currentMap || null });
             this.databaseEditorUI?.tilesetEditor?.resetFlagEditing?.();
             // The grid is rebuilt with the map canvas, which knows nothing of
             // the preference — so it comes up hidden unless it is told again.
@@ -793,12 +794,22 @@ class RPGReactor {
     dockMapPanel(panel) {
         const dock = this.mapSideDock();
         if (!dock) return false;
+        // With the Build bar up (Lighting, Media Surfaces or Image Layers opened from it or over it), the panel floats
+        // where the bar's own panels do, over the map's corner: the side dock opening narrowed the map and moved the
+        // bar left, for those two Objects slots only (owner, 2026-11-22).
+        const canvas = document.getElementById('canvas-container');
+        if (this.buildHotbar?.visible && canvas) {
+            panel.classList.add('rr-build-floating-dock');
+            canvas.appendChild(panel);
+            return true;
+        }
         dock.appendChild(panel);
         if (dock.hidden) { dock.hidden = false; window.dispatchEvent(new Event('resize')); }
         return true;
     }
     undockMapPanel(panel) {
         const dock = this.mapSideDock();
+        panel?.classList?.remove('rr-build-floating-dock');
         if (panel?.parentElement) panel.parentElement.removeChild(panel);
         if (dock && !dock.hidden && !dock.children.length) { dock.hidden = true; window.dispatchEvent(new Event('resize')); }
     }

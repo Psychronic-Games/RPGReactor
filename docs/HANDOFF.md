@@ -17,13 +17,14 @@ Changes belong in the editor changelog; behavior goes in the commit message and 
 
 ## 2026-11-22 (desktop) — Achievements, Objects, Workshop projects
 
-Not committed. [Changelog](../editor/changelog/0.99.7.md).
+Committed in two parts (`82fd2963`, then the afternoon's). [Changelog](../editor/changelog/0.99.7.md).
 
 - **Steam build is still 0.99.6** (BuildID 26841284): no Steam code in it, so no achievements yet. They need a build of this work uploaded to the depots. steamworks.js connected to the owner's running Steam client as app 4817110 (read only; nothing unlocked).
 - **Achievements:** seven more (17), hooked, imported and published in Steamworks.
 - **Builder:** Models is now Objects: Library, Light, Screen, Select, Remove; no model thumbnails.
 - **Workshop:** whole projects share and open as new projects (`WorkshopProjects.js`), plugins off on arrival.
 - **Owner:** the removed stock assets are not to be mentioned in UI, store copy or reports.
+- **Plugins:** editor plugins v1 (`EditorPlugins.js`, Plugin Manager tabs), examples RR_MapStats (editor) and RR_DayNight (Reactor-only game plugin), guide `docs/PLUGIN-DEVELOPMENT.md`; editor plugins in `js/editor-plugins/` (each one's files in `<Name>/`), list `js/reactor_editor_plugins.js`, toolbar buttons with their own icon. Plugin Manager's Add Plugin, fields and the Forge Workshop tabs in the theme. The Steam zips in `~/.cache/rr-tests/steam-0997` predate the afternoon's commit.
 - **Runtime 20261122.1** synced into all 17 (ragdoll over a rim). The Steam copy's Demo (0.99.6) still has eight EVFX sounds: the next uploaded build replaces it.
 - **Store page (owner asked, through Claude in Chrome):** new short description ("Your RPG, built your way", no RPG Maker wording) and long description with seven MP4 loops (`docs/steam/description-en.txt`, `description-media/`); 16 translations uploaded (`localization/`); 14 screenshots replace the 10 (`screenshots/`, old ones in `screenshots/replaced-2026-11-22/`); an empty screenshot entry removed. Saved, not published (the store page goes out with Valve's review).
 

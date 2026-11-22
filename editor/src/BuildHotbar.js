@@ -188,7 +188,7 @@ class BuildHotbar {
 
     /**
      * The Tools menu's map tools open in the bar, as its own slots and groups do: 'light' and 'screen' (Lighting and
-     * Media Surfaces), or a group, 'terrain', 'foliage' or 'models'. Picked again while it is in hand, the bar goes away.
+     * Media Surfaces), or a group, 'build', 'terrain', 'foliage' or 'models'. Picked again while it is in hand, the bar goes away.
      */
     openTool(target) {
         if (!this.root || !this.manager()) return false;
@@ -197,6 +197,7 @@ class BuildHotbar {
         if (inHand) { this.hide(); return true; }
         if (!this.visible) this.show();
         if (docks) this.pick(target);
+        else if (target === 'build') this.pick(this._lastBuild || 'select');
         else if (target === 'terrain') this.pick(this._lastTerrain || 'raise');
         else if (target === 'foliage') this.pick(this._lastFoliage || 'grass');
         else if (target === 'models') this.pick(this._lastModels || 'mselect');
@@ -282,6 +283,18 @@ class BuildHotbar {
         const piece = manager.selectAt(view.pieceTargetAt(clientX, clientY, { erase: true }));
         this.render();
         return !!piece;
+    }
+
+    /**
+     * A slot clicked on the bar: picked, or, when it is the one in hand already, put down (owner, 2026-11-22): back to
+     * Select, where a click on the map places nothing. Objects has its own Select; Terrain and Foliage, which have
+     * none, go back to Build's.
+     */
+    press(slot) {
+        const active = this.activeSlot();
+        const neutral = this.group() === 'models' ? 'mselect' : 'select';
+        if (slot === active && slot !== neutral) { this.pick(neutral); return; }
+        this.pick(slot);
     }
 
     /** Pick a slot: pieces place, the Eraser takes away, Select picks up, the rest open their specs. */
@@ -437,6 +450,8 @@ class BuildHotbar {
         if (slot === 'mselect') return this._t('build.select');
         if (slot === 'mremove' || slot === 'terase' || slot === 'ferase') return this._t('build.hammer');
         if (slot === 'library') return this._t('build.library');
+        // Media Surfaces by the name it has everywhere else (the Tools menu, its panel), not "Screen" (owner, 2026-11-22).
+        if (slot === 'screen') return this._t('menu.mediaSurfaces');
         if (slot === 'dunes' || slot === 'ground' || slot === 'path' || slot === 'biome' || slot === 'sky' || slot === 'surround') return this._tt({ dunes: 'Dunes', ground: 'Ground', path: 'Path', biome: 'Biome', sky: 'Room and Sky', surround: 'Beyond the Border' }[slot]);
         if (BuildHotbar.TERRAIN.includes(slot)) return this._t({ pour: 'terrain.waterPour', drain: 'terrain.drain', look: 'terrain.lookShort' }[slot] || 'terrain.' + slot);
         if (BuildHotbar.ALIEN_FOLIAGE[slot]) return this._tt(BuildHotbar.ALIEN_FOLIAGE[slot]);
@@ -462,7 +477,7 @@ class BuildHotbar {
                 ${buttons}</div>
             <div class="rr-build-hint" tabindex="0">${terrain || group === 'foliage' ? `<span class="rr-build-keys">${this._t('terrain.keys')}</span>` : group === 'models' ? `<span class="rr-build-keys">${this._t('build.modelKeys')}</span>` : `<span class="rr-build-height" title="${escape(this._tt('Height above the ground for the next piece. Zero places it on the ground. Q lowers it; E raises it.'))}">${this._tt('Placement height')}: <b class="rr-build-level">${manager.level}</b> ${this._tt('above ground')}</span><span class="rr-build-keys"> · ${this._tt(manager.mode === 'select' ? BuildHotbar.SELECT_HINT : manager.mode === 'erase' ? BuildHotbar.ERASE_HINT : BuildHotbar.KEYS_HINT)}</span>`}</div>`;
         this._slotsKey = slots.join('|');
-        BuildHotbar.bindSlots(root, slot => this.pick(slot));
+        BuildHotbar.bindSlots(root, slot => this.press(slot));
         root.querySelectorAll('.rr-build-group').forEach(el => el.addEventListener('click', () => {
             const to = el.dataset.group;
             if (to === group) return;

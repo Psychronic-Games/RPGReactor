@@ -138,20 +138,42 @@
         return enhanceList(target.querySelectorAll('input[type="number"]'));
     }
 
+    function collect(records) {
+        const inputs = [];
+        for (const record of records) {
+            for (const node of record.addedNodes) {
+                if (node.nodeType !== 1) continue;
+                if (node.tagName === 'INPUT') inputs.push(node);
+                else if (node.querySelectorAll) for (const input of node.querySelectorAll('input[type="number"]')) inputs.push(input);
+            }
+        }
+        return inputs;
+    }
+
+    // Another window's document: a window popped out of the editor (the Plugin Manager, the Database) holds its
+    // panel in a document of its own, which the main document's watch never sees. DetachedWindow calls this when it
+    // moves a panel there, once per document.
+    const watched = typeof WeakSet !== 'undefined' ? new WeakSet() : null;
+    function watch(doc) {
+        if (!doc || !doc.body || (watched && watched.has(doc))) return false;
+        const Observer = (doc.defaultView && doc.defaultView.MutationObserver) || (typeof MutationObserver !== 'undefined' ? MutationObserver : null);
+        if (!Observer) return false;
+        if (watched) watched.add(doc);
+        enhanceAll(doc);
+        new Observer(records => {
+            const inputs = collect(records);
+            if (inputs.length) enhanceList(inputs);
+        }).observe(doc.body, { childList: true, subtree: true });
+        return true;
+    }
+
     let observer = null;
     function install() {
         if (observer || typeof MutationObserver === 'undefined' || !root.document) return;
         const run = () => {
             enhanceAll(root.document);
             observer = new MutationObserver(records => {
-                const inputs = [];
-                for (const record of records) {
-                    for (const node of record.addedNodes) {
-                        if (node.nodeType !== 1) continue;
-                        if (node.tagName === 'INPUT') inputs.push(node);
-                        else if (node.querySelectorAll) for (const input of node.querySelectorAll('input[type="number"]')) inputs.push(input);
-                    }
-                }
+                const inputs = collect(records);
                 if (inputs.length) enhanceList(inputs);
             });
             observer.observe(root.document.body, { childList: true, subtree: true });
@@ -160,7 +182,7 @@
         else root.document.addEventListener('DOMContentLoaded', run, { once: true });
     }
 
-    const api = { CLASS, AUTO, wants, enhance, enhanceList, enhanceAll, install };
+    const api = { CLASS, AUTO, wants, enhance, enhanceList, enhanceAll, install, watch };
     root.RRNumberSteppers = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (root.document && !root.RR_NUMBER_STEPPERS_MANUAL) install();

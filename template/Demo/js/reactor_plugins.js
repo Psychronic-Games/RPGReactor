@@ -1185,5 +1185,18 @@ var $plugins =
         "status": true,
         "description": "(v1.0) Creates shatter effect on character sprites.",
         "parameters": {}
+    },
+    {
+        "name": "RR_DayNight",
+        "status": false,
+        "description": "[RPG Reactor only] Day and night on 3D maps: an in-game clock moves the ambient light, and tagged lamps light up at night.",
+        "parameters": {
+            "hourVariable": "0",
+            "secondsPerHour": "60",
+            "startHour": "8",
+            "lampTag": "village",
+            "nightStart": "19",
+            "nightEnd": "6"
+        }
     }
 ];

@@ -25,7 +25,8 @@
  *
  * config: overlayId, panelSelector, headerSelector, titleSelector, title (fallback), page (the
  * blank HTML page its window loads), storageKey, popoutKey, minWidth, minHeight, defaultWidth and
- * defaultHeight (the first-open size's cap, 1400 × 1000 unless given), sizeToScreen (use the
+ * defaultHeight (the first-open size's cap, 1400 × 1000 unless given), defaultRect(view) (the first-open place
+ * and size instead, from the editor's or the in-page view's rectangle), sizeToScreen (use the
  * editor's monitor for the initial size, even when the editor itself is smaller),
  * floatingClass, poppedClass, gripClass, dockedEvent (fired on window when it comes back into
  * the editor window), isOpen(overlay), closeFromFrame() (closed by Alt+F4 or the taskbar: close
@@ -181,6 +182,7 @@
 
         /** Today's dialog size, centered on the view: what the window is before it has been moved. */
         function defaultRect(view) {
+            if (typeof config.defaultRect === 'function') return config.defaultRect(view);
             const width = Math.min(config.defaultWidth || 1400, Math.round(view.width * 0.95));
             const height = Math.min(config.defaultHeight || 1000, Math.round(view.height * 0.97));
             return { left: (view.left || 0) + Math.round((view.width - width) / 2), top: (view.top || 0) + Math.round((view.height - height) / 2), width, height };
@@ -283,6 +285,12 @@
                 const home = shown.find(area => editor.left + editor.width / 2 >= area.left && editor.left + editor.width / 2 < area.left + area.width
                     && editor.top + editor.height / 2 >= area.top && editor.top + editor.height / 2 < area.top + area.height);
                 if (home) return clamp(defaultRect(home), home);
+            }
+            if (typeof config.defaultRect === 'function') {
+                // A place of its own (beside the map, at the editor's edge): kept on the screen the editor is on.
+                const home = shown.find(area => editor.left + editor.width / 2 >= area.left && editor.left + editor.width / 2 < area.left + area.width
+                    && editor.top + editor.height / 2 >= area.top && editor.top + editor.height / 2 < area.top + area.height) || shown[0];
+                return home ? clamp(defaultRect(editor), home) : defaultRect(editor);
             }
             return defaultRect(editor);
         }
@@ -602,6 +610,8 @@
                     overlay.classList.add(config.poppedClass);
                     panel.style.cssText = '';
                     doc.body.appendChild(overlay);
+                    // The themed number arrows, in this window's document too (the main one's watch never sees it).
+                    root.RRNumberSteppers?.watch?.(doc);
                     addResizeGrip(doc, win);
                     addWindowControls(overlay);
                     showControls();
@@ -612,8 +622,10 @@
                     Promise.resolve(stylesReady).then(() => {
                         if (popped !== state) return;
                         win.setMinimumSize(MIN_WIDTH, MIN_HEIGHT);
-                        win.moveTo(rect.left, rect.top);
+                        // Sized first, then moved (as setBounds does): the window can be made at the editor's size,
+                        // and moved first to a place near a screen's edge most of it was off screen, which NW refuses.
                         win.resizeTo(rect.width, rect.height);
+                        win.moveTo(rect.left, rect.top);
                         setTimeout(() => {
                             if (popped !== state) return;
                             state.ready = true;

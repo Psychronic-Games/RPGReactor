@@ -634,6 +634,7 @@ class ModelPropsManager {
         container.innerHTML = `
             <div class="mp-panel">
                 <div class="mp-select-hint rr-build-note rr-build-wrap rr-build-lead" hidden>${escape(this._tx('Click a model on the map to select it. Drag moves it, Delete removes it.'))}</div>
+                <div class="mp-select-hint mp-erase-hint rr-build-note rr-build-wrap rr-build-lead" hidden>${escape(this._tx('Click a model on the map to remove it. Ctrl+Z puts it back.'))}</div>
                 <div class="mp-fixed rr-accent-scrollbar">
                 <section class="mp-section mp-model-card">
                     <div class="mp-section-body mp-model-heading">
@@ -987,11 +988,15 @@ class ModelPropsManager {
         const byId = id => panel.querySelector('#' + id);
         const prop = this.prop(this.selectedId);
         const shown = prop || null;
-        // Select with nothing selected: only what a click does.
-        const idle = this.tool === 'select' && !shown;
+        // Select with nothing selected, or the Eraser: only what a click does (the Eraser held up the last model in
+        // hand, its name and its fields, as if a click would place it; owner, 2026-11-22).
+        const erasing = this.tool === 'erase';
+        const idle = (this.tool === 'select' || erasing) && !shown;
         panel.querySelector('.mp-panel')?.classList.toggle('is-select-idle', idle);
-        const hint = panel.querySelector('.mp-select-hint');
-        if (hint) hint.hidden = !idle;
+        const hint = panel.querySelector('.mp-select-hint:not(.mp-erase-hint)');
+        if (hint) hint.hidden = !idle || erasing;
+        const eraseHint = panel.querySelector('.mp-erase-hint');
+        if (eraseHint) eraseHint.hidden = !idle || !erasing;
         if (shown) {
             for (const key of ['size','scale','direction','z','passable','yaw','pitch','roll','repeat']) this.fields[key] = shown[key];
             this.fields.animationSpeed = shown.animationSpeed ?? 100;

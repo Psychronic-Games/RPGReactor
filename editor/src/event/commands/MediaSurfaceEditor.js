@@ -1637,6 +1637,8 @@ class MediaSurfaceEditor {
     /** Where the live panel sits on screen, so map previews can stay clear of it. */
     livePanelRect() {
         if (this.popout || !this.liveDialog?.isConnected) return null;
+        // In a window of its own it covers nothing of the map.
+        if (typeof window !== 'undefined' && window.RRMediaSurfaceWindow?.isPoppedOut?.()) return null;
         return this.liveDialog.getBoundingClientRect();
     }
 
@@ -1715,55 +1717,15 @@ class MediaSurfaceEditor {
         try { popout.win?.close(true); } catch (_) {}
     }
 
-    static get PANEL_OFFSET_KEY() { return 'rpgreactor.videoSurfacePanelOffset'; }
-
-    /**
-     * The live panel floats over the map, so let the user move it by its
-     * title bar and keep that position for the next command.
-     */
-    _makePanelDraggable(header, dialog, closeButton) {
-        header.style.cursor = 'move';
-        header.style.userSelect = 'none';
-        let offset = { x: 0, y: 0 };
-        try {
-            const saved = JSON.parse(localStorage.getItem(MediaSurfaceEditor.PANEL_OFFSET_KEY) || 'null');
-            if (Number.isFinite(saved?.x) && Number.isFinite(saved?.y)) offset = { x: saved.x, y: saved.y };
-        } catch (_) {}
-        const apply = () => {
-            const rect = dialog.getBoundingClientRect();
-            const baseLeft = rect.left - this._panelOffset.x;
-            const baseTop = rect.top - this._panelOffset.y;
-            const maxX = Math.max(0, window.innerWidth - rect.width) - baseLeft;
-            const maxY = Math.max(0, window.innerHeight - rect.height) - baseTop;
-            offset = { x: Math.min(maxX, Math.max(-baseLeft, offset.x)), y: Math.min(maxY, Math.max(-baseTop, offset.y)) };
-            this._panelOffset = offset;
-            dialog.style.transform = offset.x || offset.y ? `translate(${offset.x}px, ${offset.y}px)` : '';
-        };
-        this._panelOffset = { x: 0, y: 0 };
-        apply();
-        this._listen(header, 'pointerdown', event => {
-            if (event.button !== 0 || this.popout || event.target.closest?.('button')) return;
-            event.preventDefault();
-            // A native <select> popup does not follow its element, so close it.
-            if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
-            const startX = event.clientX - offset.x;
-            const startY = event.clientY - offset.y;
-            const move = moveEvent => {
-                offset = { x: moveEvent.clientX - startX, y: moveEvent.clientY - startY };
-                apply();
-            };
-            let end;
-            end = this._addDragCleanup(() => {
-                window.removeEventListener('pointermove', move);
-                window.removeEventListener('pointerup', end);
-                window.removeEventListener('pointercancel', end);
-                try { localStorage.setItem(MediaSurfaceEditor.PANEL_OFFSET_KEY, JSON.stringify(offset)); } catch (_) {}
-            });
-            window.addEventListener('pointermove', move);
-            window.addEventListener('pointerup', end);
-            window.addEventListener('pointercancel', end);
-        });
+    /** The live editor's window put away, empty (it is kept for the next map surface). */
+    static hideLiveWindow() {
+        const overlay = typeof document !== 'undefined' ? document.getElementById('media-surface-editor-modal') : null;
+        if (!overlay || overlay.style.display === 'none') return;
+        overlay.style.display = 'none';
+        overlay.querySelector('.video-surface-editor')?.replaceChildren();
+        window.RRMediaSurfaceWindow?.hidePopout?.();
     }
+
 
     _beginLiveMapAuthoring() {
         if (this.operation === 'StopVideoSurface' || this.context.type !== 'map') return false;
@@ -1851,10 +1813,11 @@ class MediaSurfaceEditor {
     }
 
     show(command, callback, operation, context = null) {
-        this.close(false);
+        // Its own window stays up from one surface to the next: only the editor's contents are put away here.
+        this.close(false, { keepWindow: true });
         this.operation = operation || command?.parameters?.[1] || 'ShowVideoSurface';
-        if (!MediaSurfaceEditor.supports(this.operation)) return false;
-        if (command && !this.acceptsCommand(command)) return false;
+        if (!MediaSurfaceEditor.supports(this.operation)) { MediaSurfaceEditor.hideLiveWindow(); return false; }
+        if (command && !this.acceptsCommand(command)) { MediaSurfaceEditor.hideLiveWindow(); return false; }
         this.context = Object.assign({ type: 'map' }, context || {});
         this.callback = callback;
         this.data = MediaSurfaceEditor.parse(command, this.operation);
@@ -1864,31 +1827,37 @@ class MediaSurfaceEditor {
         this.movies = this.mediaFiles();
         this.fields = {};
         this.liveMapAuthoring = this._beginLiveMapAuthoring();
+        // An event's command edited in the full dialog: the live editor's window, kept from a map surface, goes.
+        if (!this.liveMapAuthoring) MediaSurfaceEditor.hideLiveWindow();
 
-        const overlay = this._el('div', 'rr-modal-overlay video-surface-editor-modal');
-        overlay.style.cssText = this.liveMapAuthoring
-            ? 'position:fixed;inset:0;z-index:21000;display:flex;align-items:stretch;justify-content:flex-end;padding:12px;box-sizing:border-box;pointer-events:none;background:transparent;'
-            : 'position:fixed;inset:0;z-index:21000;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;background:rgba(0,0,0,.78);';
-        const dialog = this._el('div', 'rr-modal video-surface-editor');
-        dialog.style.cssText = this.liveMapAuthoring
-            ? 'display:flex;flex-direction:column;width:min(440px,calc(100vw - 24px));height:calc(100vh - 24px);min-height:420px;pointer-events:auto;box-shadow:0 12px 42px rgba(0,0,0,.72);'
-            : 'display:flex;flex-direction:column;width:min(1220px,calc(100vw - 24px));height:min(900px,calc(100vh - 24px));min-height:420px;';
-        overlay.appendChild(dialog);
+        let overlay, dialog;
+        if (this.liveMapAuthoring) {
+            // Live on the map: the editor's window (RRMediaSurfaceWindow), one for every surface, kept between them.
+            overlay = document.getElementById('media-surface-editor-modal');
+            if (!overlay) {
+                overlay = this._el('div', 'rr-modal-overlay video-surface-editor-modal');
+                overlay.id = 'media-surface-editor-modal';
+                overlay.style.display = 'none';
+                const panel = this._el('div', 'rr-modal video-surface-editor');
+                overlay.appendChild(panel);
+                document.body.appendChild(overlay);
+            }
+            dialog = overlay.querySelector('.video-surface-editor');
+            dialog.replaceChildren();
+        } else {
+            overlay = this._el('div', 'rr-modal-overlay video-surface-editor-modal');
+            overlay.style.cssText = 'position:fixed;inset:0;z-index:21000;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;background:rgba(0,0,0,.78);';
+            dialog = this._el('div', 'rr-modal video-surface-editor');
+            dialog.style.cssText = 'display:flex;flex-direction:column;width:min(1220px,calc(100vw - 24px));height:min(900px,calc(100vh - 24px));min-height:420px;';
+            overlay.appendChild(dialog);
+        }
 
         const header = this._el('div', 'rr-modal-header');
         header.appendChild(this._el('div', 'rr-modal-title', this._t(this.context.mapSurface ? 'Map Media Surface' : MediaSurfaceEditor.OPERATIONS[this.operation])));
         const closeButton = this._button('\u00d7', 'rr-modal-close');
-        if (this.liveMapAuthoring && typeof nw !== 'undefined' && nw.Window?.open) {
-            const popOut = this._button('\u29c9', 'rr-modal-close vs-pop-out');
-            popOut.title = this._t('Open in a separate window');
-            popOut.style.marginRight = '4px';
-            this._listen(popOut, 'click', () => this._popOut());
-            header.appendChild(popOut);
-        }
         header.appendChild(closeButton);
         dialog.appendChild(header);
         this.liveDialog = this.liveMapAuthoring ? dialog : null;
-        if (this.liveMapAuthoring) this._makePanelDraggable(header, dialog, closeButton);
 
         const body = this._el('div', 'rr-modal-body video-surface-editor-body');
         body.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr));gap:12px;min-height:0;flex:1;padding:12px;overflow:auto;';
@@ -1939,8 +1908,15 @@ class MediaSurfaceEditor {
         }
         footer.append(validation, cancel, ok);
         dialog.appendChild(footer);
-        document.body.appendChild(overlay);
+        if (!this.liveMapAuthoring) document.body.appendChild(overlay);
         this.modal = overlay;
+        if (this.liveMapAuthoring) {
+            MediaSurfaceEditor.liveEditor = this;
+            const shownBefore = overlay.style.display === 'flex';
+            overlay.style.display = 'flex';
+            const frame = typeof window !== 'undefined' ? window.RRMediaSurfaceWindow : null;
+            if (frame) { frame.install(overlay); frame.open(overlay, { shownBefore }); }
+        }
         if (this.liveMapAuthoring) this._previewManager()?.revealAuthoringSurface?.();
 
         const cancelEdit = () => {
@@ -1949,6 +1925,7 @@ class MediaSurfaceEditor {
             if (done) done(null);
         };
         this._listen(closeButton, 'click', cancelEdit);
+        this.cancelLive = cancelEdit;
         this._listen(cancel, 'click', cancelEdit);
         // (No cancel on a backdrop click: as in every other command dialog, a stray click must not throw the work away.)
         const accept = after => {
@@ -1983,7 +1960,7 @@ class MediaSurfaceEditor {
         return true;
     }
 
-    close(notify = false) {
+    close(notify = false, { keepWindow = false } = {}) {
         this._cancelMediaDimensions?.();
         this.mediaDimensions = null;
         const callback = this.callback;
@@ -2001,7 +1978,16 @@ class MediaSurfaceEditor {
                 media.load?.();
             } catch (_) {}
         }
-        this.modal?.remove();
+        if (this.modal && this.modal.id === 'media-surface-editor-modal') {
+            // The live editor's window waits for the next surface, empty; it hides unless one opens at once.
+            this.modal.querySelector('.video-surface-editor')?.replaceChildren();
+            if (!keepWindow) {
+                this.modal.style.display = 'none';
+                if (typeof window !== 'undefined') window.RRMediaSurfaceWindow?.hidePopout?.();
+            }
+            if (MediaSurfaceEditor.liveEditor === this) MediaSurfaceEditor.liveEditor = null;
+        } else this.modal?.remove();
+        this.cancelLive = null;
         if (this.hiddenEventModal?.element) {
             this.hiddenEventModal.element.style.display = this.hiddenEventModal.display;
         }
