@@ -2143,6 +2143,7 @@ class EventManager {
                     this._replaceEventData(sourceEvent, committedEvent);
                     events[sourceEvent.id] = sourceEvent;
                     isNew = false;
+                    if (typeof window !== 'undefined') window.RRAchievements?.earn('FIRST_EVENT');
                 } else {
                     if (!changes.modelsChanged && JSON.stringify(sourceEvent) === JSON.stringify(committedEvent)) return true;
                     this.saveState();

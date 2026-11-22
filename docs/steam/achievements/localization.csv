@@ -1,0 +1,35 @@
+api_name (required; must match an api_name from the definitions CSV),field (name or description),english
+NEW_PROJECT,name,A Blank Page
+NEW_PROJECT,description,Create a new project.
+FIRST_PLAYTEST,name,It Runs!
+FIRST_PLAYTEST,description,Playtest your game.
+MAP_3D,name,A New Dimension
+MAP_3D,description,Open a map in 3D.
+PROJECT_IMPORT,name,Welcome Home
+PROJECT_IMPORT,description,Import a project made in another editor.
+FORGE_CHARACTER,name,Character Smith
+FORGE_CHARACTER,description,Add a character from the Forge to your project.
+FORGE_PROP,name,Set Dresser
+FORGE_PROP,description,Add a prop from the Forge to your project.
+FORGE_SOUND,name,Sound Designer
+FORGE_SOUND,description,Save a sound effect made in the Forge.
+BUILD_GAME,name,Ship It
+BUILD_GAME,description,Build your game for players.
+WORKSHOP_SHARE,name,Show and Tell
+WORKSHOP_SHARE,description,Share a design on the Steam Workshop.
+WORKSHOP_ADD,name,Borrowed Brilliance
+WORKSHOP_ADD,description,Add a design from the Steam Workshop to a project.
+RUNTIME_INSTALL,name,Reactor Online
+RUNTIME_INSTALL,description,Install the Reactor Runtime in an existing project.
+FIRST_EVENT,name,Something Happens
+FIRST_EVENT,description,Create an event on a map.
+BUILD_PIECE,name,Groundbreaking
+BUILD_PIECE,description,Place a building piece with the Builder.
+SHAPE_TERRAIN,name,Earthmover
+SHAPE_TERRAIN,description,Reshape the land with the Builder.
+PLACE_LIGHT,name,Let There Be Light
+PLACE_LIGHT,description,Place a light on a map.
+MEDIA_SURFACE,name,Now Showing
+MEDIA_SURFACE,description,Put a media surface on a map.
+BLUEPRINT,name,Architect
+BLUEPRINT,description,Save a building as a blueprint.

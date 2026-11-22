@@ -1454,6 +1454,7 @@ class PropBuilder {
             if (!own.animations) delete kept.animations;
             atomic(fs, sidecarFile, JSON.stringify(Object.assign(kept, own, { transform: Object.assign({}, kept.transform || {}, own.transform) }), null, 2) + '\n');
             this._status(this._t('Saved to 3D Models › Props/{name}.', { name }), 'ok');
+            window.RRAchievements?.earn('FORGE_PROP');
             window.dispatchEvent(new CustomEvent('rr-models-changed', { detail: { name: 'Props/' + name } }));
         } catch (error) {
             console.error('[PropBuilder] save', error);

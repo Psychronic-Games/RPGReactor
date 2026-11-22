@@ -1,0 +1,57 @@
+[h2]Your RPG, built your way[/h2]
+RPG Reactor is a modern editor and game engine for role-playing games. Paint classic 2D maps, light them up in HD-2D, or build full 3D worlds, then fight on them in the battle system that fits your game.
+[img]{STEAM_APP_IMAGE}/extras/rr-styles[/img]
+
+[h2]Maps in HD-2D and full 3D[/h2]
+[list]
+[*]Turn any map into a lit 3D world: terrain and cliffs, water, rivers and waterfalls, grass and trees, buildings with roofs and doors, ladders, and maps stacked above and below each other.
+[*]Build piece by piece, or stamp whole buildings from blueprints.
+[*]Real-time lights and shadows, mirrors, video screens, weather and fog.
+[*]Maps that lead into each other across their borders, with no loading screen.
+[*]Cameras from classic HD-2D to isometric, third person and first person.
+[/list]
+[img]{STEAM_APP_IMAGE}/extras/rr-build[/img]
+
+[h2]Battles your way[/h2]
+[list]
+[*]Classic turn-based battles staged in 3D Battle Rooms, with cinematic camera cuts.
+[*]Tactical, Action and First Person battles fought on the map itself.
+[*]Vehicles to ride across the map, and to fight from in Tactical battles.
+[/list]
+[img]{STEAM_APP_IMAGE}/extras/rr-battles[/img]
+[img]{STEAM_APP_IMAGE}/extras/rr-tactical[/img]
+
+[h2]Make your own content[/h2]
+[list]
+[*]3D Character Builder: humans and fantasy species, faces, hair, outfits and four-legged creatures, saved as rigged 3D models or sprite sheets.
+[/list]
+[img]{STEAM_APP_IMAGE}/extras/rr-character[/img]
+[list]
+[*]3D Prop Builder: weapons, furniture, containers, flags and vehicles.
+[/list]
+[img]{STEAM_APP_IMAGE}/extras/rr-props[/img]
+[list]
+[*]Effect generator: build Effekseer battle effects from layered recipes, and preview them as you go.
+[*]Sound effect generator: explosions, lasers, magic, interface sounds and instruments.
+[/list]
+[img]{STEAM_APP_IMAGE}/extras/rr-effects[/img]
+
+[h2]Everything an RPG needs[/h2]
+[list]
+[*]A full editor: four tile layers, autotiles, events with over 100 commands, and complete database editors.
+[*]Custom user interfaces: replace the title, menus, shops and battle HUD with your own designs.
+[*]Online worlds: accounts, chat, voice and shared battles on your own server.
+[*]Steam Workshop: share your projects, characters and props, and open what others share.
+[*]Steam for your own games: achievements by event command, under your game's own App ID.
+[*]Deploy to Windows, Linux, macOS and the web.
+[*]An editor in 18 languages.
+[*]Open source under the MIT license.
+[/list]
+
+[h2]Bring your projects with you[/h2]
+Open a project made in RPG Maker MV or MZ and it keeps working: its maps, events, database and plugins, MV and MZ plugins side by side in one project. Games made in RPG Maker 2000, 2003, XP, VX and VX Ace import into new projects.
+
+[h2]A sample game to learn from[/h2]
+RPG Reactor comes with Reactor One, a sample project with a reactor complex, a village, open roads, battles of every kind and characters made in the builder.
+
+[i]RPG Maker is a trademark of Gotcha Gotcha Games Inc. RPG Reactor is an independent product, not affiliated with or endorsed by Gotcha Gotcha Games or KADOKAWA.[/i]

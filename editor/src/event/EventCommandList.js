@@ -119,6 +119,8 @@ class EventCommandList {
             () => ({ event: eventEditor.currentEvent || null, map: (eventEditor._currentMap ? eventEditor._currentMap() : null) || (typeof window !== 'undefined' ? window.reactor?.eventManager?.currentMap : null) || null })) : null;
         this.questCommandEditor = typeof QuestCommandEditor !== 'undefined'
             ? new QuestCommandEditor(eventEditor.databaseManager) : null;
+        this.steamCommandEditor = typeof SteamCommandEditor !== 'undefined'
+            ? new SteamCommandEditor(eventEditor.databaseManager) : null;
         this.fightCommandEditor = typeof FightCommandEditor !== 'undefined'
             ? new FightCommandEditor(eventEditor.databaseManager) : null;
         // Party Followers: Change Follower Formation, Follower Orders.
@@ -491,6 +493,7 @@ class EventCommandList {
         if (name === 'SpeakModel3D') return this.speakModel3DEditor;
         if (name === 'CallUserInterface') return this.callUserInterfaceEditor;
         if (typeof QuestCommandEditor !== 'undefined' && QuestCommandEditor.supports(name)) return this.questCommandEditor;
+        if (typeof SteamCommandEditor !== 'undefined' && SteamCommandEditor.supports(name)) return this.steamCommandEditor;
         if (typeof FightCommandEditor !== 'undefined' && FightCommandEditor.supports(name)) return this.fightCommandEditor;
         if (typeof FollowerCommandEditor !== 'undefined' && FollowerCommandEditor.supports(name)) return this.followerCommandEditor;
         if (typeof CharacterCommandEditor !== 'undefined' && CharacterCommandEditor.supports(name)) return this.characterCommandEditor;
@@ -2290,6 +2293,12 @@ class EventCommandList {
                     if (typeof QuestCommandEditor !== 'undefined' && QuestCommandEditor.supports(params[1])) {
                         info.name = this._commandName(QuestCommandEditor.LABELS[params[1]]);
                         description = QuestCommandEditor.summary(params[1], params[3], this.questCommandEditor);
+                        break;
+                    }
+                    // The game's Steam achievements ("Steam Achievement: Unlock: FIRST_WIN").
+                    if (typeof SteamCommandEditor !== 'undefined' && SteamCommandEditor.supports(params[1])) {
+                        info.name = this._commandName(SteamCommandEditor.LABELS[params[1]]);
+                        description = SteamCommandEditor.summary(params[1], params[3], this.steamCommandEditor);
                         break;
                     }
                     if (typeof CharacterCommandEditor !== 'undefined' && CharacterCommandEditor.supports(params[1])) {

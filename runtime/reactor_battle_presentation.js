@@ -90,6 +90,18 @@
     // states (entry, idle, damage, victory...) stand aside for Victor's Battle Motions and the YEP and
     // VisuStella battle cores, and its battler graphics for Victor's Battle Motions and Battler Graphic Setup.
     P.enginePlugins=()=>{const scripts=root.PluginManager?._scripts||[];if(P._engineScripts!==scripts.length){P._engineScripts=scripts.length;const names=scripts.join(' ');P._engineStates=/VE_BattleMotions|YEP_BattleEngineCore|VisuMZ_1_BattleCore/i.test(names);P._engineGraphics=/VE_BattleMotions|VE_BattlerGraphicSetup/i.test(names);}return {states:P._engineStates,graphics:P._engineGraphics};};
+    /**
+     * How far a body's box (world units: a room tile `x` is world x + 0.5, its `y` world z + 0.5) reaches from
+     * `to`, its battler's place, back along the line toward `from`: where that line leaves the box. 0 when they meet.
+     */
+    P.reachAlong=(box,from,to)=>{
+        const dx=to.x-from.x,dy=to.y-from.y,length=Math.hypot(dx,dy);if(length<1e-6)return 0;
+        const ux=dx/length,uy=dy/length,x0=box.min.x-.5,x1=box.max.x-.5,y0=box.min.z-.5,y1=box.max.z-.5;
+        let t=Infinity;
+        if(Math.abs(ux)>1e-6)t=Math.min(t,ux>0?(to.x-x0)/ux:(x1-to.x)/-ux);
+        if(Math.abs(uy)>1e-6)t=Math.min(t,uy>0?(to.y-y0)/uy:(y1-to.y)/-uy);
+        return Number.isFinite(t)?Math.max(0,t):0;
+    };
     P.adapter=function(manager,subject,targets,stateOnly=false){
         const ss=manager._spriteset,room=ss?._reactorRoom;
         const visibleTargets=[...new Set(targets)],roles={user:ss?.findTargetSprite(subject)};
@@ -99,6 +111,15 @@
         for(const [key,sprite] of Object.entries(roles))if(sprite){
             if(!saved.has(sprite))saved.set(sprite,{x:sprite.x,y:sprite.y,offsetX:sprite._offsetX,offsetY:sprite._offsetY,rotation:sprite.rotation,scaleX:sprite.scale?.x??1,scaleY:sprite.scale?.y??1,model:sprite._reactorBattler?.object,modelRotation:sprite._reactorBattler?.object?.rotation.clone(),modelScale:sprite._reactorBattler?.object?.scale.clone(),room:room&&sprite._reactorRoomPosition?{...sprite._reactorRoomPosition}:null});
             homes[key]=Object.assign({rotateX:0,rotateY:0,rotateZ:0,scale:1},room?{...sprite._reactorRoomPosition}:{x:sprite.x/48,y:sprite.y/48,z:0,facing:P.spriteYaw(sprite,targets[0]===sprite._battler?subject:targets[0])});
+        }
+        // In a battle room each body as it is posed: how far a target reaches back toward the user, and the user toward it (B.moveGoal).
+        if(room?.boxOf&&root.THREE&&homes.user)for(const [key,sprite] of Object.entries(roles)){
+            if(!(key.startsWith('target')||key==='user')||!sprite||!homes[key])continue;
+            const record=room.models.get(sprite._reactorRoomKey);if(!record?.object)continue;
+            const box=room.boxOf(record);if(!box||box.isEmpty())continue;
+            // A target's reach back toward the user; the user's own toward its target (its weapon in hand counts).
+            if(key==='user'){if(homes.target&&homes.target!==homes.user)homes.user.reach=P.reachAlong(box,homes.target,homes.user);}
+            else homes[key].reach=P.reachAlong(box,homes.user,homes[key]);
         }
         const camera=room?{...room.settings.camera}:null,cameraSource=room?.settings.cameraSource;
         homes.camera=room?{x:camera.x,y:camera.y,z:camera.z}: {x:0,y:0,z:0};
@@ -399,7 +420,10 @@
             for(const sprite of sprites)capture(sprite);
             raw._roles=sprites.map(s=>spriteKeys.get(s));raw._chosen=chosen;
             if(visuals.cue(step,start,chosen,step.type==='projectile'?choose({role:step.destination||'target',targetIndex:step.targetIndex,callRole:step.callRole,callFilter:step.callFilter}):null))return;
-            if(['move','camera','direction'].includes(step.type)){const target=ss?.findTargetSprite(step.direction==='opponents'?subject.opponentsUnit?.().members()?.[0]:selected[0]||targets[0]);if(target)raw._target=room?{...target._reactorRoomPosition}:{x:target.x/48,y:target.y/48,z:0};}
+            if(['move','camera','direction'].includes(step.type)){const target=ss?.findTargetSprite(step.direction==='opponents'?subject.opponentsUnit?.().members()?.[0]:selected[0]||targets[0]);if(target){raw._target=room?{...target._reactorRoomPosition}:{x:target.x/48,y:target.y/48,z:0};
+                // Its body, as the adapter's homes carry it (B.moveGoal): how far it reaches back toward the user where the user stands now.
+                const record=room?.models.get(target._reactorRoomKey),from=ss?.findTargetSprite(subject)?._reactorRoomPosition;
+                if(record?.object&&room.boxOf&&from&&root.THREE){const box=room.boxOf(record);if(box&&!box.isEmpty())raw._target.reach=P.reachAlong(box,from,raw._target);}}}
             if(step.type==='impact'){
                 rate=number(step.rate??100);
                 if(adapter.hitPolicy==='authored'){impactQueue=chosen.slice();manager._targets=[];}

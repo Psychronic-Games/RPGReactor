@@ -270,7 +270,7 @@ class MediaSurfaceManager {
                 const rows = this.rows().slice(), index = existing ? rows.indexOf(existing) : -1;
                 const value = {...built.parameters[3],target:'map',wait:'false'};
                 if (existing && index < 0) return;
-                if (index >= 0) rows[index] = value; else rows.push(value);
+                if (index >= 0) rows[index] = value; else { rows.push(value); window.RRAchievements?.earn('MEDIA_SURFACE'); }
                 this.change(rows);
             }
             if (this.panel && this.map() === map) { this.panel.style.display = 'flex'; this.render(); }

@@ -700,6 +700,7 @@ class PieceBuilderManager {
         this.structures(true);
         if (replace) this._replaceWithStructure(map, file, result);
         this._syncPanel();
+        if (typeof window !== 'undefined') window.RRAchievements?.earn('BLUEPRINT');
         return { file, record, counts: result.counts };
     }
 
@@ -2538,6 +2539,7 @@ class PieceBuilderManager {
     endStroke() {
         // Fences laid by a drag face the way they run.
         if (this._stroke && this._stroke.moved && this._stroke.mode !== 'erase' && this.kind === 'fence') this.orientFences(this.currentMap());
+        if (this._stroke && this._stroke.moved && this._stroke.mode === 'place' && typeof window !== 'undefined') window.RRAchievements?.earn('BUILD_PIECE');
         if (this._stroke && !this._stroke.moved) this.undoStack.pop();
         // What grew under the pieces the stroke laid on the ground goes with the stroke's own step.
         else if (this._stroke && this._stroke.mode !== 'erase' && this.undoStack[this.undoStack.length - 1] === this._stroke.entry) {

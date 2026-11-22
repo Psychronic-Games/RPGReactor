@@ -1711,6 +1711,7 @@ class TerrainManager {
             if (!this.refitWater() && this._reachesWater(this._stroke.region)) this.announce(null, true);
             this._relayPieces(this._stroke.region);
             this._seal(this.undoStack[this.undoStack.length - 1]);
+            if (typeof window !== 'undefined') window.RRAchievements?.earn('SHAPE_TERRAIN');
         }
         this._stroke = null;
         this.refreshStatus();

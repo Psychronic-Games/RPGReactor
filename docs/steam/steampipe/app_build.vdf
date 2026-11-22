@@ -1,0 +1,14 @@
+"AppBuild"
+{
+	"AppID" "4817110"
+	"Desc" "RPG Reactor VERSION"
+	"ContentRoot" "../content/"
+	"BuildOutput" "../output/"
+	"SetLive" ""
+	"Depots"
+	{
+		"4817111" "depot_windows.vdf"
+		"4817112" "depot_macos.vdf"
+		"4817113" "depot_linux.vdf"
+	}
+}

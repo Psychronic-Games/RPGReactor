@@ -553,6 +553,7 @@
                             importButton.style.display = 'none';
                             if (msg.success) {
                                 clearInterval(clock); tick();
+                                window.RRAchievements?.earn('PROJECT_IMPORT');
                                 const summary = msg.summary || {};
                                 const needsReview = (summary.missingFiles || []).length || (summary.missingMapReferences || []).length
                                     || ['images', 'movies', 'music'].some(kind => (summary[kind]?.failed || []).length)

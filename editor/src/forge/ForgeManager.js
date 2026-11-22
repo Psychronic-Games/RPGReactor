@@ -15,6 +15,7 @@
  *   forge/
  *     character_3d/        designs and groups of the 3D Character Builder
  *     animation_generator/, sound_effect_generator/, ... one folder a tool
+ *     workshop.json        the designs this project has shared on the Steam Workshop
  *   (A project may still hold forge/character_generator/ from the 2D Character
  *   Generator, retired on 2026-11-12; nothing reads it.)
  *
@@ -47,6 +48,9 @@ const FORGE_ICONS = {
 
     // Particle burst — core dot with radiating sparks of varied length.
     effekseerGenerator: (size) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="display: block;" aria-hidden="true"><circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none"/><line x1="12" y1="7.5" x2="12" y2="3.5"/><line x1="12" y1="16.5" x2="12" y2="20.5"/><line x1="7.5" y1="12" x2="3.5" y2="12"/><line x1="16.5" y1="12" x2="20.5" y2="12"/><line x1="8.8" y1="8.8" x2="6.6" y2="6.6"/><line x1="15.2" y1="15.2" x2="17.4" y2="17.4"/><line x1="15.2" y1="8.8" x2="16.8" y2="7.2"/><line x1="8.8" y1="15.2" x2="7.2" y2="16.8"/></svg>`,
+
+    // A box with an arrow rising out of it: designs shared to (and brought in from) the Steam Workshop.
+    steamWorkshop: (size) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="display: block;" aria-hidden="true"><path d="M3.5 11.5 L12 15.5 L20.5 11.5"/><path d="M3.5 11.5 V18 L12 22 L20.5 18 V11.5"/><path d="M12 15.5 V22"/><path d="M12 11 V2.5"/><path d="M8.5 6 L12 2.5 L15.5 6"/></svg>`,
 
     // Wrench over a document — a tool that comes from the project, not the editor.
     projectTools: (size) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="display: block;" aria-hidden="true"><path d="M13.5 3.5H6.5A1.5 1.5 0 0 0 5 5v14a1.5 1.5 0 0 0 1.5 1.5h6"/><path d="M13.5 3.5 18 8v3"/><path d="M13.5 3.5V8H18"/><path d="M20.2 14.1a2.6 2.6 0 0 1-3.3 3.3l-2.6 2.6a1.1 1.1 0 0 1-1.6-1.6l2.6-2.6a2.6 2.6 0 0 1 3.3-3.3l-1.5 1.5 1.6 1.6z"/></svg>`
@@ -100,6 +104,14 @@ const FORGE_TOOLS = [
         icon: FORGE_ICONS.soundEffectGenerator,
         ctor: () => new SoundEffectGenerator(),
         getter: 'soundEffectGenerator'
+    },
+    {
+        id: 'steam-workshop',
+        nameKey: 'menu.steamWorkshop',
+        descriptionKey: 'forge.steamWorkshop.description',
+        icon: FORGE_ICONS.steamWorkshop,
+        ctor: () => new ForgeWorkshop(),
+        getter: 'steamWorkshop'
     },
     {
         id: 'project-tools',

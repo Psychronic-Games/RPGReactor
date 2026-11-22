@@ -62,6 +62,7 @@ class DatabaseEditorUI {
         };
         this.system1Editor = new DatabaseSystem1Editor(databaseManager, system1ProjectManager, this.commonUI, this);
         this.onlineEditor = typeof DatabaseOnlineEditor !== 'undefined' ? new DatabaseOnlineEditor(databaseManager) : null;
+        this.steamEditor = typeof DatabaseSteamEditor !== 'undefined' ? new DatabaseSteamEditor(databaseManager) : null;
         this.characterCreationEditor = typeof DatabaseCharacterCreationEditor !== 'undefined' ? new DatabaseCharacterCreationEditor(databaseManager) : null;
         this.system2Editor = new DatabaseSystem2Editor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
         this.featuresEditor = typeof DatabaseFeaturesEditor !== 'undefined'

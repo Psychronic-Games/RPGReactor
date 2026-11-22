@@ -248,12 +248,40 @@ function copyDirRecursive(src, dest) {
     }
 }
 
+/**
+ * A desktop game whose project uses Steam (data/ReactorSteam.json: enabled, an App ID) gets steamworks.js in its
+ * package: the module and the one system's native files, from the editor's own node_modules. Answers
+ * { appId } when it was added, else null. runtime/reactor_steam.js loads it.
+ */
+function steamworksForGame(gameRoot, appDest, nwPlatform) {
+    let settings = null;
+    try { settings = JSON.parse(fs.readFileSync(path.join(gameRoot, 'data', 'ReactorSteam.json'), 'utf8')); } catch { return null; }
+    const appId = Math.floor(Number(settings && settings.appId));
+    if (!settings || settings.enabled !== true || !(appId > 0)) return null;
+    let source = null;
+    for (const root of [path.join(__dirname, '..'), path.join(__dirname, '..', '..')]) {
+        const dir = path.join(root, 'node_modules', 'steamworks.js');
+        if (fs.existsSync(path.join(dir, 'package.json'))) { source = dir; break; }
+    }
+    if (!source) throw new Error('This game uses Steam (Database > Steam), but the editor has no steamworks.js to put in it.');
+    const system = { win: 'win64', linux: 'linux64', osx: 'osx' }[nwPlatform];
+    if (!system) return null;
+    const dest = path.join(appDest, 'node_modules', 'steamworks.js');
+    fs.mkdirSync(path.join(dest, 'dist'), { recursive: true });
+    for (const file of ['index.js', 'package.json', 'LICENSE', 'README.md']) {
+        if (fs.existsSync(path.join(source, file))) fs.copyFileSync(path.join(source, file), path.join(dest, file));
+    }
+    copyDirRecursive(path.join(source, 'dist', system), path.join(dest, 'dist', system));
+    fs.rmSync(path.join(dest, 'dist', system, 'steam_api64.lib'), { force: true });
+    return { appId };
+}
+
 function validateProjectRuntime(root) {
     const required = [
         'reactor_main.js', 'reactor_json.js', 'reactor_core.js', 'reactor_core_display.js', 'reactor_core_io.js', 'reactor_features.js', 'reactor_3d.js', 'reactor_3d_lighting.js', 'reactor_3d_models.js', 'reactor_3d_effects.js', 'reactor_3d_world.js', 'reactor_3d_speech.js', 'reactor_3d_foliage.js', 'reactor_3d_doors.js', 'reactor_3d_surround.js', 'reactor_3d_vehicles.js', 'reactor_3d_rider.js', 'reactor_managers.js',
         'reactor_objects.js', 'reactor_objects_actions.js', 'reactor_objects_battlers.js', 'reactor_objects_map.js', 'reactor_objects_interpreter.js', 'reactor_objects_followers.js', 'reactor_objects_legacy.js',
         'reactor_hdr_overlay.js', 'reactor_scenes.js', 'reactor_sprites.js', 'reactor_picture_extensions.js', 'reactor_screen_fx.js',
-        'reactor_media_surfaces.js', 'reactor_quests.js', 'reactor_image_layers.js', 'reactor_controls.js', 'reactor_physics.js', 'reactor_rig_motions.js',
+        'reactor_media_surfaces.js', 'reactor_quests.js', 'reactor_steam.js', 'reactor_image_layers.js', 'reactor_controls.js', 'reactor_physics.js', 'reactor_rig_motions.js',
             'reactor_battle_data.js', 'reactor_battle_room.js', 'reactor_battle_presentation.js', 'reactor_battle_events.js', 'reactor_fight_look.js', 'reactor_fight.js', 'reactor_fight_flow.js', 'reactor_fight_tactical.js', 'reactor_fight_stage.js', 'reactor_fight_camera.js', 'reactor_fight_action.js', 'reactor_fight_menu.js', 'reactor_fight_classic.js', 'reactor_speaker_face.js', 'reactor_character_creator.js', 'reactor_online.js', 'reactor_online_ui.js', 'reactor_online_voice.js', 'reactor_online_party.js', 'reactor_online_battle.js', 'reactor_online_classic.js', 'reactor_online_action.js', 'reactor_vehicles.js', 'reactor_vehicles_drive.js', 'reactor_vehicles_feel.js', 'reactor_vehicles_mount.js',
         'reactor_windows.js', 'reactor_ui_victory.js', 'reactor_ui_fight.js', 'reactor_ui_action.js', 'reactor_ui.js', 'reactor_mv_compat.js', 'reactor_plugins.js',
         path.join('libs', 'pixi.js'), path.join('libs', 'pixi_compat.js'),
@@ -849,6 +877,9 @@ async function installProprietaryCodec(platform, runtimeRoot, runtimeVersion, pr
                 progress(Math.round(pCopy), 'Copying game files...');
                 copyDirRecursive(stagingDir, appDest);
                 logGood('Game files copied.');
+                // ── Steam (Database > Steam) ────────────────────────
+                const steamAdded = steamworksForGame(stagingDir, appDest, nwPlatform);
+                if (steamAdded) logGood(`Steam: steamworks.js for ${label} added (App ID ${steamAdded.appId}).`);
                 progress(Math.round(pRename), 'Finalizing...');
 
                 // ── Rename executable ───────────────────────────────

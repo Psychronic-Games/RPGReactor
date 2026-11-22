@@ -783,13 +783,26 @@
     // along the battler's facing. Facing is a yaw: a battler facing up or
     // down steps along y, one facing left or right along x, and the step's
     // second value is the sideways offset either way.
+    // How far a figure reaches from its middle toward whoever comes at it, in tiles: an approach's distance short
+    // of the target is reckoned for a body this size, and a wider one is met that much further out.
+    B.APPROACH_BODY = 0.45;
+    // The room left between two bodies that meet (each measured from its model where the room knows it), in tiles.
+    B.APPROACH_GAP = 0.15;
     B.moveGoal = (step, from, home, target, homes, direction = 1) => {
         const anchor = ['target','approach'].includes(step.anchor) ? target : home;
         let dx=number(step.x)*direction,dy=number(step.y);
         if(step.anchor==='approach') {
             const start=homes.user||home,vx=target.x-start.x,vy=target.y-start.y,length=Math.hypot(vx,vy);
             const ux=length>1e-6?vx/length:direction,uy=length>1e-6?vy/length:0;
-            dx=number(step.x)*ux-number(step.y)*uy;dy=number(step.x)*uy+number(step.y)*ux;
+            // Short of the target, short of its body: a body wider than a figure's (a tank, a dragon) is met at
+            // its edge, not walked into to the usual distance from its middle (`reach`, from its model: BattleRoom).
+            // And never nearer than the two bodies allow (a dash that stops a third of a tile short of a big mech's middle).
+            let along=number(step.x);
+            if(along<0){
+                const reach=number(target.reach),own=number(start.reach)||B.APPROACH_BODY;
+                along=-Math.max(-along+Math.max(0,reach-B.APPROACH_BODY),reach>0?reach+own+B.APPROACH_GAP:0);
+            }
+            dx=along*ux-number(step.y)*uy;dy=along*uy+number(step.y)*ux;
         }
         let goal={x:anchor.x+dx,y:anchor.y+dy,z:(anchor.z||0)+number(step.z)};
         if(step.moveMode==='position')goal={x:number(step.x),y:number(step.y),z:number(step.z)};

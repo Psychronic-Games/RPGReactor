@@ -4116,6 +4116,7 @@ class Character3DBuilder {
         try {
             if (!await this._writeModel(name, current)) return;
             this._status(this._t('Saved to 3D Models › Characters/{name}.', { name }), 'ok');
+            window.RRAchievements?.earn('FORGE_CHARACTER');
         } catch (error) {
             console.error('[Character3DBuilder] save', error);
             if (current()) this._status(this._t('{name} could not be saved.', { name }), 'error');

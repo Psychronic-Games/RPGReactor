@@ -965,6 +965,7 @@ class BuildManager {
                         this.log('', 'var(--color-text)');
                         this.log(`${tt('Output directory:')} ${outputDir}`, 'var(--color-text)');
                         this.updateProgress(100, tt('Build complete!'));
+                        window.RRAchievements?.earn('BUILD_GAME');
                     }
                 }
             });

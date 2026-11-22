@@ -414,6 +414,7 @@ class PlaytestManager {
 
         const child = spawn(nwPath, launchArgs, {
             cwd: projectPath,
+            env: PlaytestManager.playtestEnv(process.env, path, fs, this.resolveAppRoot(path, fs)),
             stdio: 'ignore',
             detached: false,
             windowsHide: false
@@ -432,7 +433,22 @@ class PlaytestManager {
         });
 
         console.log('Playtest process launched with PID:', child.pid);
+        if (mode === 'test' && typeof window !== 'undefined') window.RRAchievements?.earn('FIRST_PLAYTEST');
         return true;
+    }
+
+    /**
+     * The playtest's environment: the editor's, without what Steam set for RPG Reactor itself (a game is not app
+     * 4817110), and with where the editor's steamworks.js is, for a game whose Database > Steam uses Steam in playtests
+     * (runtime/reactor_steam.js reads RR_STEAMWORKS only in a playtest).
+     */
+    static playtestEnv(env, path, fs, appRoot) {
+        const out = { ...env };
+        for (const key of ['SteamAppId', 'SteamGameId', 'SteamOverlayGameId']) delete out[key];
+        const candidates = [appRoot, appRoot && path.join(appRoot, '..')].filter(Boolean).map(root => path.join(root, 'node_modules', 'steamworks.js'));
+        const found = candidates.find(dir => { try { return fs.existsSync(path.join(dir, 'package.json')); } catch (_) { return false; } });
+        if (found) out.RR_STEAMWORKS = found; else delete out.RR_STEAMWORKS;
+        return out;
     }
 
     resolvePlaytestUserDataDir(path, fs, projectPath, options = {}) {

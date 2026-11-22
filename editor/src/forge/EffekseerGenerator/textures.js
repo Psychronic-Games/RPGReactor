@@ -214,7 +214,7 @@ const RR_EfkTextures = (() => {
             ctx.fillRect(h, 0, h, h); ctx.fillRect(0, h, h, h);
         }),
 
-        // Dense radial filament starburst (EVFX-style discharge core).
+        // Dense radial filament starburst (an energy discharge core).
         rays: (size) => make(size, (ctx, s) => {
             const c = s / 2;
             ctx.translate(c, c);

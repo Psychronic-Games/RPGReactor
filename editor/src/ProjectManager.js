@@ -676,8 +676,8 @@ class ProjectManager {
             if(ReactorBattleData.addStarters(records).length)this.writeJson(file,records);
         }
 
-        // The Demo is set up to play on the demo server. A new project is the author's own, and single player.
-        for (const file of ['ReactorOnline.json', 'ReactorCharacters.json']) {
+        // The Demo is set up to play on the demo server. A new project is the author's own, single player, and not on Steam.
+        for (const file of ['ReactorOnline.json', 'ReactorSteam.json', 'ReactorCharacters.json']) {
             const settings = this.path.join(targetPath, 'data', file);
             if (this.fs.existsSync(settings)) this.fs.unlinkSync(settings);
         }

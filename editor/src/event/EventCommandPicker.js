@@ -276,6 +276,7 @@ class EventCommandPicker {
                                     { name: 'Quest Objective', code: 357, reactor: 'QuestObjective' },
                                     { name: 'Quest Reward', code: 357, reactor: 'QuestReward' },
                                     { name: 'Open Quest Log', code: 357, reactor: 'OpenQuestLog' },
+                                    { name: 'Steam Achievement', code: 357, reactor: 'SteamAchievement' },
                                     { name: 'Character Creation', code: 357, reactor: 'CharacterCreation' }
                                 ]
                             }

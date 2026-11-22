@@ -1400,7 +1400,10 @@
      * doorway, a bridge) holds nothing, the water passing under it. Shapes
      * and rocks hold to their tops (the hollow ones and ones thinner than a
      * post, `WATER_THIN`, not at all) when the 3D
-     * runtime is loaded to say which cells they stand on.
+     * runtime is loaded to say which cells they stand on. A tube standing
+     * upright is a basin's or a silo's wall: it holds on the cells its wall
+     * stands on, and water poured inside stands in it; on its side it is a
+     * pipe, and the water runs through.
      */
     const WATER_HOLD = new Map([['wall', 5], ['glass', 5], ['block', 1], ['window', 1.5]]);
     const WATER_OPEN_SHAPES = ['tube', 'ring', 'arch', 'tunnel'];
@@ -1426,7 +1429,7 @@
             for (const entry of raw) {
                 if (!entry || typeof entry !== 'object') continue;
                 const hold = WATER_HOLD.get(entry.kind);
-                if (hold === undefined) { if (WATER_SOLID_SHAPES.has(entry.kind)) own.shapes = true; continue; }
+                if (hold === undefined) { if (WATER_SOLID_SHAPES.has(entry.kind) || entry.kind === 'tube') own.shapes = true; continue; }
                 const x = Math.floor(Number(entry.x)), y = Math.floor(Number(entry.y));
                 if (!(x >= 0 && y >= 0 && x < W && y < H)) continue;
                 const z = Math.max(0, Math.min(PIECE_MAX_LEVEL, Math.floor(Number(entry.z)) || 0)), key = y * W + x;
@@ -1458,7 +1461,7 @@
         // Each shape on every cell of its footprint, as the runtime stands it there (`pieceIndex`); rocks by the columns it worked out.
         let rocks = false;
         for (const piece of index.list) {
-            if (!WATER_SOLID_SHAPES.has(piece.kind)) continue;
+            if (!WATER_SOLID_SHAPES.has(piece.kind) && !(piece.kind === 'tube' && !R.shapeTurned(piece))) continue;
             if (piece.kind === 'rock') { rocks = true; continue; }
             for (const [fx, fy] of R.pieceFootprint(piece)) hold(fx === piece.x && fy === piece.y ? piece : Object.assign({}, piece, { x: fx, y: fy, standIn: true, anchor: [piece.x, piece.y] }));
         }

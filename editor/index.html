@@ -85,6 +85,15 @@
                     <div class="html-menu-option" data-action="exit" data-i18n="menu.exit" style="padding: 8px 16px; cursor: pointer;">Exit</div>
                 </div>
             </div>
+            <!-- Edit: what the toolbar's Undo, Redo and Search do (owner, 2026-11-21: every tool reachable from the menu bar). -->
+            <div class="html-menu-item" data-menu="edit" style="position: relative; padding: 8px 16px; cursor: pointer;">
+                <span data-i18n-text-source="Edit">Edit</span>
+                <div class="html-submenu" id="submenu-edit" style="display: none; position: absolute; top: 100%; left: 0; background-color: var(--color-bg-toolbar); color: var(--color-text); border: 1px solid var(--color-border); min-width: 220px; z-index: 10000; box-shadow: var(--shadow-popup);">
+                    <div class="html-menu-option" data-action="edit-undo" style="padding: 8px 16px; cursor: pointer; display: flex; justify-content: space-between; gap: 24px;"><span data-i18n-text-source="Undo">Undo</span><span style="color: var(--color-text-muted);">Ctrl+Z</span></div>
+                    <div class="html-menu-option" data-action="edit-redo" style="padding: 8px 16px; cursor: pointer; display: flex; justify-content: space-between; gap: 24px;"><span data-i18n-text-source="Redo">Redo</span><span style="color: var(--color-text-muted);">Ctrl+Y</span></div>
+                    <div class="html-menu-option" data-action="edit-search" style="padding: 8px 16px; cursor: pointer; display: flex; justify-content: space-between; gap: 24px;"><span data-i18n-text-source="Search">Search</span><span style="color: var(--color-text-muted);">Ctrl+Shift+F</span></div>
+                </div>
+            </div>
             <div class="html-menu-item" data-menu="database" style="position: relative; padding: 8px 16px; cursor: pointer;">
                 <span data-i18n="menu.database">Database</span>
                 <div class="html-submenu rr-accent-scrollbar" id="submenu-database" style="display: none; position: absolute; top: 100%; left: 0; background-color: var(--color-bg-toolbar); color: var(--color-text); border: 1px solid var(--color-border); min-width: 200px; z-index: 10000; box-shadow: var(--shadow-popup);">
@@ -108,8 +117,11 @@
                     <div class="html-menu-option" data-action="toggle-event-mode" data-i18n="menu.eventManager" style="padding: 8px 16px; cursor: pointer;">Event Manager</div>
                     <div class="html-menu-option" data-action="battle-setup" data-i18n="battleSetup.title" style="padding: 8px 16px; cursor: pointer;">Battle Setup</div>
                     <div class="html-menu-option" data-action="build-tool" data-i18n="menu.buildInWorld" style="padding: 8px 16px; cursor: pointer;">Build in the World</div>
-                    <div class="html-menu-option" data-action="lighting-tool" data-i18n="toolbar.title.lighting" style="padding: 8px 16px; cursor: pointer;">Lighting Tool</div>
-                    <div class="html-menu-option" data-action="media-surfaces" data-i18n="menu.mediaSurfaces" style="padding: 8px 16px; cursor: pointer;">Media Surfaces</div>
+                    <div class="html-menu-option" data-action="terrain-tool" data-i18n="build.group.terrain" style="padding: 8px 16px 8px 28px; cursor: pointer;">Terrain</div>
+                    <div class="html-menu-option" data-action="foliage-tool" data-i18n="build.group.foliage" style="padding: 8px 16px 8px 28px; cursor: pointer;">Foliage</div>
+                    <div class="html-menu-option" data-action="models-tool" data-i18n="build.group.models" style="padding: 8px 16px 8px 28px; cursor: pointer;">Objects</div>
+                    <div class="html-menu-option" data-action="media-surfaces" data-i18n="menu.mediaSurfaces" style="padding: 8px 16px 8px 28px; cursor: pointer;">Media Surfaces</div>
+                    <div class="html-menu-option" data-action="lighting-tool" data-i18n="toolbar.title.lighting" style="padding: 8px 16px 8px 28px; cursor: pointer;">Lighting Tool</div>
                     <div class="html-menu-option" data-action="image-layers" data-i18n="menu.imageLayers" style="padding: 8px 16px; cursor: pointer;">Image Layers</div>
                     <div class="html-menu-option" data-action="resource-manager" data-i18n="menu.resourceManager" style="padding: 8px 16px; cursor: pointer;">Resource Manager</div>
                     <div class="html-menu-option" data-action="audio-player" data-i18n="menu.audioPlayer" style="padding: 8px 16px; cursor: pointer;">♪ Audio Player</div>
@@ -1253,6 +1265,11 @@
     <script src="src/forge/EffekseerGenerator/recipes/ShadowPulse.js"></script>
     <script src="src/forge/EffekseerGenerator/recipes/HealingRing.js"></script>
     <script src="src/forge/EffekseerGenerator/EffekseerGenerator.js"></script>
+    <script src="src/steam/SteamBridge.js"></script>
+    <script src="src/steam/SteamAchievements.js"></script>
+    <script src="src/steam/WorkshopItems.js"></script>
+    <script src="src/steam/WorkshopProjects.js"></script>
+    <script src="src/forge/Workshop/WorkshopTool.js"></script>
     <script src="src/forge/ProjectTools/ProjectTools.js"></script>
     <script src="src/forge/ForgeManager.js"></script>
     <script src="src/utils/SelectThemingShim.js"></script>
@@ -1481,6 +1498,7 @@
     <script src="src/event/commands/SpeakModel3DEditor.js"></script>
     <script src="src/event/commands/CallUserInterfaceEditor.js"></script>
     <script src="src/event/commands/QuestCommandEditor.js"></script>
+    <script src="src/event/commands/SteamCommandEditor.js"></script>
     <script src="src/event/commands/CharacterCommandEditor.js"></script>
     <script src="src/event/commands/VehicleCommandEditor.js"></script>
     <script src="src/event/commands/FightCommandEditor.js"></script>
@@ -1489,6 +1507,7 @@
     <script src="src/database/DatabaseSystem2Editor.js"></script>
     <script src="src/database/DatabaseFlowForm.js"></script>
     <script src="src/database/DatabaseOnlineEditor.js"></script>
+    <script src="src/database/DatabaseSteamEditor.js"></script>
     <script src="src/database/DatabaseCharacterCreationEditor.js"></script>
     <script src="src/database/DatabaseFeaturesEditor.js"></script>
     <script src="src/database/DatabaseControlsEditor.js"></script>

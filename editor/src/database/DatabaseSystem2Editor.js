@@ -76,6 +76,9 @@ class DatabaseSystem2Editor {
         col2.appendChild(this.createAttackMotionsSection(system));
         // (Higher Limits, once a Limits card here, is a tick on Database › Reactor Features.)
         col2.appendChild(this.createCompatibilitySection(system));
+        // The game's own Steam app (DatabaseSteamEditor; data/ReactorSteam.json, not System.json).
+        const steam = this.parentEditor?.steamEditor;
+        if (steam && typeof steam.createSection === 'function') col2.appendChild(steam.createSection());
         columnsGrid.appendChild(col2);
 
         // Col 3: Asset Sizes (horizontal), Advanced Settings

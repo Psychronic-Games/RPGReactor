@@ -116,3 +116,28 @@ test('a combat ragdoll bends its limbs, keeps the skin above ground, sleeps and 
         for(const arm of b.arms)assert.ok(arm.quaternion.angleTo(new T.Quaternion())<1e-6);
     }finally{delete global.Graphics;}
 });
+
+test('a body thrown against a wall or a fountain rim stops at it and drops at its foot, never lifted onto or over it', () => {
+    for (const [kind, extra, height] of [['wall', {}, 5], ['tube', { size: [7.4, 1.5, 7.4], thick: 0.22 }, 1.5]]) {
+        const b = body(); b.object.quaternion.identity(); b.character._reactorPosePitch = 0;
+        // Standing a tile short of it, thrown hard toward it (+x).
+        const pieces = kind === 'wall'
+            ? Array.from({ length: 9 }, (_, i) => ({ id: i + 1, kind: 'wall', x: 5, y: i, z: 0, rot: 0, material: '' }))
+            : [{ id: 1, kind: 'tube', x: 8, y: 4, z: 0, rot: 0, material: '', ...extra }];
+        global.$dataMap = { width: 16, height: 12, data: [], reactor3d: { version: 1, elevation: new Array(192).fill(0), pieces } };
+        // A wall's face is its cell's edge; a round rim stands on whole cells too (the cells its wall covers), so
+        // what stops a body is the edge of the last cell it does not cover.
+        const face = kind === 'wall' ? 5 : 8.5 - 3.7, stop = Math.ceil(face);
+        b.object.position.set(face - 1.1, 0, 4.5);
+        b.character._reactorRagdoll = { combat: true, vx: 0.14, vy: -0.1, vz: 0 };
+        R.DownedPose.update(b.holder, b.character);
+        try {
+            for (let i = 0; i < 1500 && !b.holder.ragdoll?.asleep; i++) { global.Graphics = { frameCount: i }; R.stepRagdoll(b.holder, b.character); }
+            const doll = b.holder.ragdoll;
+            assert.equal(doll.rigid, undefined, kind);
+            const xs = doll.points.map(p => p.p.x), ys = doll.points.map(p => p.p.y);
+            assert.ok(Math.max(...xs) < stop + 0.05, `${kind}: nothing went into it (${Math.max(...xs).toFixed(2)} against ${stop})`);
+            assert.ok(Math.max(...ys) < Math.min(1.2, height), `${kind}: the body lies at its foot, not on top (${Math.max(...ys).toFixed(2)})`);
+        } finally { delete global.Graphics; delete global.$dataMap; }
+    }
+});

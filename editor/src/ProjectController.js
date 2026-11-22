@@ -602,6 +602,7 @@ class ProjectController {
                     const success = await this.projectManager.createNewProject(projectPath, projectName, createOptions);
 
                     if (success) {
+                        window.RRAchievements?.earn('NEW_PROJECT');
                         // Load the newly created project
                         const loadedProject = await this.projectManager.loadProject(projectPath);
                         if (loadedProject && this.acquireProjectLock(loadedProject.path)) {
@@ -1609,6 +1610,7 @@ class ProjectController {
             );
             return false;
         }
+        window.RRAchievements?.earn('RUNTIME_INSTALL');
         await ui.showAlert(
             title,
             this._tt('Reactor runtime installed. Playtest and deployment now use the RPG Reactor engine.')

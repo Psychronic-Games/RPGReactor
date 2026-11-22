@@ -9656,6 +9656,11 @@ Reactor3D.RAGDOLL_GROUND_KEEP = 0.8;
 Reactor3D.RAGDOLL_BOUNCE = 0.4;
 /** How hard the impact flings each hand and foot its own way (tiles a frame, per unit of impact). */
 Reactor3D.RAGDOLL_FLING = 0.9;
+// The highest a limp body is lifted onto a surface it slides into, in tiles: a kerb, a floor slab, a low step.
+// Higher is a side (a wall, a fountain's rim, a counter): it stops the body, which comes back off it.
+Reactor3D.RAGDOLL_STEP = 0.35;
+// How much of its speed a body keeps, the other way, when it hits a side.
+Reactor3D.RAGDOLL_WALL_BOUNCE = 0.35;
 
 Reactor3D.startRagdoll = function(holder, character) {
     if (typeof THREE === "undefined" || !holder.binding || !holder.object) return null;
@@ -9793,6 +9798,8 @@ Reactor3D.runRagdoll = function(holder, character) {
         const vy = (point.p.y - point.q.y) * Reactor3D.RAGDOLL_DAMPING;
         const vz = (point.p.z - point.q.z) * Reactor3D.RAGDOLL_DAMPING;
         point.q.copy(point.p);
+        // Where it was at the start of the frame: a side it meets sends it back from here.
+        point.ox = point.p.x; point.oy = point.p.y; point.oz = point.p.z;
         point.p.x += vx; point.p.y += vy - gravity; point.p.z += vz;
         moving = Math.max(moving, Math.abs(vx) + Math.abs(vy) + Math.abs(vz));
     }
@@ -9806,7 +9813,23 @@ Reactor3D.runRagdoll = function(holder, character) {
             pb.x -= dx * k; pb.y -= dy * k; pb.z -= dz * k;
         }
         for (const point of doll.points) {
-            const floor = (map && Reactor3D.groundHeightAt ? Reactor3D.groundHeightAt(map, point.p.x, point.p.z, point.p.y) : 0) + point.r;
+            const groundAt = (x, z) => (map && Reactor3D.groundHeightAt ? Reactor3D.groundHeightAt(map, x, z, point.p.y) : 0) + point.r;
+            let floor = groundAt(point.p.x, point.p.z);
+            // A surface well above where the point was is the side of something (a wall's top reads as its
+            // cell's floor): it is not climbed. The point stays where it was and comes back off it, so a body
+            // thrown against a wall drops at its foot instead of being lifted over it or onto a fountain's rim.
+            // Measured from the lower of where it was and the ground it was over: a limb flung up high still
+            // does not sail over a rim into the bowl behind it.
+            const was = Number.isFinite(point.floor) ? Math.min(point.oy, point.floor) : point.oy;
+            if (Number.isFinite(point.oy) && floor > was + Reactor3D.RAGDOLL_STEP) {
+                const vx = point.p.x - point.ox, vz = point.p.z - point.oz;
+                point.p.x = point.ox; point.p.z = point.oz;
+                point.q.x = point.p.x + vx * Reactor3D.RAGDOLL_WALL_BOUNCE; point.q.z = point.p.z + vz * Reactor3D.RAGDOLL_WALL_BOUNCE;
+                floor = groundAt(point.p.x, point.p.z);
+                // Already over the inside of one (a hand that went limp across a wall): it keeps the floor it had.
+                if (floor > was + Reactor3D.RAGDOLL_STEP) floor = Number.isFinite(point.floor) ? Math.min(floor, point.floor) : point.oy;
+            }
+            point.floor = floor;
             if (point.p.y < floor) {
                 const into = point.p.y - point.q.y;
                 point.p.y = floor;

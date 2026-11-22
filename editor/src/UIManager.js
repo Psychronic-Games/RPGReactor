@@ -181,6 +181,17 @@ class UIManager {
             case 'save-project':
                 this.callbacks.saveProject();
                 break;
+            // Edit: the toolbar's own Undo, Redo and Search buttons, so the menu does exactly what they do (and
+            // nothing while Undo or Redo has nothing to take back).
+            case 'edit-undo':
+            case 'edit-redo': {
+                const button = document.getElementById(action === 'edit-undo' ? 'undo-btn' : 'redo-btn');
+                if (button && !button.disabled) button.click();
+                break;
+            }
+            case 'edit-search':
+                document.getElementById('global-search-btn')?.click();
+                break;
             case 'save-project-as':
                 if (this.callbacks.saveProjectAs) this.callbacks.saveProjectAs();
                 break;
@@ -204,6 +215,9 @@ class UIManager {
                 }
                 break;
             // The map tools open from the menu exactly as from the toolbar.
+            case 'terrain-tool':
+            case 'foliage-tool':
+            case 'models-tool':
             case 'build-tool':
             case 'lighting-tool':
             case 'media-surfaces':
@@ -1499,8 +1513,14 @@ class UIManager {
                     }
                 }
                 break;
+            // Media Surfaces and Lighting are Build bar slots: from the menu they open in the bar too, and so do its groups.
             case 'media-surfaces':
-                window.reactor?.mediaSurfaceManager?.toggle();
+                if (!window.reactor?.buildHotbar?.openTool('screen')) window.reactor?.mediaSurfaceManager?.toggle();
+                break;
+            case 'terrain-tool':
+            case 'foliage-tool':
+            case 'models-tool':
+                window.reactor?.buildHotbar?.openTool(action.replace('-tool', ''));
                 break;
             case 'image-layers':
                 window.reactor?.mapImageLayersManager?.toggle();
@@ -1511,7 +1531,7 @@ class UIManager {
                 else window.RRBattleSetup?.toggle(window.reactor.eventManager);
                 break;
             case 'lighting-tool':
-                if (typeof window !== 'undefined' && window.reactor?.lightingManager) {
+                if (typeof window !== 'undefined' && !window.reactor?.buildHotbar?.openTool('light') && window.reactor?.lightingManager) {
                     window.reactor.lightingManager.toggle();
                 }
                 break;

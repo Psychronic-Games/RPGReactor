@@ -81,7 +81,7 @@ test('localized animation None label is display-only, not a stored sound filenam
 test('every word the map toolbar and the rest of index.html show carries a key', () => {
     const html = read('index.html');
     // Codes and shortcuts read the same in every language; placeholders are filled in at runtime.
-    const notWords = /^(3D|A1|-- x --|&times;|&#\d+;|Ctrl\+[A-Z]|Alt\+[A-Z]|Shift\+[A-Z]|F\d{1,2}|[\d\s.,:%×x+/()-]*)$/;
+    const notWords = /^(3D|A1|-- x --|&times;|&#\d+;|(?:(?:Ctrl|Alt|Shift)\+)+[A-Z]|F\d{1,2}|[\d\s.,:%×x+/()-]*)$/;
     const offenders = [];
     for (const match of html.matchAll(/<span([^>]*)>([^<>]+)<\/span>/g)) {
         const [, attrs, textRaw] = match;

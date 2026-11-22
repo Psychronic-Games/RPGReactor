@@ -121,7 +121,7 @@ test('editor distribution staging includes runtime asset dependencies', async ()
             'template/Demo/js/reactor_plugins.js',
             'src/event/commands/MediaSurfaceEditor.js',
             'template/Demo/audio/bgm/Psychronic - Acoustic Circuits.ogg',
-            'template/Demo/effects/Absorb.efkefc',
+            'template/Demo/effects/RR-Absorb.efkefc',
             'template/Demo/img/system/Window.png'
         ];
         for (const relativePath of required) {

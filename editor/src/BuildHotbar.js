@@ -42,7 +42,7 @@ class BuildHotbar {
     }
 
     static PIECES = ['floor', 'wall', 'doorway', 'door', 'window', 'glass', 'stair', 'ladder', 'ramp', 'roof', 'pillar', 'fence', 'block'];
-    static EXTRA = ['shape', 'screen', 'light', 'hammer', 'blueprint'];
+    static EXTRA = ['shape', 'hammer', 'blueprint'];
     /** A placed shape's panel tabs. */
     static SHAPE_TABS = ['size', 'offset', 'rotate'];
     static ROCK_PRESETS = { boulder: [3, 2, 3], rock: [4, 4, 4], cliff: [4, 8, 4], spire: [2, 8, 2], ledge: [6, 2, 3], slab: [6, 1, 6] };
@@ -50,8 +50,12 @@ class BuildHotbar {
     /** The Terrain group: the ground's brushes, the water, then the whole map's look and the land past its border. Each is a TerrainManager mode. */
     static TERRAIN = ['raise', 'lower', 'smooth', 'flatten', 'dunes', 'ground', 'terase', 'path', 'rock', 'pour', 'river', 'drain', 'look', 'biome', 'sky', 'surround'];
     static TERRAIN_MODE = { raise: 'raise', lower: 'lower', smooth: 'smooth', flatten: 'flatten', dunes: 'dunes', ground: 'ground', path: 'path', terase: 'ground', pour: 'fill', river: 'river', drain: 'drain', look: 'look', biome: 'biome', sky: 'sky', surround: 'surround' };
-    /** The Models group's fixed slots; the models themselves follow as model0, model1... */
-    static MODELS = ['mselect', 'mremove', 'library'];
+    /**
+     * The Objects group ('models' inside: the things set into the world whole, not the building pieces): the Library
+     * first (a model is placed from it; the bar keeps no picture of each model, a row that would run out of room),
+     * then Light (Lighting) and Screen (Media Surfaces), Select and Remove (owner, 2026-11-21 and 2026-11-22).
+     */
+    static MODELS = ['library', 'light', 'screen', 'mselect', 'mremove'];
     /** The Foliage group: four kinds painted as a density, then bushes. Each is a TerrainManager mode of the same name. */
     static FOLIAGE = ['grass', 'flowers', 'fern', 'reeds', 'bulbs', 'tendrils', 'crystals', 'bush', 'ferase'];
     /** Each group's eraser: the Build group's takes pieces away, the Terrain group's the painted ground, the Foliage group's every plant, the Models group's a model. */
@@ -88,7 +92,7 @@ class BuildHotbar {
     group() {
         const tool = this.tool();
         if (tool === 'terrain') return BuildHotbar.FOLIAGE.includes(this.terrain()?.mode) ? 'foliage' : 'terrain';
-        if (tool === 'models') return 'models';
+        if (tool === 'models' || this.docked()) return 'models';
         // Rock is laid by the builder and kept with the ground it is.
         return this.rockInHand() ? 'terrain' : 'build';
     }
@@ -103,7 +107,7 @@ class BuildHotbar {
         const group = this.group();
         if (group === 'terrain') return BuildHotbar.TERRAIN;
         if (group === 'foliage') return BuildHotbar.FOLIAGE;
-        if (group === 'models') return BuildHotbar.MODELS.concat((this.props()?.libraryModels() || []).map((_, i) => 'model' + i));
+        if (group === 'models') return BuildHotbar.MODELS;
         return BuildHotbar.SLOTS;
     }
     currentMap() { return this.projectController?.getTilemapManager?.()?.currentMap || null; }
@@ -182,6 +186,29 @@ class BuildHotbar {
 
     toggle(on) { if (on === undefined ? !this.visible : on) this.show(); else this.hide(); }
 
+    /**
+     * The Tools menu's map tools open in the bar, as its own slots and groups do: 'light' and 'screen' (Lighting and
+     * Media Surfaces), or a group, 'terrain', 'foliage' or 'models'. Picked again while it is in hand, the bar goes away.
+     */
+    openTool(target) {
+        if (!this.root || !this.manager()) return false;
+        const docks = target === 'light' || target === 'screen';
+        const inHand = this.visible && (docks ? this.docked() === target : !this.docked() && this.group() === target);
+        if (inHand) { this.hide(); return true; }
+        if (!this.visible) this.show();
+        if (docks) this.pick(target);
+        else if (target === 'terrain') this.pick(this._lastTerrain || 'raise');
+        else if (target === 'foliage') this.pick(this._lastFoliage || 'grass');
+        else if (target === 'models') this.pick(this._lastModels || 'mselect');
+        return true;
+    }
+
+    /** Lighting or Media Surfaces closed its panel with the bar up: the map comes back to the Objects group they are in. */
+    undock() {
+        if (!this.visible) { this.show(); return; }
+        this.pick(this._lastModels || 'mselect');
+    }
+
     /** Whether Lighting or Media Surfaces holds the map while the bar is up. */
     docked() { const owner = window.reactor?.mapTool; return owner === 'lighting' ? 'light' : owner === 'media' ? 'screen' : null; }
 
@@ -198,14 +225,13 @@ class BuildHotbar {
         }
         if (this.group() === 'foliage') return BuildHotbar.FOLIAGE.includes(this.terrain()?.mode) ? this.terrain().mode : 'grass';
         if (this.group() === 'models') {
+            const docked = this.docked();
+            if (docked) return docked;
             const props = this.props();
             if (!props || props.tool === 'erase') return 'mremove';
-            if (!props.placing()) return 'mselect';
-            const index = props.libraryModels().findIndex(entry => entry.name === props.model.name);
-            return index >= 0 ? 'model' + index : 'mselect';
+            // A model in hand came from the Library.
+            return props.placing() ? 'library' : 'mselect';
         }
-        const docked = this.docked();
-        if (docked) return docked;
         if (manager.mode === 'select') return 'select';
         if (manager.mode === 'erase') return 'hammer';
         if (manager.mode === 'stamp' || manager.mode === 'move') return 'blueprint';
@@ -262,18 +288,21 @@ class BuildHotbar {
     pick(slot) {
         const manager = this.manager();
         if (!manager) return;
-        // A models slot: Select picks up, Remove takes away, the Library opens the picker, a model is placed.
-        if (BuildHotbar.MODELS.includes(slot) || /^model\d+$/.test(slot)) {
+        // Screens and lights have their own editors: the slot opens the one for the map, and the bar stays.
+        if (slot === 'screen') { if (this.docked() !== 'screen') window.reactor?.mediaSurfaceManager?.open?.(); return; }
+        // Lights have their own editor too: the builder takes the map back from another tool, then Lighting docks.
+        if (slot === 'light') {
+            if (this.docked() !== 'light') { if (this.tool() !== 'build') this.manager().activate(); window.reactor?.lightingManager?.setActive?.(true); }
+            return;
+        }
+        // An Objects slot: the Library opens the picker (the model chosen there is placed), Select picks up, Remove takes away.
+        if (BuildHotbar.MODELS.includes(slot)) {
             const props = this.enterModels();
             if (!props) return;
             if (slot === 'library') { props.openModelPicker(); this.render(); return; }
             this._lastModels = slot;
             if (slot === 'mselect') props.tool = 'select';
             else if (slot === 'mremove') { props.tool = 'erase'; props.select(null); }
-            else {
-                const entry = props.libraryModels()[Number(slot.slice(5))];
-                if (entry) props.chooseModel(entry);
-            }
             this.render();
             return;
         }
@@ -299,9 +328,6 @@ class BuildHotbar {
             return;
         }
         if (this.tool() !== 'build') manager.activate();
-        // Screens and lights have their own editors: the slot opens the one for the map, and the bar stays.
-        if (slot === 'screen') { if (this.docked() !== 'screen') window.reactor?.mediaSurfaceManager?.open?.(); return; }
-        if (slot === 'light') { if (this.docked() !== 'light') window.reactor?.lightingManager?.setActive?.(true); return; }
         if (this.docked()) manager.activate();
         if (slot === 'rock') this._lastTerrain = slot; else this._lastBuild = slot;
         if (slot === 'select') manager.setMode('select');
@@ -386,7 +412,7 @@ class BuildHotbar {
             level: 'M3 16h18 M5 12h14 M4 8h16',
             build: 'M4 20V10l8-6 8 6v10z M9 20v-6h6v6',
             terrain: 'M2 19l6-9 4 5 3-3 7 7z',
-            // The models group: a cube; Select, Remove and the Library within it.
+            // The Objects group: a cube; Select, Remove and the Library within it.
             models: 'M12 3l8 4.5v9L12 21l-8-4.5v-9z M4 7.5l8 4.5 8-4.5 M12 12v9',
             mselect: 'M5 3l14 9-6 1.5L10 20z',
             mremove: 'M4 15l9-9 6 6-7 7H7z M9 10l6 6 M13 19h7',
@@ -411,7 +437,6 @@ class BuildHotbar {
         if (slot === 'mselect') return this._t('build.select');
         if (slot === 'mremove' || slot === 'terase' || slot === 'ferase') return this._t('build.hammer');
         if (slot === 'library') return this._t('build.library');
-        if (/^model\d+$/.test(slot)) return (this.props()?.libraryModels()[Number(slot.slice(5))]?.name || '').split('/').pop();
         if (slot === 'dunes' || slot === 'ground' || slot === 'path' || slot === 'biome' || slot === 'sky' || slot === 'surround') return this._tt({ dunes: 'Dunes', ground: 'Ground', path: 'Path', biome: 'Biome', sky: 'Room and Sky', surround: 'Beyond the Border' }[slot]);
         if (BuildHotbar.TERRAIN.includes(slot)) return this._t({ pour: 'terrain.waterPour', drain: 'terrain.drain', look: 'terrain.lookShort' }[slot] || 'terrain.' + slot);
         if (BuildHotbar.ALIEN_FOLIAGE[slot]) return this._tt(BuildHotbar.ALIEN_FOLIAGE[slot]);
@@ -425,15 +450,11 @@ class BuildHotbar {
         const active = this.activeSlot();
         const group = this.group(), terrain = group === 'terrain' && !this.rockInHand();
         const slots = this.slots();
-        const face = slot => {
-            if (!/^model\d+$/.test(slot)) return this.icon(slot === 'shape' && active === 'shape' ? manager.kind : slot);
-            const url = this.modelThumb(this.props()?.libraryModels()[Number(slot.slice(5))]);
-            return url ? `<img class="rr-build-slot-thumb" src="${url}" alt="">` : this.icon('models');
-        };
+        const face = slot => this.icon(slot === 'shape' && active === 'shape' ? manager.kind : slot);
         // The key that picks a slot (1 to 9, then 0; the Eraser's X) is in its tooltip: no badge on some slots and not the rest.
         const keyOf = (slot, index) => slot === 'hammer' ? 'X' : index < 10 ? String((index + 1) % 10) : '';
         const escape = text => String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-        const buttons = BuildHotbar.slotsHtml(slots.map((slot, index) => ({ id: slot, label: this.label(slot), icon: face(slot), key: keyOf(slot, index), className: /^model\d+$/.test(slot) ? 'rr-build-slot-model' : '' })), active);
+        const buttons = BuildHotbar.slotsHtml(slots.map((slot, index) => ({ id: slot, label: this.label(slot), icon: face(slot), key: keyOf(slot, index) })), active);
         root.innerHTML = `
             ${this.is3D() ? '' : `<div class="rr-build-note">${this._t('build.needs3D')}</div>`}
             <div class="rr-build-row rr-build-slots">
@@ -445,32 +466,11 @@ class BuildHotbar {
         root.querySelectorAll('.rr-build-group').forEach(el => el.addEventListener('click', () => {
             const to = el.dataset.group;
             if (to === group) return;
-            const last = this._lastModels && this.slots().includes(this._lastModels) ? this._lastModels : 'mselect';
-            this.pick(to === 'terrain' ? (this._lastTerrain || 'raise') : to === 'foliage' ? (this._lastFoliage || 'grass') : to === 'models' ? (/^model/.test(last) && !this.props()?.libraryModels().length ? 'mselect' : last) : (this._lastBuild || 'select'));
+            this.pick(to === 'terrain' ? (this._lastTerrain || 'raise') : to === 'foliage' ? (this._lastFoliage || 'grass') : to === 'models' ? (this._lastModels || 'mselect') : (this._lastBuild || 'select'));
         }));
         if (this.panel && this.visible) this.panel.style.display = this.docked() ? 'none' : 'flex';
         this.renderPanel();
         this.layout();
-    }
-
-    /** A model's picture for its slot, or null while it is drawn (the bar redraws when it lands). */
-    modelThumb(entry) {
-        if (!entry || typeof RREventPreviewModels === 'undefined' || typeof Reactor3D === 'undefined' || !Reactor3D.normalizeModelSpec) return null;
-        const project = this.projectController?.getCurrentProject?.() || this.projectController?.currentProject;
-        // Pictures by name, so per project: another project's model of the same name is another model.
-        if (!this._thumbs || this._thumbsProject !== project?.path) { this._thumbs = new Map(); this._thumbsProject = project?.path; }
-        const thumbs = this._thumbs;
-        const known = thumbs.get(entry.name);
-        if (known !== undefined) return known;
-        thumbs.set(entry.name, null);
-        const spec = Reactor3D.normalizeModelSpec({ name: entry.name, ext: entry.ext, file: entry.file, texture: entry.texture, size: 1, scale: 1 });
-        if (!spec || !project) return null;
-        Promise.resolve(RREventPreviewModels.thumbnail(project, spec, window.reactor?.mapEditor3D || this.projectController?.mapEditor3D, 64, 2)).then(result => {
-            if (!result?.url) { thumbs.delete(entry.name); return; }
-            thumbs.set(entry.name, result.url);
-            if (this.visible && this.group() === 'models' && thumbs === this._thumbs) this.render();
-        }).catch(() => thumbs.delete(entry.name));
-        return null;
     }
 
     /** The Models group's panel: the prop panel itself, mounted once and kept (it syncs itself). */
@@ -504,6 +504,8 @@ class BuildHotbar {
         if (!panel || !manager) return;
         if (this.group() === 'terrain' && !this.rockInHand()) { this._modelsBody = null; this.renderTerrainPanel(); return; }
         if (this.group() === 'foliage') { this._modelsBody = null; this.renderFoliagePanel(); return; }
+        // Lighting or Media Surfaces holds the map with its own panel in the dock: the bar's panel is hidden, and the models' waits.
+        if (this.docked()) return;
         if (this.group() === 'models') { this.renderModelsPanel(); return; }
         this._modelsBody = null;
         const s = this.subject();

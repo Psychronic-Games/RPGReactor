@@ -288,16 +288,18 @@ test('building happens in the world: the hammer in the toolbar opens a bar over 
     assert.match(barSource, /static PIECES = \['floor', 'wall', 'doorway', 'door', 'window', 'glass', 'stair', 'ladder', 'ramp', 'roof', 'pillar', 'fence', 'block'\]/, 'the slots a child reaches for first, by the kinds\' own names');
     assert.match(barSource, /static SLOTS = \['select'\]\.concat/, 'Select comes first');
     // Rock is laid from the Terrain group (ground-types.test.cjs).
-    assert.match(barSource, /static EXTRA = \['shape', 'screen', 'light', 'hammer', 'blueprint'\]/);
+    assert.match(barSource, /static EXTRA = \['shape', 'hammer', 'blueprint'\]/);
+    // Lighting and Media Surfaces (the Light and Screen slots) are in the Objects group, with the other things set into the world whole (owner, 2026-11-21, 2026-11-22).
+    assert.match(barSource, /static MODELS = \['library', 'light', 'screen', 'mselect', 'mremove'\]/);
     assert.match(barSource, /if \(\/\^\[0-9\]\$\/\.test\(event\.key\)\)/, 'number keys pick slots');
     const managerSrc = read('editor/src/PieceBuilderManager.js');
     assert.doesNotMatch(managerSrc, /placeEffectAt/, 'the builder places no screens or lights of its own');
     assert.match(barSource, /if \(slot === 'screen'\) \{ if \(this\.docked\(\) !== 'screen'\) window\.reactor\?\.mediaSurfaceManager\?\.open\?\.\(\); return; \}/, 'the Screen slot opens the Media Surfaces panel');
-    assert.match(barSource, /if \(slot === 'light'\) \{ if \(this\.docked\(\) !== 'light'\) window\.reactor\?\.lightingManager\?\.setActive\?\.\(true\); return; \}/, 'the Light slot opens the Lighting panel');
+    assert.match(barSource, /if \(slot === 'light'\) \{\s*if \(this\.docked\(\) !== 'light'\) \{ if \(this\.tool\(\) !== 'build'\) this\.manager\(\)\.activate\(\); window\.reactor\?\.lightingManager\?\.setActive\?\.\(true\); \}/, 'the Light slot opens the Lighting panel');
     assert.match(barSource, /if \(this\.docked\(\)\) manager\.activate\(\);/, 'picking a piece again takes the map back from that panel');
     assert.match(mainSource, /if \(this\.buildHotbar\?\.visible && \(owner === 'lighting' \|\| owner === 'media' \|\| owner === 'terrain' \|\| owner === 'models'\)\) this\.buildHotbar\.render\(\);/, 'the bar stays up while Lighting, Media Surfaces, Terrain or Models hold the map');
     assert.match(mainSource, /const building = owner === 'pieces' \|\| \(!!this\.buildHotbar\?\.visible && \(owner === 'lighting' \|\| owner === 'media' \|\| owner === 'terrain' \|\| owner === 'models'\)\);/, 'the Build button stays lit beside theirs');
-    assert.match(mainSource, /if \(this\.buildHotbar\?\.visible && \(owner === 'lighting' \|\| owner === 'media'\)\) \{ this\.buildHotbar\.show\(\); return; \}/, 'closing their panel hands the map back to the bar');
+    assert.match(mainSource, /if \(this\.buildHotbar\?\.visible && \(owner === 'lighting' \|\| owner === 'media'\)\) \{ this\.buildHotbar\.undock\(\); return; \}/, 'closing their panel hands the map back to the bar');
     { const html = read('editor/index.html'); assert.ok(html.includes('tool-button" data-action="build-tool"') && !html.includes('tool-button" data-action="lighting-tool"') && !html.includes('tool-button" data-action="media-surfaces"'), 'Build is the toolbar button; Lighting and Media Surfaces open from its bar and the Tools menu'); }
     // Lighting and Media Surfaces dock beside the map, in a column the map makes room for, not a sheet over it.
     { const html = read('editor/index.html'); assert.match(html, /<div id="map-stage">\s*<div id="canvas-container" class="rr-dark-surface"><\/div>\s*<aside id="map-side-dock" hidden><\/aside>\s*<\/div>/, 'the dock sits beside the canvas');

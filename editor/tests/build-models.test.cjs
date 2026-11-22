@@ -35,22 +35,25 @@ function load() {
     return { context, props, bar };
 }
 
-test('the Models group offers Select, the hammer, the Library, then the models in hand and on the map', () => {
+test('the Objects group: the Library, Light, Screen, Select and Remove; no slot per model (a row that would run out of room)', () => {
     const { context, props, bar } = load();
     context.reactor.mapTool = 'models';
     assert.equal(bar.group(), 'models');
-    assert.deepEqual([...bar.slots()], ['mselect', 'mremove', 'library', 'model0', 'model1'], 'each model once');
+    assert.deepEqual([...bar.slots()], ['library', 'light', 'screen', 'mselect', 'mremove'], 'the Library at the far left; Lighting and Media Surfaces beside it (owner, 2026-11-22)');
     props.chooseModel({ name: 'Actors/Fleagus', ext: 'glb' });
-    assert.equal(props.libraryModels()[0].name, 'Actors/Fleagus', 'the model just chosen comes first');
-    assert.equal(bar.activeSlot(), 'model0');
-    assert.equal(bar.label('model1'), 'Tree-02');
+    assert.equal(bar.activeSlot(), 'library', 'a model in hand came from the Library');
+    assert.equal(bar.label('library'), 'build.library');
+    assert.doesNotMatch(read('editor/src/BuildHotbar.js'), /modelThumb|rr-build-slot-thumb/, 'no pictures of models in the bar');
 });
 
-test('Select picks up without placing; the hammer takes away; a model slot places', () => {
+test('Select picks up without placing; the hammer takes away; the Library opens the picker', () => {
     const { props, bar } = load();
-    bar.pick('model1');
-    assert.equal(props.active, true, 'a models slot hands the map to the models tool');
-    assert.equal(props.model.name, 'Vehicles/Bike');
+    let picker = 0;
+    props.openModelPicker = () => { picker++; };
+    bar.pick('library');
+    assert.equal(picker, 1);
+    assert.equal(props.active, true, 'an Objects slot hands the map to the models tool');
+    props.chooseModel({ name: 'Vehicles/Bike' });
     assert.equal(props.placing(), true);
     bar.pick('mselect');
     assert.equal(props.placing(), false, 'in Select a click on the ground places nothing');
@@ -98,4 +101,56 @@ test('the Build bar opens in Select', () => {
     const bar = read('editor/src/BuildHotbar.js');
     assert.match(bar, /const opening = !this\.visible;[\s\S]{0,300}if \(opening && manager\.mode !== 'select'\) manager\.setMode\('select'\);/);
     assert.match(read('editor/src/PieceBuilderManager.js'), /this\.mode = 'select';\n\s*this\.structure = '';/, 'and a fresh manager starts there');
+});
+
+test('Lighting is an Objects slot too: it opens its panel with the Objects group up, and closing it comes back there', () => {
+    const { context, bar } = load();
+    let lit = 0;
+    context.reactor.lightingManager = { setActive(on) { if (on) { lit++; context.reactor.mapTool = 'lighting'; } } };
+    bar.pick('light');
+    assert.equal(lit, 1);
+    assert.equal(bar.group(), 'models');
+    assert.equal(bar.activeSlot(), 'light');
+    bar.pick('light');
+    assert.equal(lit, 1, 'picked again while it holds the map, it is not opened twice');
+    bar.visible = true;
+    bar.undock();
+    assert.equal(context.reactor.mapTool, 'models', 'its panel closed: the Objects group in Select');
+    assert.equal(bar.activeSlot(), 'mselect');
+    assert.match(read('editor/src/main.js'), /owner === 'lighting' \|\| owner === 'media'\)\) \{ this\.buildHotbar\.undock\(\); return; \}/);
+});
+
+test('Media Surfaces is an Objects slot: it opens its panel, and the bar shows the Objects group with Screen in hand', () => {
+    const { context, bar } = load();
+    let opened = 0;
+    context.reactor.mediaSurfaceManager = { open() { opened++; context.reactor.mapTool = 'media'; return true; } };
+    bar.pick('screen');
+    assert.equal(opened, 1, 'the Screen slot opens the Media Surfaces panel');
+    assert.equal(bar.group(), 'models');
+    assert.equal(bar.activeSlot(), 'screen');
+    bar.pick('screen');
+    assert.equal(opened, 1, 'picked again while it holds the map, it is not opened twice');
+});
+
+test('the Tools menu opens Terrain, Foliage, Models, Media Surfaces and Lighting in the bar', () => {
+    const { context, bar } = load();
+    const fs = require('node:fs'), path = require('node:path');
+    const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+    for (const action of ['terrain-tool', 'foliage-tool', 'models-tool', 'media-surfaces', 'lighting-tool']) assert.match(html, new RegExp(`class="html-menu-option" data-action="${action}"`), action);
+    const ui = fs.readFileSync(path.join(__dirname, '..', 'src', 'UIManager.js'), 'utf8');
+    assert.match(ui, /buildHotbar\?\.openTool\('screen'\)/);
+    assert.match(ui, /buildHotbar\?\.openTool\('light'\)/);
+    assert.match(ui, /buildHotbar\?\.openTool\(action\.replace\('-tool', ''\)\)/);
+    let shown = 0;
+    bar.root = {}; bar.show = () => { shown++; bar.visible = true; };
+    bar.hide = () => { bar.visible = false; };
+    context.reactor.mediaSurfaceManager = { open() { context.reactor.mapTool = 'media'; return true; } };
+    assert.equal(bar.openTool('screen'), true);
+    assert.equal(shown, 1, 'the bar comes up first');
+    assert.equal(bar.activeSlot(), 'screen');
+    bar.openTool('screen');
+    assert.equal(bar.visible, false, 'the same entry again puts the bar away');
+    bar.openTool('models');
+    assert.equal(bar.group(), 'models');
+    assert.equal(bar.activeSlot(), 'mselect');
 });

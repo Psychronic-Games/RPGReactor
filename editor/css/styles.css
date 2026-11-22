@@ -4470,7 +4470,6 @@
         .rr-build-slot:hover { background: rgba(255, 255, 255, 0.06); }
         .rr-build-slot[aria-pressed="true"] { border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 18%, transparent); color: var(--color-text-strong); }
         .rr-build-slot-label { white-space: nowrap; max-width: 58px; overflow: hidden; text-overflow: ellipsis; }
-        .rr-build-slot-thumb { width: 26px; height: 26px; object-fit: contain; border-radius: 3px; }
         /* The prop panel inside the side panel: it scrolls with the panel, not in its own box. */
         .rr-build-models-body { padding: 0; }
         .rr-build-models-body .mp-panel { height: auto; flex: 1 1 auto; background: transparent; padding: 8px; }
@@ -7882,6 +7881,46 @@ html.rr-detached-window.rr-repaint { clip-path: inset(0 round calc(var(--radius-
 .rr-c3d-gallery-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 600; color: var(--color-text); margin-bottom: 8px; }
 .rr-c3d-gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; align-content: start; }
 .rr-c3d-gallery-scroll { overflow-y: auto; min-height: 0; flex: 1 1 auto; }
+/* Database › System 2 › Steam (src/database/DatabaseSteamEditor.js) */
+.rr-steam-card .database-section-content { display: flex; flex-direction: column; gap: 7px; }
+.rr-steam-field { display: flex; align-items: center; gap: 8px; color: var(--color-text); font-size: 12px; cursor: pointer; }
+.rr-steam-appid { justify-content: space-between; cursor: default; }
+.rr-steam-appid input { width: 130px; font-size: 12px; }
+.rr-steam-note { font-size: 11px; line-height: 1.5; color: var(--color-text-muted); }
+/* Forge › Steam Workshop (src/forge/Workshop/WorkshopTool.js) */
+.rr-workshop { display: flex; flex-direction: column; gap: 10px; height: 100%; min-height: 0; padding: 14px 16px; box-sizing: border-box; font-size: 12px; color: var(--color-text); }
+.rr-workshop-status { padding: 9px 12px; background: var(--color-bg-input); border: 1px solid var(--color-border); border-left: 3px solid var(--color-warning, #e0af68); color: var(--color-text-muted); line-height: 1.5; }
+.rr-workshop-status.is-ok { border-left-color: var(--color-accent); }
+.rr-workshop-bar, .rr-workshop-subbar, .rr-workshop-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.rr-workshop-spacer { flex: 1 1 auto; }
+.rr-workshop-tab { background: none; border: none; border-bottom: 2px solid transparent; color: var(--color-text-muted); padding: 6px 10px; font: inherit; cursor: pointer; }
+.rr-workshop-tab.is-active { color: var(--color-text-strong); border-bottom-color: var(--color-accent); }
+.rr-workshop-body { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.rr-workshop-split { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 14px; min-height: 100%; }
+.rr-workshop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; align-content: start; }
+.rr-workshop-card { position: relative; display: flex; flex-direction: column; align-items: stretch; gap: 3px; padding: 6px; background: var(--color-bg-input); border: 1px solid var(--color-border); color: var(--color-text); font: inherit; text-align: left; cursor: pointer; }
+.rr-workshop-card:hover { border-color: var(--color-accent-border); }
+.rr-workshop-card.is-active { border-color: var(--color-accent); background: var(--color-bg-selected, var(--color-bg-input)); }
+.rr-workshop-card img, .rr-workshop-card .rr-workshop-nopic { width: 100%; aspect-ratio: 1; object-fit: contain; background: var(--color-bg-deep); }
+.rr-workshop-nopic { display: flex; align-items: center; justify-content: center; color: var(--color-text-muted); }
+.rr-workshop-card-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rr-workshop-card-sub, .rr-workshop-row-sub, .rr-workshop-hint, .rr-workshop-terms { color: var(--color-text-muted); font-size: 11px; }
+.rr-workshop-badge { position: absolute; top: 9px; left: 9px; padding: 1px 6px; background: var(--color-accent); color: var(--color-bg-deep); font-size: 10px; }
+.rr-workshop-form { display: flex; flex-direction: column; gap: 9px; padding: 12px; background: var(--color-bg-panel); border: 1px solid var(--color-border); align-self: start; }
+.rr-workshop-field { display: flex; flex-direction: column; gap: 4px; }
+.rr-workshop-field textarea { resize: vertical; font: inherit; }
+.rr-workshop-terms { margin: 0; line-height: 1.5; }
+.rr-workshop-link { background: none; border: none; padding: 0; color: var(--color-accent-bright); text-decoration: underline; font: inherit; cursor: pointer; }
+.rr-workshop-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.rr-workshop-row { display: flex; align-items: center; gap: 12px; padding: 8px 10px; background: var(--color-bg-input); border: 1px solid var(--color-border); }
+.rr-workshop-row img, .rr-workshop-row .rr-workshop-nopic { width: 56px; height: 56px; flex: none; object-fit: contain; background: var(--color-bg-deep); }
+.rr-workshop-row-text { flex: 1 1 auto; min-width: 0; }
+.rr-workshop-row-title { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rr-workshop-line { min-height: 16px; color: var(--color-text-muted); }
+.rr-workshop-line.is-ok { color: var(--color-accent-bright); }
+.rr-workshop-line.is-error { color: var(--color-danger-bright, #f7768e); }
+.rr-workshop-empty { padding: 32px 16px; text-align: center; color: var(--color-text-muted); line-height: 1.6; }
+@media (max-width: 760px) { .rr-workshop-split { grid-template-columns: minmax(0, 1fr); } }
 .rr-c3d-group-pick select { max-width: 150px; }
 .rr-random-icon { display: inline-block; vertical-align: -2px; }
 .rr-c3d-gallery-grid > .rr-c3d-note { grid-column: 1 / -1; margin: 0; }

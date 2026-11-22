@@ -237,7 +237,7 @@ test('the Demo\'s server is the demo server, and a project made from it is the a
     assert.equal(demo.address, 'https://demo.rpgreactor.org');
     assert.equal(typeof demo.playtest, 'boolean');
     assert.equal(demo.accounts.mode, 'optional');
-    assert.match(fs.readFileSync(path.join(appRoot, 'src/ProjectManager.js'), 'utf8'), /\['ReactorOnline\.json', 'ReactorCharacters\.json'\][\s\S]{0,160}unlinkSync/);
+    assert.match(fs.readFileSync(path.join(appRoot, 'src/ProjectManager.js'), 'utf8'), /\['ReactorOnline\.json', (?:'ReactorSteam\.json', )?'ReactorCharacters\.json'\][\s\S]{0,160}unlinkSync/);
 });
 
 test('the option pages flow across the window instead of running down one column', () => {
@@ -263,7 +263,7 @@ test('a project\'s online settings are its own file, and looking at the page wri
     assert.equal(/innerHTML[^;]*settings\.address/.test(source), false, 'typed text is never written into markup');
     const manager = fs.readFileSync(path.join(appRoot, 'src/DatabaseManager.js'), 'utf8');
     assert.match(manager, /\['online', 'ReactorOnline\.json'\]/);
-    assert.match(manager, /key === 'online' \|\| key === 'characterCreation'\) && !this\.data\[key\]\) continue/, 'an unused project gains no file');
+    assert.match(manager, /key === 'online' \|\| key === 'characterCreation'(?: \|\| key === 'steam')?\) && !this\.data\[key\]\) continue/, 'an unused project gains no file');
     for (const file of ['runtime/reactor_online.js', 'runtime/reactor_online_ui.js', 'runtime/reactor_character_creator.js']) {
         assert.equal(/\$dataSystem\.reactor(Online|Character)/.test(fs.readFileSync(path.join(appRoot, '..', file), 'utf8')), false, file);
     }

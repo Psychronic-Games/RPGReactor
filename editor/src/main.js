@@ -691,6 +691,7 @@ class RPGReactor {
         }
 
         if (active) this.optionsManager.setMap3DView(true);
+        if (active) window.RRAchievements?.earn('MAP_3D');
         // Overtaken by a later request (a map loading asks again; a second one is now in charge of the view and of
         // the box): this one neither clears the box nor reports a failure that did not happen.
         if (requested && !active && !this.mapEditor3D.lastError && (this.mapEditor3D.enabled || this.mapEditor3D._activationPromise || this.mapEditor3D._desiredEnabled !== requested)) return this.mapEditor3D.enabled === true;
@@ -872,8 +873,8 @@ class RPGReactor {
 
     releaseMapTool(owner) {
         if (this._changingMapTool || this.mapTool !== owner) return;
-        // Closing the Lighting or Media Surfaces panel with the build bar up hands the map back to the bar.
-        if (this.buildHotbar?.visible && (owner === 'lighting' || owner === 'media')) { this.buildHotbar.show(); return; }
+        // Closing the Lighting or Media Surfaces panel with the build bar up hands the map back to the bar's Objects group, theirs.
+        if (this.buildHotbar?.visible && (owner === 'lighting' || owner === 'media')) { this.buildHotbar.undock(); return; }
         // So does closing the Image Layers panel.
         if (this.buildHotbar?.visible && owner === 'imageLayers') { this.buildHotbar.show(); return; }
         const palette=this.tilesetPaletteViewer;

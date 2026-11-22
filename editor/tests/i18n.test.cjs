@@ -306,6 +306,8 @@ test('literal translations preserve interpolation placeholders', () => {
 // from RR_ADDITIONAL_LOCALES inherit the English table, so a key added without a
 // translation renders in English instead of failing loudly.
 const IDENTICAL_TO_ENGLISH_BY_DESIGN = [
+    // Valve's own name for the Workshop is the English one in some languages (Greek, Thai).
+    'menu.steamWorkshop',
     'app.title', 'about.version', 'about.steam', 'about.youtube',
     'about.catalyst', 'about.rarelyTypicalPlayers', 'common.ok'
 ];

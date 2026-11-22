@@ -271,6 +271,7 @@ class LightingManager {
             ? { type: preset, color: preset === 'spot' ? '#fff2cc' : preset === 'beam' ? '#ff2a2a' : '#ffcf7d' }
             : Object.assign({}, preset);
         this.pushUndo();
+        window.RRAchievements?.earn('PLACE_LIGHT');
         const at = {
             x: Math.round(x * 100) / 100,
             y: Math.round(y * 100) / 100

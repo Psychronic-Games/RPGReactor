@@ -1,0 +1,18 @@
+"api_name (required, unique; the name your game passes to the API)",setid (optional; the id of a set that already exists),"permission (one of Client, GameServer, OfficialGameServer)",spoiler (true or false),archived (true or false),"progress_stat_name (optional; the name of a stat that already exists, blank for no progress bar)","progress_stat_min (number, no lower than the stat's own min)","progress_stat_max (number, above min and no higher than the stat's own max)"
+NEW_PROJECT,,Client,false,false,,0,0
+FIRST_PLAYTEST,,Client,false,false,,0,0
+MAP_3D,,Client,false,false,,0,0
+PROJECT_IMPORT,,Client,false,false,,0,0
+FORGE_CHARACTER,,Client,false,false,,0,0
+FORGE_PROP,,Client,false,false,,0,0
+FORGE_SOUND,,Client,false,false,,0,0
+BUILD_GAME,,Client,false,false,,0,0
+WORKSHOP_SHARE,,Client,false,false,,0,0
+WORKSHOP_ADD,,Client,false,false,,0,0
+RUNTIME_INSTALL,,Client,false,false,,0,0
+FIRST_EVENT,,Client,false,false,,0,0
+BUILD_PIECE,,Client,false,false,,0,0
+SHAPE_TERRAIN,,Client,false,false,,0,0
+PLACE_LIGHT,,Client,false,false,,0,0
+MEDIA_SURFACE,,Client,false,false,,0,0
+BLUEPRINT,,Client,false,false,,0,0

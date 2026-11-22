@@ -53,6 +53,7 @@
     "lamejs": "^1.2.1",
     "pixi.js": "8.22.0",
     "pngjs": "^7.0.0",
+    "steamworks.js": "0.4.0",
     "three": "0.187.0"
   },
   "keywords": [

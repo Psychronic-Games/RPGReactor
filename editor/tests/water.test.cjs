@@ -75,10 +75,36 @@ test('a sheet is a rectangle at a level; deep water blocks, shallows wade, dry l
     const geometry = R.waterGeometry(R.waterOf(masked)[0], masked, false);
     assert.equal(geometry.index.count, 8 * 6, 'a quad per wet cell'); assert.equal(geometry.attributes.position.count, 16, 'corners shared');
     assert.equal(geometry.attributes.rrDepth.count, 16);
-    const shore = R.waterGeometry(R.waterOf(masked)[0], masked);
+    // Ground rising out of the water all round (and on the dry middle cell, an island): a shore everywhere.
+    const banked = Object.assign({}, masked, { reactor3d: Object.assign({}, masked.reactor3d, { terrain: new Array(49).fill(2) }) });
+    const shore = R.waterGeometry(R.waterOf(banked)[0], banked);
     assert.equal(shore.index.count, 25 * 6, 'with the shore: the ring of bank cells round the wet ones too, and the dry middle cell (wet-adjacent)');
-    const edge = R.waterGeometry(R.normalizeWater({ x0: 0, y0: 0, x1: 1, y1: 0, level: 1, mask: "10" }, masked), masked);
+    const edge = R.waterGeometry(R.normalizeWater({ x0: 0, y0: 0, x1: 1, y1: 0, level: 1, mask: "10" }, banked), banked);
     assert.equal(edge.index.count, 4 * 6, 'the shore ring stops at the map edge');
+    // Ground under the level all round: the water is held by something built (a fountain's basin), and the sheet
+    // stops at its wet cells rather than spilling a cell past the basin's wall onto the paving.
+    assert.equal(R.waterGeometry(R.waterOf(masked)[0], masked).index.count, 9 * 6, 'no bank, no shore: the wet cells, and the sunken dry cell they ring');
+    const half = Object.assign({}, masked, { reactor3d: Object.assign({}, masked.reactor3d, { terrain: Array.from({ length: 49 }, (_, i) => (i % 7 === 0 ? 2 : 0)) }) });
+    assert.equal(R.waterGeometry(R.waterOf(half)[0], half).index.count, (9 + 5) * 6, 'a bank on one side only: the shore there (the column of cells whose west edge rises)');
+    // A round basin wall (an upright tube) on flat paving, water poured inside it (the cells under the wall left dry):
+    // the sheet fills to the wall's inner face and never reaches past its outer face.
+    const basin = { width: 14, height: 14, reactor3d: { version: 1, elevation: new Array(196).fill(0), terrain: new Array(225).fill(0), terrainWidth: 14,
+        pieces: [{ id: 1, kind: 'tube', x: 7, y: 7, z: 0, size: [7.4, 1.5, 7.4], thick: 0.22, material: 'Stone' }],
+        water: [{ x0: 5, y0: 5, x1: 9, y1: 9, level: 1, material: 'Water', mask: '01110' + '11111' + '11111' + '11111' + '01110' }] } };
+    const sheet = R.waterGeometry(R.waterOf(basin)[0], basin), pos = sheet.attributes.position.array, ix = sheet.index.array;
+    const outer = 3.7, inner = 3.7 * (1 - 0.22);
+    let farthest = 0;
+    for (let i = 0; i < pos.length; i += 3) farthest = Math.max(farthest, Math.hypot(pos[i] - 7.5, pos[i + 2] - 7.5));
+    assert.ok(farthest <= outer + 1e-3, `no corner of the sheet past the wall's outer face (${farthest.toFixed(3)})`);
+    const boxes = [];
+    for (let i = 0; i < ix.length; i += 6) { const xs = [], zs = []; for (let k = 0; k < 6; k++) { xs.push(pos[ix[i + k] * 3]); zs.push(pos[ix[i + k] * 3 + 2]); } boxes.push([Math.min(...xs), Math.min(...zs), Math.max(...xs), Math.max(...zs)]); }
+    const open = [];
+    for (let a = 0; a < 360; a += 5) for (const r of [0.5, 1.5, 2.5, inner - 0.02]) {
+        const px = 7.5 + r * Math.cos(a * Math.PI / 180), pz = 7.5 + r * Math.sin(a * Math.PI / 180);
+        if (!boxes.some(([x0, z0, x1, z1]) => px >= x0 - 1e-6 && px <= x1 + 1e-6 && pz >= z0 - 1e-6 && pz <= z1 + 1e-6)) open.push(`${r.toFixed(2)}@${a}`);
+    }
+    assert.deepEqual(open, [], 'the water reaches the wall\'s inner face all round');
+    assert.equal(R.waterGeometry(R.waterOf(masked)[0], masked).index.count, 9 * 6, 'with nothing built round it the sheet is laid in whole tiles');
     assert.equal(R.normalizeWater({ x0: 1, y0: 1, x1: 3, y1: 3, level: 1, mask: '111111111' }).mask, undefined, 'a full mask is no mask');
     assert.equal(R.normalizeWater({ x0: 1, y0: 1, x1: 3, y1: 3, level: 1, mask: '1111' }).mask, undefined, 'a mask of the wrong length is ignored');
 });

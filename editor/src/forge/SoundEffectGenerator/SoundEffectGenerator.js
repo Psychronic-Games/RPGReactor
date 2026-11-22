@@ -1738,6 +1738,7 @@ class SoundEffectGenerator {
                     suggestedName: `${rawName}${extension}`,
                     mimeType: format.mimeType,
                 });
+                if (result) window.RRAchievements?.earn('FORGE_SOUND');
                 if (result) this._showSaveStatus(result.project
                     ? `${this._t('Saved:')} audio/se/${rawName}${extension}`
                     : `${this._t('Saved:')} ${result.path}`);
@@ -1762,6 +1763,7 @@ class SoundEffectGenerator {
             if (!file || !file.path) return;
             try {
                 fs.writeFileSync(file.path, Buffer.from(wav));
+                window.RRAchievements?.earn('FORGE_SOUND');
                 this._showSaveStatus(`${this._t('Saved:')} ${file.path}`);
             } catch (err) {
                 console.error('SoundEffectGenerator save:', err);

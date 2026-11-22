@@ -4829,8 +4829,15 @@ Reactor3D.MapScene.prototype.removeWaterHaze = function() {
  * bank cell is dry at its middle but its ground dips under the level toward
  * the pond, and the sheet must be there for the shoreline to be where the
  * ground crosses the water rather than a square cut at the cell's edge.
- * Where the bank stands above the level the ground hides the sheet.
+ * Where the bank stands above the level the ground hides the sheet. A cell
+ * whose ground lies under the level all across is no bank: what holds the
+ * water there is built (a fountain's basin, a tank's wall), and the sheet
+ * stops at the wet cells instead of spilling past the wall onto the paving:
+ * it runs into such a cell only where the cell lies wholly within the
+ * water's edge and what is built (a round wall's foot over square cells).
  */
+/** The most wet cells a pool laid in quarter tiles at a wall's foot may have (waterGeometry). */
+Reactor3D.WATER_FINE_MAX = 1024;
 Reactor3D.waterGeometry = function(region, mapData, shore = true, others = null) {
     if (region.path) return this.riverGeometry(region, mapData, shore, others);
     const w = region.x1 - region.x0 + 1, h = region.y1 - region.y0 + 1;
@@ -4844,31 +4851,95 @@ Reactor3D.waterGeometry = function(region, mapData, shore = true, others = null)
     const riverOut = (x, y) => !this.waterCovers(region, x, y) && rivers.some(river => this.waterCovers(river, x, y) && Math.abs(this.riverCellLevel(river, x, y) - region.level) < 0.6);
     const ids = new Map();
     const wet = (cx, cy) => cx >= 0 && cy >= 0 && cx < w && cy < h && (!region.mask || region.mask[cy * w + cx] === "1");
-    const corner = (cx, cy) => {
-        const key = (cy + reach) * (gw + 1) + (cx + reach);
+    // Whether a dry cell's ground reaches the level somewhere (its corners or its middle): a shore the sheet runs up to.
+    const bank = (wx, wz) => {
+        const lift = this.elevationAt(mapData, wx, wz);
+        for (const [u, v] of [[0.5, 0.5], [0, 0], [1, 0], [0, 1], [1, 1]]) {
+            const gx = Math.min(mapData.width - 1e-3, wx + u), gz = Math.min(mapData.height - 1e-3, wz + v);
+            if (lift + this.terrainHeightAt(mapData, gx, gz) >= region.level - 1e-6) return true;
+        }
+        return false;
+    };
+    // Whether a point lies within something built that stands up through the water: a wall or block on the cell,
+    // or inside the outline of an upright shape there (a round basin's wall, and the hollow it rings). The sheet
+    // may run in there: under the wall it is hidden, inside the ring it is the pool.
+    const pieces = reach ? this.pieceIndex(mapData) : null;
+    const builtAt = (cellX, cellY, px, pz) => {
+        const stack = pieces && pieces.cells.get(cellY * 65536 + cellX);
+        if (!stack) return false;
+        for (const piece of stack) {
+            const anchor = Array.isArray(piece.anchor) ? piece.anchor : [piece.x, piece.y];
+            const foot = this.pieceBaseAt(mapData, anchor[0], anchor[1]) + piece.z;
+            if (piece.kind === "wall" || piece.kind === "block") {
+                if (foot <= region.level && foot + this.pieceHeight(piece.kind, piece) > region.level) return true;
+                continue;
+            }
+            if (!this.isShapeKind(piece.kind) || piece.kind === "rock" || this.shapeTurned(piece)) continue;
+            const [sw, sh, sd] = this.shapeSize(piece);
+            if (foot > region.level || foot + sh <= region.level) continue;
+            const [cx, cz] = this.shapeCentre(piece);
+            const turn = ((Number(piece.angle) || 0) + (Number(piece.rot) || 0) * 90) * Math.PI / 180, cos = Math.cos(turn), sin = Math.sin(turn);
+            const qx = px - cx, qz = pz - cz, params = this.shapeParams(piece);
+            // A tube's outline is its outer face: the hollow inside it holds the water too.
+            const kind = piece.kind === "tube" ? "cylinder" : piece.kind;
+            if (this.shapeSolidAt(kind, qx * cos + qz * sin, -qx * sin + qz * cos, sw / 2, sd / 2, 1e-3, params.sweep, params.thick)) return true;
+        }
+        return false;
+    };
+    // Whether a point of the sheet (in the box's own tiles) lies on a wet cell or its edge.
+    const wetNear = (fx, fz) => {
+        const xs = [Math.floor(fx - 1e-6), Math.floor(fx + 1e-6)], zs = [Math.floor(fz - 1e-6), Math.floor(fz + 1e-6)];
+        return xs.some(cx => zs.some(cy => wet(cx, cy)));
+    };
+    // A dry cell beside the water with no bank, where the water meets the foot of a wall: the sheet runs into it
+    // a quarter tile at a time, wherever each corner of the quarter is at the water's edge or within what is built,
+    // so it fills to a round wall over square cells and never shows past the wall's outer face.
+    const held = (cx, cy, fx, fz) => wetNear(fx, fz) || builtAt(region.x0 + cx, region.y0 + cy, region.x0 + fx, region.y0 + fz);
+    const STEP = 4;
+    const corner = (fx, fz) => {
+        const key = Math.round((fz + reach) * STEP) * ((gw + 1) * STEP + 1) + Math.round((fx + reach) * STEP);
         let id = ids.get(key);
         if (id === undefined) {
             id = positions.length / 3;
             ids.set(key, id);
-            const wx = region.x0 + cx, wz = region.y0 + cy;
+            const wx = region.x0 + fx, wz = region.y0 + fz;
             positions.push(wx, region.level, wz);
             // In tiles: the image repeats once per tile in the sheet's own UVs. The image itself is
             // shared by every sheet (and piece) of that material, so its repeat is left alone.
-            uvs.push(cx + reach, gh - (cy + reach));
+            uvs.push(fx + reach, gh - (fz + reach));
             const gx = Math.max(0, Math.min(mapData.width - 1e-3, wx)), gz = Math.max(0, Math.min(mapData.height - 1e-3, wz));
             // Over the bed, not over what stands up through the water (a jetty, a boat).
             depth.push(region.level - Reactor3D.waterBedAt(mapData, gx, gz, region.level));
-            edge.push(rivers.length && (riverOut(wx - 1, wz - 1) || riverOut(wx, wz - 1) || riverOut(wx - 1, wz) || riverOut(wx, wz)) ? 0 : 1);
+            const ex = Math.round(wx), ez = Math.round(wz);
+            edge.push(rivers.length && (riverOut(ex - 1, ez - 1) || riverOut(ex, ez - 1) || riverOut(ex - 1, ez) || riverOut(ex, ez)) ? 0 : 1);
         }
         return id;
     };
+    const quad = (x0, z0, x1, z1) => { const a = corner(x0, z0), b = corner(x1, z0), c = corner(x1, z1), d = corner(x0, z1); index.push(a, d, b, b, d, c); };
+    // Which cells are laid whole (`whole`) and which a quarter tile at a time (`fine`, each with its quarters).
+    const whole = [], fine = [];
+    let wetCount = 0;
     for (let cy = -reach; cy < h + reach; cy++) for (let cx = -reach; cx < w + reach; cx++) {
         const wx = region.x0 + cx, wz = region.y0 + cy;
         if (wx < 0 || wz < 0 || wx >= mapData.width || wz >= mapData.height) continue;
-        if (!wet(cx, cy) && !(reach && (wet(cx - 1, cy) || wet(cx + 1, cy) || wet(cx, cy - 1) || wet(cx, cy + 1) || wet(cx - 1, cy - 1) || wet(cx + 1, cy - 1) || wet(cx - 1, cy + 1) || wet(cx + 1, cy + 1)))) continue;
-        const a = corner(cx, cy), b = corner(cx + 1, cy), c = corner(cx + 1, cy + 1), d = corner(cx, cy + 1);
-        index.push(a, d, b, b, d, c);
+        if (wet(cx, cy)) { whole.push([cx, cy]); wetCount++; continue; }
+        if (!(reach && (wet(cx - 1, cy) || wet(cx + 1, cy) || wet(cx, cy - 1) || wet(cx, cy + 1) || wet(cx - 1, cy - 1) || wet(cx + 1, cy - 1) || wet(cx - 1, cy + 1) || wet(cx + 1, cy + 1)))) continue;
+        if (bank(wx, wz) || (held(cx, cy, cx, cy) && held(cx, cy, cx + 1, cy) && held(cx, cy, cx, cy + 1) && held(cx, cy, cx + 1, cy + 1))) { whole.push([cx, cy]); continue; }
+        const parts = [];
+        for (let j = 0; j < STEP; j++) for (let i = 0; i < STEP; i++) {
+            const x0 = cx + i / STEP, z0 = cy + j / STEP, x1 = cx + (i + 1) / STEP, z1 = cy + (j + 1) / STEP;
+            if (held(cx, cy, x0, z0) && held(cx, cy, x1, z0) && held(cx, cy, x0, z1) && held(cx, cy, x1, z1)) parts.push([x0, z0, x1, z1]);
+        }
+        if (parts.length) fine.push(parts);
     }
+    // The waves lift each corner where it stands, so a quarter's corner partway along a whole cell's edge would
+    // open a hairline there: a pool small enough (a fountain, a tank) is laid all in quarters once any part is.
+    const quarters = fine.length && wetCount <= this.WATER_FINE_MAX;
+    for (const [cx, cy] of whole) {
+        if (!quarters) { quad(cx, cy, cx + 1, cy + 1); continue; }
+        for (let j = 0; j < STEP; j++) for (let i = 0; i < STEP; i++) quad(cx + i / STEP, cy + j / STEP, cx + (i + 1) / STEP, cy + (j + 1) / STEP);
+    }
+    for (const parts of fine) for (const part of parts) quad(...part);
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
     geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));

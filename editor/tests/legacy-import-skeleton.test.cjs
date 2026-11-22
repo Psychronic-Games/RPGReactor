@@ -29,7 +29,7 @@ test('the skeleton is an empty project with the pictures every scene loads', () 
     try {
         EditorPaths.copySkeleton(dest, rel => rel.startsWith('js/'));
         for (const rel of ['index.html', 'package.json', 'icon/icon.png', 'data/System.json', 'data/MapInfos.json', 'data/Actors.json',
-            'fonts/mplus-1m-regular.woff', 'fonts/mplus-2p-bold-sub.woff', 'effects/Absorb.efkefc']) {
+            'fonts/mplus-1m-regular.woff', 'fonts/mplus-2p-bold-sub.woff', 'effects/RR-Absorb.efkefc']) {
             assert.ok(fs.existsSync(path.join(dest, rel)), rel);
         }
         for (const name of ['Balloon', 'ButtonSet', 'Damage', 'GameOver', 'IconSet', 'Shadow1', 'Shadow2', 'States', 'Weapons1', 'Weapons2', 'Weapons3', 'Window']) {

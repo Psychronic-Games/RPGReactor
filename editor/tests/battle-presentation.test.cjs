@@ -711,3 +711,25 @@ test('the room\'s clock counts the game\'s updates, so a picture that carried tw
  const run=steps=>{const state={x:[0],v:[0]};for(const n of steps)for(let i=0;i<n;i++)View.damp(state,[10],View.CAMERA_FOLLOW);return state.x[0];};
  assert.equal(run([1,1,1,1]),run([2,2]));assert.ok(run([2,2])>run([1,1]));
 });
+
+test('a melee approach stops at the edge of a wide body (a tank), not inside it; a figure is met as before', () => {
+ const s=B.template();s.steps=[B.step('move',{anchor:'approach',x:-1.2,duration:10}),B.step('impact')];
+ const figure={homes:{user:{x:0,y:0,z:0},target:{x:8,y:0,z:0,reach:0.4}}};figure.target=figure.homes.target;
+ assert.ok(Math.abs(B.evaluate(s,10,figure).user.x-6.8)<1e-6,'a figure: 1.2 short of its middle, as always');
+ const tank={homes:{user:{x:0,y:0,z:0},target:{x:8,y:0,z:0,reach:3.1}}};tank.target=tank.homes.target;
+ const x=B.evaluate(s,10,tank).user.x;
+ assert.ok(x<8-3.1,`the tank's near side is at ${(8-3.1).toFixed(2)}; the attacker stops at ${x.toFixed(2)}`);
+ assert.ok(Math.abs(x-(8-Math.max(1.2+3.1-B.APPROACH_BODY,3.1+B.APPROACH_BODY+B.APPROACH_GAP)))<1e-6,'the same gap to its body as to a figure\'s');
+ // A dash meant to stop a third of a tile short still stops clear of the body it strikes.
+ const dash=B.template();dash.steps=[B.step('move',{anchor:'approach',x:-.3,duration:10}),B.step('impact')];
+ const mech={homes:{user:{x:0,y:0,z:0},target:{x:8,y:0,z:0,reach:0.9}}};mech.target=mech.homes.target;
+ assert.ok(Math.abs(B.evaluate(dash,10,mech).user.x-(8-0.9-B.APPROACH_BODY-B.APPROACH_GAP))<1e-6,'the dash stops at the mech, body to body');
+ const armed={homes:{user:{x:0,y:0,z:0,reach:1.1},target:{x:8,y:0,z:0,reach:0.9}}};armed.target=armed.homes.target;
+ assert.ok(Math.abs(B.evaluate(dash,10,armed).user.x-(8-0.9-1.1-B.APPROACH_GAP))<1e-6,'one with a long reach (a sword out) stops that much further off');
+ // How far a box reaches back toward the attacker: a 6-tile tank centred on its place, approached along x.
+ const src=require('node:fs').readFileSync(require('node:path').join(__dirname,'../../runtime/reactor_battle_presentation.js'),'utf8');
+ const body=src.match(/P\.reachAlong=(\(box,from,to\)=>\{[\s\S]*?\n    \});/);assert.ok(body,'P.reachAlong is in the presentation');const P={reachAlong:eval(body[1])};
+ const box={min:{x:8.5-3,y:0,z:8.5-1.4},max:{x:8.5+3,y:2,z:8.5+1.4}};
+ assert.ok(Math.abs(P.reachAlong(box,{x:0,y:8},{x:8,y:8})-3)<1e-6,'along its length, half its length');
+ assert.ok(Math.abs(P.reachAlong(box,{x:8,y:0},{x:8,y:8})-1.4)<1e-6,'across it, half its width');
+});

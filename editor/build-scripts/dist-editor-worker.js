@@ -1219,6 +1219,12 @@ function buildWeb(stageRoot, stagingDir) {
     copyDirRecursive(oxipngPath, path.join(stageRoot, 'node_modules', '@jsquash', 'oxipng'));
     copyDirRecursive(wasmFeatureDetectPath, path.join(stageRoot, 'node_modules', 'wasm-feature-detect'));
     copyDirRecursive(pngjsPath, path.join(stageRoot, 'node_modules', 'pngjs'));
+    // Steam (src/steam/SteamBridge.js): the Node-API addon and Valve's steam_api library for each desktop system,
+    // loaded only when Steam starts the editor. Not the Windows import library (.lib), which only a compiler reads.
+    const steamworksPath = dependencyPath('steamworks.js');
+    if (!steamworksPath) throw new Error('Editor runtime dependencies are missing. Run npm ci before packaging the editor.');
+    copyDirRecursive(steamworksPath, path.join(stageRoot, 'node_modules', 'steamworks.js'));
+    fs.rmSync(path.join(stageRoot, 'node_modules', 'steamworks.js', 'dist', 'win64', 'steam_api64.lib'), { force: true });
 
     // Copy runtime corescript used for newly created projects.
     const runtimeCandidates = [
@@ -1231,7 +1237,7 @@ function buildWeb(stageRoot, stagingDir) {
             'reactor_main.js', 'reactor_json.js', 'reactor_core.js', 'reactor_core_display.js', 'reactor_core_io.js', 'reactor_features.js', 'reactor_3d.js', 'reactor_3d_lighting.js', 'reactor_3d_models.js', 'reactor_3d_effects.js', 'reactor_3d_world.js', 'reactor_3d_speech.js', 'reactor_3d_foliage.js', 'reactor_3d_doors.js', 'reactor_3d_surround.js', 'reactor_3d_vehicles.js', 'reactor_3d_rider.js', 'reactor_managers.js',
             'reactor_objects.js', 'reactor_objects_actions.js', 'reactor_objects_battlers.js', 'reactor_objects_map.js', 'reactor_objects_interpreter.js', 'reactor_objects_followers.js', 'reactor_objects_legacy.js',
             'reactor_hdr_overlay.js', 'reactor_scenes.js', 'reactor_sprites.js', 'reactor_picture_extensions.js', 'reactor_screen_fx.js',
-            'reactor_media_surfaces.js', 'reactor_quests.js', 'reactor_image_layers.js', 'reactor_controls.js', 'reactor_physics.js', 'reactor_rig_motions.js',
+            'reactor_media_surfaces.js', 'reactor_quests.js', 'reactor_steam.js', 'reactor_image_layers.js', 'reactor_controls.js', 'reactor_physics.js', 'reactor_rig_motions.js',
             'reactor_battle_data.js', 'reactor_battle_room.js', 'reactor_battle_presentation.js', 'reactor_battle_events.js', 'reactor_fight_look.js', 'reactor_fight.js', 'reactor_fight_flow.js', 'reactor_fight_tactical.js', 'reactor_fight_stage.js', 'reactor_fight_camera.js', 'reactor_fight_action.js', 'reactor_fight_menu.js', 'reactor_fight_classic.js', 'reactor_speaker_face.js', 'reactor_character_creator.js', 'reactor_online.js', 'reactor_online_ui.js', 'reactor_online_voice.js', 'reactor_online_party.js', 'reactor_online_battle.js', 'reactor_online_classic.js', 'reactor_online_action.js', 'reactor_vehicles.js', 'reactor_vehicles_drive.js', 'reactor_vehicles_feel.js', 'reactor_vehicles_mount.js',
             'reactor_windows.js', 'reactor_ui_victory.js', 'reactor_ui_fight.js', 'reactor_ui_action.js', 'reactor_ui.js', 'reactor_mv_compat.js', 'reactor_plugins.js',
             path.join('libs', 'pixi.js'), path.join('libs', 'pixi_compat.js'),

@@ -1,6 +1,6 @@
 /**
  * Interface family — sci-fi consoles/HUDs as NATIVE 3D holographic
- * interfaces (EVFXForge16 "Cyberforge" pack is the quality reference).
+ * interfaces.
  *
  * Unlike the first-generation Interface recipes (baked AG sprite sheets on
  * a quad), every recipe here BUILDS its interface out of Effekseer

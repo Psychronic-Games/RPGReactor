@@ -6,7 +6,7 @@ Changes belong in the editor changelog; behavior goes in the commit message and 
 
 ## Where things stand (2026-11-20)
 
-- **Development:** 0.99.7 open since 2026-11-16, runtime **20261120.1**, synced into all 17 on the desktop (with the Iris Xe laptop's 20261118 work). The owner's next upload: the end of the weekend of 2026-11-22; GitHub issue 90 is commented as fixed for it, to close when it is out. NW.js **0.120.0** in `nwjs-win` and `nwjs-linux`; `nwjs-mac` still 0.107. Committed to 2026-11-20 (`836929ce`), not pushed (`main` five ahead). CI: the GUI smokes left the push CI for a workflow started by hand (2026-11-21); main's next run is the proof. 0.99.6 still to see: [OPEN-ITEMS](OPEN-ITEMS.md) 22, 24, 26, 27. The Demo: single player, creator off, its committed Graphics Backend is Auto (`System.json`): say so before a deploy.
+- **Development:** 0.99.7 open since 2026-11-16, runtime **20261121.6**, synced into all 17 on the desktop. The owner's next upload: the end of the weekend of 2026-11-22 (issue 90 closed 11-21). NW.js **0.120.0** in `nwjs-win` and `nwjs-linux`; `nwjs-mac` still 0.107. Committed to 2026-11-21 (`e3f024dc`), not pushed (`main` six ahead). **Steam:** release 21 January 2027, $9.99; kit in `docs/steam/`. CI: GUI smokes started by hand since 11-21; main's next run is the proof. 0.99.6 still to see: [OPEN-ITEMS](OPEN-ITEMS.md) 22, 24, 26, 27. The Demo: single player, creator off, its committed Graphics Backend is Auto (`System.json`): say so before a deploy.
 - **Windows machines:** the Iris Xe laptop (i5-1145G7), which holds only the Demo in `template/` (2026-11-18), and an MSI, RTX 3060 Laptop and Intel UHD (i5-10500H), which held all 17 on 11-17. The Iris Xe's games start on OpenGL by its record; Vulkan shows on both.
 - **Published:** [0.99.6](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.6), the Latest source release. Its itch.io devlog is drafted ([Markdown](posts/itch-devlog-0.99.6.md), [plain text](posts/itch-devlog-0.99.6-plain.txt)); posting it is the owner's.
 - **Verification:** the whole suite on the desktop on 2026-11-13, before the day's second commit: 9,793 of 9,804 passed, 11 skipped, none failed (5.8 minutes). Substantial checks go through `codex-check`.
@@ -14,6 +14,35 @@ Changes belong in the editor changelog; behavior goes in the commit message and 
 - **Forge:** Character Preview **98**, Props **62**, clothing Preview 61. Appearance remains under review. [Face handoff](HUMAN-FACE-HANDOFF.md#current-candidate--preview-98).
 - **Faces:** the owner works on them in a separate session with another model, which may edit this tree. Leave face code alone unless asked, and check `git status` before scripted edits.
 - **Resume:** use [OPEN-ITEMS.md](OPEN-ITEMS.md) and [STATUS.md](STATUS.md#open-work). Preserve fixed gameplay timing. V-Sync is on by default since 2026-11-17, a project setting; F2 still shows what the machine could draw.
+
+## 2026-11-22 (desktop) — Achievements, Objects, Workshop projects
+
+Not committed. [Changelog](../editor/changelog/0.99.7.md).
+
+- **Steam build is still 0.99.6** (BuildID 26841284): no Steam code in it, so no achievements yet. They need a build of this work uploaded to the depots. steamworks.js connected to the owner's running Steam client as app 4817110 (read only; nothing unlocked).
+- **Achievements:** seven more (17), hooked, imported and published in Steamworks.
+- **Builder:** Models is now Objects: Library, Light, Screen, Select, Remove; no model thumbnails.
+- **Workshop:** whole projects share and open as new projects (`WorkshopProjects.js`), plugins off on arrival.
+- **Owner:** the removed stock assets are not to be mentioned in UI, store copy or reports.
+- **Runtime 20261122.1** synced into all 17 (ragdoll over a rim). The Steam copy's Demo (0.99.6) still has eight EVFX sounds: the next uploaded build replaces it.
+- **Store page (owner asked, through Claude in Chrome):** new short description ("Your RPG, built your way", no RPG Maker wording) and long description with seven MP4 loops (`docs/steam/description-en.txt`, `description-media/`); 16 translations uploaded (`localization/`); 14 screenshots replace the 10 (`screenshots/`, old ones in `screenshots/replaced-2026-11-22/`); an empty screenshot entry removed. Saved, not published (the store page goes out with Valve's review).
+
+## 2026-11-21 (desktop) — Steam: our own assets, the store page kit
+
+Not committed (the owner asked for none yet). [Changelog](../editor/changelog/0.99.7.md).
+
+- **The owner's decisions:** Steam release Thursday 21 January 2027, 10:00 Pacific (RPG Maker U2U is 27 January on the US store), $9.99; every RPG Maker and EVFX asset out of what ships, effects rebuilt with our generator.
+- **Done:** the Demo's MZ, MV and EVFX assets replaced or removed; `stock-assets.test.cjs` guards it. `docs/steam/`: `STORE-PAGE.md` (every field, dates, decisions), `art/` (all capsules, library art, icons), `screenshots/` (ten, 1920 x 1080), `steampipe/`.
+- **For the owner:** connect Claude in Chrome (`/chrome`) to have the Steamworks fields filled; the four decisions at the top of `STORE-PAGE.md` (platforms, AI disclosure, content survey, languages); Mark as Ready for Review this week (Coming Soon by 7 January at the latest).
+- **Also, this morning:** the GUI smokes left the push CI for `gui-smokes.yml` (hand-started); a hook refuses whole-suite test runs (`.claude/hooks/limit-tests.cjs`). Committed in `e3f024dc`.
+- **Steamworks filled (afternoon, through Claude in Chrome):** Store Presence checklist complete, price $9.99 sent for review, date Jan 21, 2027 10:00 PST; content survey published (Brazil 14, Germany 16); build review now takes up to 14 business days. Support email set. Trailer v1 (69.5 s, Nightshade Strike) in `docs/steam/trailer/` (git-ignored). Detail: `docs/steam/STORE-PAGE.md`.
+- **Found, not chased:** `texSubImage3D: no bound PIXEL_UNPACK_BUFFER` four times in a game run that changed maps by transfer (not a border crossing): the warning of 11-15's black clothing (`wornKeys`), so the same may happen on an ordinary transfer. The Character Builder never finished a build in its pop-out window on the hidden display (90 s).
+- **Trailer v8 (latest, for review; v7 is on Steam):** `docs/steam/trailer/rpg-reactor-trailer-v8.mp4`, 108 s: v7 plus Star Shift Rebellion in 2D (Moletown wiped into HD-2D, a side-view battle, the 2D editor painting). Harness: `trailer-rebel.cjs`, `trailer-editor.cjs` (`PROJECT=`, `SCENES=map2d`), `trailer/build_trailer4.py`.
+- **Trailer harness (v3, v4):** `trailer-tactical3.cjs`, `trailer-editor.cjs` (x11grab of the editor's window), `trailer/build_trailer3.py`; the Demo's videos need `RR_ANGLE=vulkan RR_MOVIES=1` on the hidden display.
+- **Steam features (night):** the Forge's Steam Workshop page (share Character and Prop designs, add subscribed ones) and 10 editor achievements, through steamworks.js 0.4.0, used only when Steam starts the editor. Workshop and achievements set up and published in Steamworks; Workshop visible to developers only until it has a branding image. The Builder: Media Surfaces is in the Models group, and the Tools menu opens Terrain, Foliage, Models, Media Surfaces and Lighting in the bar. [docs/steam/ACHIEVEMENTS.md](steam/ACHIEVEMENTS.md). Games made with RPG Reactor: a Steam card on Database › System 2 (own App ID) and the Steam Achievement command, runtime 20261121.7 (`reactor_steam.js`, not yet synced), [STEAM-FOR-GAMES.md](STEAM-FOR-GAMES.md).
+- **Menu pass (night):** every top-menu entry clicked in the editor (`menu-audit.cjs`): all work. New Edit menu (Undo, Redo, Search).
+- **Fountain and water (evening):** North Haven's grass notches round the fountain came from a dug ground bowl reaching past the wall. Fixed with builder tools only (bowl flattened, paving, wall 0.22, water from the pour tool), after two engine changes so the builder can do it: a sheet no longer spills past a wall onto lower ground, and the pour tool fills an upright tube. Runtime 20261121.1, synced. `shot-fountain.cjs` takes the pictures.
+- **Harness, new:** `~/.cache/rr-tests/demo-assets/` (`generate.cjs`, `shoot.cjs`, `draw_system.py`, `steam_art.py`), `steam-game-shots.cjs` (under `nw-hidden.cjs`, `RR_DISPLAY_WIDTH=2560 RR_DISPLAY_HEIGHT=1440`, `SHOTS=maps,battle`), `steam-editor-shots.cjs` (`ONLY=`).
 
 ## 2026-11-20 (desktop) — Hendrix plugins on PIXI 8
 

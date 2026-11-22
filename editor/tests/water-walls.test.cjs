@@ -111,7 +111,7 @@ test('a wall built across a pond leaves its cells dry, and its undo gives them b
     assert.equal(wet(E.water(map)[0], 10, 10), false);
 });
 
-test('a solid shape holds water over its whole footprint when the 3D runtime is loaded; a tube does not', () => {
+test('a solid shape holds water over its whole footprint when the 3D runtime is loaded; a tube on its wall only, and upright', () => {
     global.self = global; global.window = global;
     require(path.resolve(repoRoot, 'runtime/libs/three.js'));
     const R = require(path.resolve(repoRoot, 'runtime/reactor_3d.js'));
@@ -120,7 +120,15 @@ test('a solid shape holds water over its whole footprint when the 3D runtime is 
     map.reactor3d.pieces = [{ id: 1, kind: 'box', x: 5, y: 5, z: 0, rot: 0, material: '', size: [3, 2, 3] }];
     const walls = E.waterWalls(map);
     for (const [x, y] of [[4, 4], [5, 5], [6, 6], [4, 6]]) assert.equal(walls.get(y * 12 + x), 2, `the box holds water at ${x},${y}`);
-    map.reactor3d.pieces = [{ id: 1, kind: 'tube', x: 5, y: 5, z: 0, rot: 0, material: '', size: [3, 2, 3] }];
+    // A tube standing up is a basin's wall: it holds on its wall's cells, and water poured inside stands in it.
+    map.reactor3d.pieces = [{ id: 1, kind: 'tube', x: 5, y: 5, z: 0, rot: 0, material: '', size: [7.4, 1.5, 7.4], thick: 0.31 }];
+    const ring = E.waterWalls(map);
+    for (const [x, y] of [[2, 5], [8, 5], [5, 2], [5, 8], [3, 3]]) assert.equal(ring.get(y * 12 + x), 1.5, `the basin wall holds at ${x},${y}`);
+    for (const [x, y] of [[5, 5], [4, 5], [6, 6]]) assert.equal(ring.get(y * 12 + x), undefined, `inside the basin is open at ${x},${y}`);
+    const pool = E.waterBasin(map, 4, 5);
+    assert.ok(pool && pool.level > 1 && pool.cells === 21, 'water poured inside fills the basin to its rim');
+    // On its side it is a pipe: the water runs through.
+    map.reactor3d.pieces = [{ id: 1, kind: 'tube', x: 5, y: 5, z: 0, rot: 0, tilt: 90, material: '', size: [3, 2, 3] }];
     assert.equal(E.waterWalls(map), null);
     assert.equal(loadElevation().waterWalls(Object.assign(flat(12, 12), { reactor3d: { version: 1, pieces: [{ id: 1, kind: 'box', x: 5, y: 5, z: 0, rot: 0, material: '', size: [3, 2, 3] }] } })), null,
         'without the runtime a shape\'s footprint is unknown, and it holds nothing');

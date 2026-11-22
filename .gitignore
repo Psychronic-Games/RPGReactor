@@ -76,3 +76,8 @@ template/*/save/
 
 # Battle Test snapshots are regenerated from the project database.
 /template/Demo/data/Test_*.json
+
+# Steam trailer renders, replaced screenshots and description videos (large; kept in Dropbox, not in git)
+/docs/steam/trailer/
+/docs/steam/screenshots/replaced-*/
+/docs/steam/description-media/

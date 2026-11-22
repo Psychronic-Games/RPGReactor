@@ -3,8 +3,8 @@
  *
  * Factories for the building blocks professional Effekseer effects are
  * made of, with defaults calibrated from a statistical digest of all 316
- * Complex-template effects (7,870 nodes) and a node-by-node study of the
- * EVFX packs (VoltaicDischarge, AstroInvocation):
+ * Complex-template effects (7,870 nodes) and node-by-node studies of
+ * layered discharge and invocation effects:
  *
  *   • effects are STAGED: top-level "acts" with offset start times
  *   • ~half the layers use NORMAL blend (body/shadow), half ADDITIVE (heat)
