@@ -262,7 +262,7 @@ test('EffekseerGenerator class has all required methods', () => {
 
 test('Effekseer Layers sit beside the preview and stack below it when narrow', () => {
     const src = fs.readFileSync(path.join(repoRoot, 'src', 'forge', 'EffekseerGenerator', 'EffekseerGenerator.js'), 'utf8');
-    assert.match(src, /class="rr-efk-center"[^>]*overflow: auto;/,
+    assert.match(src, /class="rr-efk-center[^"]*"[^>]*overflow: auto;/,
         'the center workspace must scroll when its content exceeds the available height');
     assert.match(src, /\.rr-efk-workarea\s*\{[^}]*grid-template-columns: minmax\(300px, 320px\) minmax\(240px, 1fr\);[^}]*grid-template-areas: "layers preview";/,
         'Layers must sit to the left of the preview when space permits');

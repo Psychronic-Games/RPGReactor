@@ -1,6 +1,6 @@
 # Reactor plugin API (design)
 
-Status: **proposal, 2026-09-29.** Nothing here is built yet (checked against the code 2026-11-06). It answers the need behind [PR #72](https://github.com/Psychronic-Games/RPGReactor/pull/72) (a reliable API reference for plugin authors and AI assistants) without adding a second language or a build step.
+Status: **proposal, 2026-09-29; `@target` built 2026-11-22.** The Plugin Manager reads `@target` and shows what a plugin is written for (section 1). The rest is not built yet (checked against the code 2026-11-22). Editor plugins, which this proposal did not cover, are built as well: see [Writing plugins](PLUGIN-DEVELOPMENT.md). It answers the need behind [PR #72](https://github.com/Psychronic-Games/RPGReactor/pull/72) (a reliable API reference for plugin authors and AI assistants) without adding a second language or a build step.
 
 ## Goals
 
@@ -18,7 +18,8 @@ Status: **proposal, 2026-09-29.** Nothing here is built yet (checked against the
 
 ## Where things stand
 
-- **Headers.** `PluginAnnotations.js` recognizes `@target` and `@base` only to split annotation lines; nothing reads their values. `@orderAfter` / `@orderBefore` are not parsed, although our own importer ports `RR_WoraFog.js` and the four `RR_PinnacleGtbs*` files use `@orderAfter`.
+- **Headers.** `@target` is read (2026-11-22): `PluginManager.targetsFrom` gives `Reactor`, `MZ`, `MV` and `ReactorEditor`, and the Plugin Manager shows them and notes a plugin in the wrong tab (section 1). `@base` is still only split as an annotation line; `@reactorVersion`, `@orderAfter` and `@orderBefore` are not parsed, although our own importer ports `RR_WoraFog.js` and the four `RR_PinnacleGtbs*` files use `@orderAfter`.
+- **Editor plugins** (2026-11-22): `@target ReactorEditor` plugins in a project's `js/editor-plugins/`, run by the editor through `ReactorEditor.plugin(name)` (menu entries, toolbar buttons with their own icons, panels over the map, the editor's moments). The interface is in [Writing plugins](PLUGIN-DEVELOPMENT.md#editor-plugins); this page's hooks and registries are for game plugins.
 - **Engine identity.** `Utils.REACTOR_NAME` is `"Reactor"`. A comment in `reactor_core.js` names `REACTOR_VERSION`, but no such constant exists; the version lives only in `reactor_main.js`'s header and the `RPG_REACTOR_RUNTIME_REVISION` global.
 - **Changing engine behavior** means replacing a prototype method, usually as an alias. The Demo's plugins make about 1,900 such assignments (1,935 matches of `.prototype.<method> =` in `template/Demo/js/plugins` on 2026-11-06), with no declared order between plugins that touch the same method. `PluginOverrides.js` can name which plugin replaced a method (by scanning for `.prototype.<method> =`), but not what it changed or in what order.
 - **Functions a game's scripts may call** (made official by the owner on 2026-11-12; nothing in the engine calls them, they are there for events and plugins):
@@ -44,14 +45,14 @@ Status: **proposal, 2026-09-29.** Nothing here is built yet (checked against the
 
 | Annotation | Meaning |
 | --- | --- |
-| `@target` | Space-separated list of `MZ`, `MV`, `Reactor`. `Reactor` means the plugin uses Reactor APIs. Keep `MZ` in the list if the plugin also runs on RPG Maker MZ. No `@target` behaves as today. |
+| `@target` | **Built.** Space-separated list of `MZ`, `MV`, `Reactor`, `ReactorEditor`. `Reactor` (or `RPGReactor`) is a game plugin written for RPG Reactor, using its APIs and its own ways, with no RPG Maker version in mind. Keep `MZ` in the list (`MZ Reactor`) if the plugin also runs on RPG Maker MZ. `ReactorEditor` is an editor plugin. No `@target` behaves as today (an RPG Maker plugin). |
 | `@reactorVersion` | The oldest Reactor engine version the plugin works on. |
 | `@base` | A plugin that must be installed and enabled. |
 | `@orderAfter` / `@orderBefore` | Load order relative to another plugin. |
 
 The editor's Plugin Manager:
 
-- shows a Reactor badge on plugins that target Reactor;
+- shows what a plugin is written for, RPG Reactor in the accent, and notes a game plugin among the editor's or an editor plugin among the game's (**built**, 2026-11-22);
 - warns when `@reactorVersion` is newer than the editor's engine, a `@base` plugin is missing or off, or the list breaks an `@orderAfter`/`@orderBefore`; and offers to reorder;
 - keeps all of this advisory: nothing blocks a project from running.
 
@@ -131,7 +132,7 @@ Some extension points are better served by registering something than by hooking
 ## 5. A reference that cannot drift
 
 - **JSDoc on the public surface.** The `Reactor` namespace, `ReactorEvents`, and the MZ classes carry JSDoc in the runtime source (much of `reactor_core.js` does already). VS Code reads it in plain `.js` plugins, including type checking with an optional `// @ts-check` line. There is no build step and nothing to install.
-- **Generated reference.** `editor/build-scripts/plugin-api-reference.cjs` writes `docs/PLUGIN-API.md` from the runtime source: the classes, their methods and JSDoc, the `Reactor` API, and the `ReactorEvents` names. A test regenerates it and fails when the checked-in copy differs, as `sync-runtime.cjs --check` does for project runtimes. If editor type hints beyond JSDoc are ever wanted, a `.d.ts` is generated the same way and checked the same way, never written by hand.
+- **Generated reference** (**built for what is official today**, 2026-11-22). `editor/build-scripts/plugin-api-reference.cjs` writes [`docs/PLUGIN-API.md`](PLUGIN-API.md) from the code: the functions meant for plugins with their parameters and comments, RPG Reactor's plugin commands (checked against every registration in the runtime; their arguments from `build-scripts/plugin-api-commands.json`), and the editor plugin interface. `tests/plugin-api-reference.test.cjs` fails when the checked-in page differs. The `Reactor` namespace and a `.d.ts` wait for the hooks.
 - **Plugin checker.** `node editor/build-scripts/check-plugin.cjs <plugin.js>` reports:
   - the header (targets, version, base and order);
   - the hooks the plugin installs;
@@ -150,14 +151,14 @@ This keeps the project's rule: a hand tool (the Plugin Manager), a readable form
 
 ## Phases
 
-1. **Header.** Parse `@target`, `@reactorVersion`, `@base`, `@orderAfter` and `@orderBefore`; add the Plugin Manager badge and warnings; add `Utils.REACTOR_VERSION` and `Reactor.requires`.
+1. **Header.** Parse `@target` (done, with the Plugin Manager's Written for and its wrong-tab note), `@reactorVersion`, `@base`, `@orderAfter` and `@orderBefore`; the rest of the warnings; add `Utils.REACTOR_VERSION` and `Reactor.requires`.
 2. **Hooks.** Add the `Reactor` namespace, `hooks` with `list`/`report`, the playtest check, and tests. Rewrite one of our own `RR_*` ports on hooks as the proof.
-3. **Reference.** Build the generated `PLUGIN-API.md`, its drift test, and the plugin checker in the CLI and the Plugin Manager.
+3. **Reference.** The generated `PLUGIN-API.md` and its drift test (done for today's official surface); the plugin checker in the CLI and the Plugin Manager.
 4. **Registries**, one at a time, as plugins ask for them.
 
 ## Open decisions
 
-- The namespace and target name: `Reactor` (matches `Utils.REACTOR_NAME`) or `RPGReactor`.
+- ~~The namespace and target name: `Reactor` or `RPGReactor`.~~ Decided 2026-11-22: `Reactor` (matches `Utils.REACTOR_NAME` and `ReactorEditor`); `@target RPGReactor` is read the same.
 - Whether an `after` hook may replace the result, or that stays with `around`.
 - Whether hooks cover the MV compatibility layer's classes in the first version.
 - Whether to generate a `.d.ts` at all, or stop at JSDoc and the generated reference.

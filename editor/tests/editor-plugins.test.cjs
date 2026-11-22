@@ -66,11 +66,11 @@ test('an editor plugin adds a Plugins entry, hears the editor\'s moments, and al
     assert.deepEqual([...editor.events], ['projectOpened', 'mapLoaded', 'beforeSave', 'saved', 'playtest', 'projectClosing']);
 });
 
-test('the Demo carries the example editor plugin, turned on, in a list the loader reads', () => {
+test('the Demo carries the example editor plugin in a list the loader reads (on or off: the owner\'s setting)', () => {
     const { api } = load();
     const list = api.readList(demo);
     const stats = list.find(entry => entry.name === 'RR_MapStats');
-    assert.ok(stats && stats.status === true);
+    assert.ok(stats && typeof stats.status === 'boolean');
     const source = fs.readFileSync(path.join(demo, 'js', 'editor-plugins', 'RR_MapStats.js'), 'utf8');
     assert.match(source, /@target ReactorEditor/);
     assert.match(source, /ReactorEditor\.plugin\('RR_MapStats'\)/);
@@ -163,5 +163,28 @@ test('RR_DayNight runs only in RPG Reactor: under MZ it says so and does nothing
 
 test('the guide is there and names both kinds', () => {
     const guide = fs.readFileSync(path.join(repoRoot, 'docs', 'PLUGIN-DEVELOPMENT.md'), 'utf8');
-    for (const words of ['Game plugins', 'Editor plugins', 'ReactorEditor.plugin', 'RR_DayNight', 'RR_MapStats', '@target MZ Reactor']) assert.ok(guide.includes(words), words);
+    for (const words of ['Game plugins', 'Editor plugins', 'ReactorEditor.plugin', 'RR_DayNight', 'RR_MapStats', '@target Reactor', '`MZ Reactor`', '`ReactorEditor`']) assert.ok(guide.includes(words), words);
+});
+
+test('@target: RPG Reactor\'s own game plugins, RPG Maker\'s, the editor\'s; the Plugin Manager tells a plugin in the wrong tab', () => {
+    global.window = {};
+    const PluginManager = require('../src/PluginManager.js');
+    delete global.window;
+    const head = target => `/*:\n * ${target}\n * @plugindesc x\n */`;
+    assert.deepEqual(PluginManager.targetsFrom(head('@target Reactor')), ['Reactor']);
+    assert.deepEqual(PluginManager.targetsFrom(head('@target RPGReactor')), ['Reactor'], 'the same');
+    assert.deepEqual(PluginManager.targetsFrom(head('@target MZ Reactor')), ['Reactor', 'MZ']);
+    assert.deepEqual(PluginManager.targetsFrom(head('@target MZ')), ['MZ']);
+    assert.deepEqual(PluginManager.targetsFrom(head('@target ReactorEditor')), ['ReactorEditor']);
+    assert.deepEqual(PluginManager.targetsFrom('/*:\n * @plugindesc none\n */'), []);
+    assert.deepEqual(PluginManager.targetsFrom(fs.readFileSync(path.join(demo, 'js', 'plugins', 'RR_DayNight.js'), 'utf8')), ['Reactor'], 'the Demo\'s example is written for RPG Reactor');
+    const manager = Object.create(PluginManager.prototype);
+    manager._tt = s => s;
+    manager.scope = 'game';
+    assert.equal(manager.targetNote(['Reactor']), null);
+    assert.equal(manager.targetNote(['ReactorEditor']).level, 'warn', 'an editor plugin among the game\'s');
+    assert.equal(manager.targetNote([]).level, 'note');
+    manager.scope = 'editor';
+    assert.equal(manager.targetNote(['ReactorEditor']), null);
+    assert.equal(manager.targetNote(['Reactor']).level, 'warn', 'a game plugin among the editor\'s');
 });

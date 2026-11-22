@@ -87,7 +87,7 @@ class ForgeWorkshop {
         el.className = 'rr-workshop-line' + (kind ? ' is-' + kind : '');
     }
 
-    _kindLabel(kind) { return kind === 'project' ? this._t('Project') : kind === 'character3d' ? this._t('Character') : this._t('Prop'); }
+    _kindLabel(kind) { return kind === 'project' ? this._t('Project') : this._t(RRWorkshopItems.KINDS[kind]?.label || 'Prop'); }
 
     /** The project as a thing to share: the first card. Its name is the game's title. */
     _projectEntry() {
@@ -349,13 +349,41 @@ class ForgeWorkshop {
         }
     }
 
+    /** After Add to Project: a button on the status line that opens the design in its own Forge tool. */
+    _openButton(added, builder) {
+        const line = this.root && this.root.querySelector('.rr-workshop-line');
+        const kind = RRWorkshopItems.KINDS[added.kind];
+        const forge = window.reactor?.forgeManager || window.opener?.reactor?.forgeManager;
+        if (!line || !kind || !forge) return;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'rr-button rr-workshop-open-design';
+        button.textContent = this._t('Open in {builder}', { builder });
+        button.addEventListener('click', () => {
+            forge.openTool(kind.tool);
+            // The tool is made as it opens; when another tool first asks whether to drop its work, that comes later.
+            const started = Date.now();
+            const tryOpen = () => {
+                const tool = forge.activeToolId === kind.tool ? forge[kind.getter] : null;
+                const open = tool && (tool.openDesign || tool._openDesign);
+                if (typeof open === 'function') open.call(tool, added.group, added.name);
+                else if (Date.now() - started < 60000) setTimeout(tryOpen, 300);
+            };
+            tryOpen();
+        });
+        line.appendChild(document.createTextNode(' '));
+        line.appendChild(button);
+    }
+
     _add(item) {
         try {
             if (this._ownership) this.projectController.verifyProjectOwnership(this._ownership, { requireWrite: true });
             const added = RRWorkshopItems.importItem(this.projectPath, item);
             window.RRAchievements?.earn('WORKSHOP_ADD');
-            const builder = window.I18n ? window.I18n.t(added.kind === 'character3d' ? 'menu.character3dBuilder' : 'menu.propBuilder') : added.kind;
+            const menu = RRWorkshopItems.KINDS[added.kind]?.menu;
+            const builder = window.I18n && menu ? window.I18n.t(menu) : added.kind;
             this._line(this._t('{name} is in the project. Open it from Open in the {builder}, in the Workshop group.', { name: added.name, builder }), 'ok');
+            this._openButton(added, builder);
         } catch (error) {
             console.error('[ForgeWorkshop] add', error);
             this._line(this._t('{name} could not be added: {error}', { name: item.name, error: (error && error.message) || String(error) }), 'error');

@@ -1960,6 +1960,8 @@ class DatabaseEnemyEditor {
                 const url = await RRDatabase3DBindings.modelThumbnail(this.parentEditor.reactor3dEditor, spec);
                 if (!isCurrent()) return;
                 if (!url) { message('(Failed to load)'); return; }
+                // Its picture for Battle Setup made ready too, in a quiet moment (RRBattleSetup.warm).
+                window.RRBattleSetup?.warm?.({ record: 'enemy', id: enemy.id });
                 const model = new Image();
                 model.alt = spec.name;
                 model.style.cssText = 'max-width:100%;height:200px;object-fit:contain;image-rendering:auto;';

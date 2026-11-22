@@ -1,0 +1,1402 @@
+{
+  "commands": [
+    {
+      "name": "ChangeEnemyEquipment",
+      "label": "Change Enemy Equipment",
+      "section": "Battle",
+      "summary": "Puts a weapon or armor into one equipment slot of one enemy in the current troop, or empties the slot.",
+      "args": [
+        {
+          "name": "enemyIndex",
+          "type": "number",
+          "meaning": "Which troop member, counted from 0."
+        },
+        {
+          "name": "slotIndex",
+          "type": "number",
+          "meaning": "Which equipment slot, counted from 0."
+        },
+        {
+          "name": "kind",
+          "type": "number",
+          "meaning": "2 for a weapon, 3 for an armor."
+        },
+        {
+          "name": "itemId",
+          "type": "number",
+          "meaning": "The weapon or armor's database number; 0 empties the slot."
+        }
+      ]
+    },
+    {
+      "name": "GetOnVehicle",
+      "label": "Get On Reactor Vehicle",
+      "section": "Vehicles",
+      "summary": "Puts the party on a vehicle, walking aboard or at once.",
+      "args": [
+        {
+          "name": "vehicle",
+          "type": "string",
+          "meaning": "Which vehicle: left out or \"this\" is the event running the command; also \"nearest\", \"ridden\", \"boat\", \"ship\" or \"airship\" (the stock ones), an event number on this map, or a vehicle's identity such as \"0:3\"."
+        },
+        {
+          "name": "instant",
+          "type": "boolean",
+          "meaning": "Boards at once with no walk; false when left out."
+        },
+        {
+          "name": "wait",
+          "type": "boolean",
+          "meaning": "Holds the event until boarding is done; true when left out."
+        }
+      ]
+    },
+    {
+      "name": "GetOffVehicle",
+      "label": "Get Off Reactor Vehicle",
+      "section": "Vehicles",
+      "summary": "Takes the party off the vehicle it is riding.",
+      "args": [
+        {
+          "name": "instant",
+          "type": "boolean",
+          "meaning": "Gets off at once with no walk; false when left out."
+        },
+        {
+          "name": "wait",
+          "type": "boolean",
+          "meaning": "Holds the event until the party is off; true when left out."
+        }
+      ]
+    },
+    {
+      "name": "PlayModelAnimation",
+      "label": "Play Model Animation",
+      "section": "3D",
+      "summary": "Plays a named animation on a character's 3D model; several in a row queue up and play one after another.",
+      "args": [
+        {
+          "name": "target",
+          "type": "number",
+          "meaning": "Whose model: 0 this event, -1 the player, -2 and below the followers, or an event number (a placed prop is 10000 + its prop number)."
+        },
+        {
+          "name": "animation",
+          "type": "string",
+          "meaning": "The animation's name from the model; empty stops the animation and clears the queue."
+        },
+        {
+          "name": "wait",
+          "type": "boolean",
+          "meaning": "Holds the event until that animation has played once through (at most 1800 frames); the player can still walk meanwhile."
+        }
+      ]
+    },
+    {
+      "name": "SetModelAnimationSpeed",
+      "label": "Set Model Animation Speed",
+      "section": "3D",
+      "summary": "Changes how fast a character's 3D model animates.",
+      "args": [
+        {
+          "name": "target",
+          "type": "number",
+          "meaning": "Whose model: 0 this event, -1 the player, -2 and below the followers, or an event number."
+        },
+        {
+          "name": "speed",
+          "type": "number",
+          "meaning": "Speed in percent, 1 to 1000; 100 when left out or not a number."
+        }
+      ]
+    },
+    {
+      "name": "PlayModelEffect",
+      "label": "Play 3D Effect",
+      "section": "3D",
+      "summary": "Plays one of a 3D model's own effects at the spot it was placed on the model.",
+      "args": [
+        {
+          "name": "target",
+          "type": "number",
+          "meaning": "Whose model: 0 this event, -1 the player, -2 and below the followers, or an event number."
+        },
+        {
+          "name": "effect",
+          "type": "string",
+          "meaning": "The effect's name from the model's effects list; empty does nothing."
+        }
+      ]
+    },
+    {
+      "name": "SpeakModel3D",
+      "label": "Speak 3D Dialogue",
+      "section": "3D",
+      "summary": "Plays a voice clip from a 3D character and moves its mouth with the sound, or stops that voice.",
+      "args": [
+        {
+          "name": "operation",
+          "type": "speak | stop",
+          "meaning": "\"stop\" stops the character's voice; anything else speaks."
+        },
+        {
+          "name": "target",
+          "type": "number",
+          "meaning": "Who speaks: 0 this event, -1 the player, -2 and below the followers, or an event number."
+        },
+        {
+          "name": "audio",
+          "type": "string",
+          "meaning": "The sound file in audio/se, without its extension."
+        },
+        {
+          "name": "volume",
+          "type": "number",
+          "meaning": "Volume, 90 when left out."
+        },
+        {
+          "name": "pitch",
+          "type": "number",
+          "meaning": "Pitch, 100 when left out."
+        },
+        {
+          "name": "pan",
+          "type": "number",
+          "meaning": "Left-right pan, 0 when left out."
+        },
+        {
+          "name": "wait",
+          "type": "boolean",
+          "meaning": "Holds the event until the voice finishes; true unless \"false\"."
+        }
+      ]
+    },
+    {
+      "name": "ChangeCamera3D",
+      "label": "Change 3D Camera",
+      "section": "3D",
+      "summary": "Moves the 3D map camera to another view, eased over a number of frames.",
+      "args": [
+        {
+          "name": "mode",
+          "type": "fixed | topDown | isometric | thirdPerson | firstPerson",
+          "meaning": "The camera mode; some other spellings are accepted, and an unknown one is fixed."
+        },
+        {
+          "name": "pitch",
+          "type": "number",
+          "meaning": "Tilt in degrees, -89 to 89; blank uses the mode's own."
+        },
+        {
+          "name": "yaw",
+          "type": "number",
+          "meaning": "Turn in degrees, -360 to 360; blank uses the mode's own."
+        },
+        {
+          "name": "distance",
+          "type": "number",
+          "meaning": "Distance from what it looks at, in tiles, 0.5 to 1024; blank uses the mode's own."
+        },
+        {
+          "name": "fov",
+          "type": "number",
+          "meaning": "Field of view in degrees, 5 to 150; blank uses the mode's own."
+        },
+        {
+          "name": "focus",
+          "type": "auto | display | player | event",
+          "meaning": "What the camera centres on; anything else is auto (the mode's own choice)."
+        },
+        {
+          "name": "eventId",
+          "type": "number",
+          "meaning": "For focus event: the event to follow; 0 is this event."
+        },
+        {
+          "name": "duration",
+          "type": "number",
+          "meaning": "Frames to ease over, 0 to 6000; 0 is at once."
+        },
+        {
+          "name": "wait",
+          "type": "boolean",
+          "meaning": "Holds the event until the camera has arrived (only when duration is above 0)."
+        },
+        {
+          "name": "keep",
+          "type": "boolean",
+          "meaning": "Keeps this camera on later maps instead of each map's own."
+        }
+      ]
+    },
+    {
+      "name": "TransformModel3D",
+      "label": "Transform 3D Model",
+      "section": "3D",
+      "summary": "Moves, turns and scales a character's 3D model from its placed pose, eased over a number of frames.",
+      "args": [
+        {
+          "name": "target",
+          "type": "number",
+          "meaning": "Whose model: 0 this event, -1 the player, -2 and below the followers, or an event number (a placed prop is 10000 + its prop number)."
+        },
+        {
+          "name": "offsetX",
+          "type": "number",
+          "meaning": "Shift left-right in tiles; 0 when left out."
+        },
+        {
+          "name": "offsetY",
+          "type": "number",
+          "meaning": "Shift along the map's depth (toward or away from the bottom of the map) in tiles; 0 when left out."
+        },
+        {
+          "name": "offsetZ",
+          "type": "number",
+          "meaning": "Shift up or down in tiles; 0 when left out."
+        },
+        {
+          "name": "yaw",
+          "type": "number",
+          "meaning": "Turn in degrees; 0 when left out."
+        },
+        {
+          "name": "pitch",
+          "type": "number",
+          "meaning": "Tilt forward or back in degrees; 0 when left out."
+        },
+        {
+          "name": "roll",
+          "type": "number",
+          "meaning": "Roll sideways in degrees; 0 when left out."
+        },
+        {
+          "name": "scaleX",
+          "type": "number",
+          "meaning": "Width scale; 1 when left out or not above 0."
+        },
+        {
+          "name": "scaleY",
+          "type": "number",
+          "meaning": "Height scale; 1 when left out or not above 0."
+        },
+        {
+          "name": "scaleZ",
+          "type": "number",
+          "meaning": "Depth scale; 1 when left out or not above 0."
+        },
+        {
+          "name": "duration",
+          "type": "number",
+          "meaning": "Frames to ease over; 0 is at once."
+        },
+        {
+          "name": "wait",
+          "type": "boolean",
+          "meaning": "Holds the event for the duration."
+        }
+      ]
+    },
+    {
+      "name": "LightSwitch",
+      "label": "Switch Light",
+      "section": "Lighting",
+      "summary": "Turns a map light, or every light with a tag, on, off, or the other way.",
+      "args": [
+        {
+          "name": "target",
+          "type": "string",
+          "meaning": "A light's id, or \"#tag\" for every light with that tag."
+        },
+        {
+          "name": "state",
+          "type": "on | off | toggle",
+          "meaning": "\"off\" turns it off, \"toggle\" flips it, anything else turns it on."
+        }
+      ]
+    },
+    {
+      "name": "TransformLight",
+      "label": "Transform Light",
+      "section": "Lighting",
+      "summary": "Eases a map light, or every light with a tag, to new position, direction, size, brightness or color.",
+      "args": [
+        {
+          "name": "target",
+          "type": "string",
+          "meaning": "A light's id, or \"#tag\" for every light with that tag."
+        },
+        {
+          "name": "x",
+          "type": "number",
+          "meaning": "Position across in tiles (an offset when the light rides a character); blank leaves it as placed."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "meaning": "Position down the map in tiles (an offset when the light rides a character); blank leaves it as placed."
+        },
+        {
+          "name": "height",
+          "type": "number",
+          "meaning": "Height in tiles; blank leaves it as placed."
+        },
+        {
+          "name": "yaw",
+          "type": "number",
+          "meaning": "Direction it points, in degrees; blank leaves it as placed."
+        },
+        {
+          "name": "pitch",
+          "type": "number",
+          "meaning": "Tilt in degrees; blank leaves it as placed."
+        },
+        {
+          "name": "radius",
+          "type": "number",
+          "meaning": "Reach in tiles; blank leaves it as placed."
+        },
+        {
+          "name": "angle",
+          "type": "number",
+          "meaning": "Cone angle in degrees, for a spotlight; blank leaves it as placed."
+        },
+        {
+          "name": "width",
+          "type": "number",
+          "meaning": "Beam width in tiles; blank leaves it as placed."
+        },
+        {
+          "name": "intensity",
+          "type": "number",
+          "meaning": "Brightness; blank leaves it as placed."
+        },
+        {
+          "name": "color",
+          "type": "string",
+          "meaning": "Color as \"#rrggbb\"; blank leaves it as placed."
+        },
+        {
+          "name": "duration",
+          "type": "number",
+          "meaning": "Frames to ease over; 0 is at once."
+        },
+        {
+          "name": "wait",
+          "type": "boolean",
+          "meaning": "Holds the event for the duration."
+        },
+        {
+          "name": "reset",
+          "type": "boolean",
+          "meaning": "Drops what earlier commands set on this target, back to the light as placed; the other fields are then ignored."
+        }
+      ]
+    },
+    {
+      "name": "AmbientLight",
+      "label": "Change Ambient Light",
+      "section": "Lighting",
+      "summary": "Eases the map's overall ambient light to a new brightness and color.",
+      "args": [
+        {
+          "name": "intensity",
+          "type": "number",
+          "meaning": "Brightness from 0 to 1; blank leaves it as it is."
+        },
+        {
+          "name": "color",
+          "type": "string",
+          "meaning": "Color as \"#rrggbb\"; blank leaves it as it is."
+        },
+        {
+          "name": "duration",
+          "type": "number",
+          "meaning": "Frames to ease over; 0 is at once."
+        },
+        {
+          "name": "wait",
+          "type": "boolean",
+          "meaning": "Holds the event for the duration."
+        },
+        {
+          "name": "reset",
+          "type": "boolean",
+          "meaning": "Goes back to the map's own ambient light at once; the other fields are then ignored."
+        }
+      ]
+    },
+    {
+      "name": "ScopedWait",
+      "label": "Scoped Wait",
+      "section": "Game Flow",
+      "summary": "Holds the event until something happens while the player keeps moving: a character's actions finish, time passes, a switch flips or a variable reaches a value.",
+      "args": [
+        {
+          "name": "target",
+          "type": "string",
+          "meaning": "Whose actions to wait on: \"all\" (the default when left out), 0 this event, -1 the player, or an event number; only used by the actions mode."
+        },
+        {
+          "name": "mode",
+          "type": "actions | duration | switch | variable",
+          "meaning": "What ends the wait; anything else is actions (model animations and, for one character, a forced move route; at most 3600 frames)."
+        },
+        {
+          "name": "duration",
+          "type": "number",
+          "meaning": "For duration: frames to wait; 0 when left out."
+        },
+        {
+          "name": "switchId",
+          "type": "number",
+          "meaning": "For switch: the switch to watch; 1 when left out."
+        },
+        {
+          "name": "switchValue",
+          "type": "boolean",
+          "meaning": "For switch: \"false\" waits for OFF, anything else for ON."
+        },
+        {
+          "name": "variableId",
+          "type": "number",
+          "meaning": "For variable: the variable to watch; 1 when left out."
+        },
+        {
+          "name": "op",
+          "type": ">= | > | = | < | <= | !=",
+          "meaning": "For variable: how it is compared with value; anything else is >=."
+        },
+        {
+          "name": "value",
+          "type": "number",
+          "meaning": "For variable: the number compared against; 0 when left out."
+        },
+        {
+          "name": "resume",
+          "type": "boolean",
+          "meaning": "Lets the waiting event carry on with its own movement while it waits; true unless \"false\"."
+        }
+      ]
+    },
+    {
+      "name": "QuestSet",
+      "label": "Quest",
+      "section": "Game Flow",
+      "summary": "Discovers, completes, fails, resets, tracks or stops tracking a quest.",
+      "args": [
+        {
+          "name": "questId",
+          "type": "string",
+          "meaning": "The quest's number or key (the older name \"quest\" is read too)."
+        },
+        {
+          "name": "action",
+          "type": "discover | complete | fail | reset | track | untrack",
+          "meaning": "What to do; discover when left out. track also discovers it; untrack only stops tracking if it is the tracked quest."
+        }
+      ]
+    },
+    {
+      "name": "QuestObjective",
+      "label": "Quest Objective",
+      "section": "Game Flow",
+      "summary": "Shows, hides, completes, fails or reopens one objective of a quest, or all of them.",
+      "args": [
+        {
+          "name": "questId",
+          "type": "string",
+          "meaning": "The quest's number or key (the older name \"quest\" is read too)."
+        },
+        {
+          "name": "objective",
+          "type": "string",
+          "meaning": "The objective's number counted from 1, or \"all\" (also when left out)."
+        },
+        {
+          "name": "state",
+          "type": "complete | show | hide | fail | reset",
+          "meaning": "What to set it to; complete when left out. reset opens it again."
+        }
+      ]
+    },
+    {
+      "name": "QuestReward",
+      "label": "Quest Reward",
+      "section": "Game Flow",
+      "summary": "Shows or hides a quest's reward in the log, or gives it to the party.",
+      "args": [
+        {
+          "name": "questId",
+          "type": "string",
+          "meaning": "The quest's number or key (the older name \"quest\" is read too)."
+        },
+        {
+          "name": "reward",
+          "type": "string",
+          "meaning": "The reward's number counted from 1, or \"all\" (also when left out)."
+        },
+        {
+          "name": "state",
+          "type": "show | hide | give",
+          "meaning": "\"give\" hands it over once, \"hide\" hides it, anything else shows it; show when left out."
+        }
+      ]
+    },
+    {
+      "name": "OpenQuestLog",
+      "label": "Open Quest Log",
+      "section": "Game Flow",
+      "summary": "Opens the quest log screen.",
+      "args": [
+        {
+          "name": "questId",
+          "type": "string",
+          "meaning": "A quest's number or key to open the log on; left out, the log opens as usual. Not used when the log is VisuStella's."
+        }
+      ]
+    },
+    {
+      "name": "SteamAchievement",
+      "label": "Steam Achievement",
+      "section": "Game Flow",
+      "summary": "Unlocks a Steam achievement, or locks it again for testing.",
+      "args": [
+        {
+          "name": "api",
+          "type": "string",
+          "meaning": "The achievement's API name from Steamworks (letters, digits, _ . -)."
+        },
+        {
+          "name": "action",
+          "type": "unlock | clear",
+          "meaning": "\"clear\" locks it again; anything else unlocks; unlock when left out."
+        }
+      ]
+    },
+    {
+      "name": "CharacterCreation",
+      "label": "Character Creation",
+      "section": "Game Flow",
+      "summary": "Opens the character creation screen, or the character choice screen, as the game is set up.",
+      "args": [
+        {
+          "name": "once",
+          "type": "boolean",
+          "meaning": "Skips the screen when the player already has a character; any value given counts as on, so leave it out for off."
+        },
+        {
+          "name": "required",
+          "type": "boolean",
+          "meaning": "The player must finish, with no way back; any value given counts as on, so leave it out for off."
+        },
+        {
+          "name": "switchId",
+          "type": "number",
+          "meaning": "A switch turned ON when the player has their character and OFF when they backed out; 0 for none."
+        }
+      ]
+    },
+    {
+      "name": "CallUserInterface",
+      "label": "Call User Interface",
+      "section": "User Interfaces",
+      "summary": "Opens one of the game's custom user interface screens; does nothing in battle.",
+      "args": [
+        {
+          "name": "interfaceId",
+          "type": "number",
+          "meaning": "The interface's number from the User Interface editor; 0 does nothing."
+        }
+      ]
+    },
+    {
+      "name": "ChangeFollowerFormation",
+      "label": "Change Follower Formation",
+      "section": "Party Followers",
+      "summary": "Changes how the followers walk behind the leader, kept with the save.",
+      "args": [
+        {
+          "name": "formation",
+          "type": "file | loose | rank | wedge | column | scattered",
+          "meaning": "The shape; any other value goes back to the game's own formation."
+        },
+        {
+          "name": "spacing",
+          "type": "number",
+          "meaning": "Tiles between members, 1 to 4."
+        },
+        {
+          "name": "straggle",
+          "type": "number",
+          "meaning": "How late and unevenly they follow, 0 to 100."
+        }
+      ]
+    },
+    {
+      "name": "FollowerOrders",
+      "label": "Follower Orders",
+      "section": "Party Followers",
+      "summary": "Tells followers to follow, stay, walk to a tile, come back to the leader, hide or show.",
+      "args": [
+        {
+          "name": "who",
+          "type": "all | follower | actor",
+          "meaning": "\"follower\" is one place in the line, \"actor\" the follower who is that actor, anything else every follower."
+        },
+        {
+          "name": "index",
+          "type": "number",
+          "meaning": "For follower: the place in the line, counted from 1."
+        },
+        {
+          "name": "actorId",
+          "type": "number",
+          "meaning": "For actor: the actor's database number."
+        },
+        {
+          "name": "order",
+          "type": "follow | stay | goto | come | hide | show",
+          "meaning": "The order; follow when left out."
+        },
+        {
+          "name": "x",
+          "type": "number",
+          "meaning": "For goto: the tile's x."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "meaning": "For goto: the tile's y."
+        },
+        {
+          "name": "direction",
+          "type": "number",
+          "meaning": "For goto: the way to face on arrival (2 down, 4 left, 6 right, 8 up); anything else keeps its facing."
+        },
+        {
+          "name": "wait",
+          "type": "boolean",
+          "meaning": "For goto and come: holds the event until they arrive."
+        }
+      ]
+    },
+    {
+      "name": "StartMapBattle",
+      "label": "Start Battle on Map",
+      "section": "Battles on the Map",
+      "summary": "Starts a battle right on the map with the units there, or the ordinary battle screen when the mode in force is Classic.",
+      "args": [
+        {
+          "name": "mode",
+          "type": "classic | tactical | action | firstPerson",
+          "meaning": "The battle mode; any other value (or none) uses the mode in force: the next-battle setting, the troop's, this map's, then the game's."
+        },
+        {
+          "name": "who",
+          "type": "near | map",
+          "meaning": "\"near\" takes the units near the party that the start rule takes; anything else takes every unit on the map."
+        },
+        {
+          "name": "troopId",
+          "type": "number",
+          "meaning": "A troop whose members join the battle, placed round the party; 0 for none. Classic mode fights this troop on the battle screen."
+        },
+        {
+          "name": "turns",
+          "type": "team | initiative",
+          "meaning": "How turns go; any other value uses the game's setting."
+        },
+        {
+          "name": "objective",
+          "type": "defeatAll | survive | defeatUnit | switch | variable",
+          "meaning": "What wins the battle; anything else is defeatAll."
+        },
+        {
+          "name": "turnsToSurvive",
+          "type": "number",
+          "meaning": "For survive: the turns to last (at least 1)."
+        },
+        {
+          "name": "unitEventId",
+          "type": "number",
+          "meaning": "For defeatUnit: the event number of the unit to beat."
+        },
+        {
+          "name": "goalSwitchId",
+          "type": "number",
+          "meaning": "For switch: the battle is won when this switch is ON."
+        },
+        {
+          "name": "goalVariableId",
+          "type": "number",
+          "meaning": "For variable: the variable that is checked."
+        },
+        {
+          "name": "goalValue",
+          "type": "number",
+          "meaning": "For variable: the battle is won when the variable is at least this value."
+        },
+        {
+          "name": "onTransfer",
+          "type": "keep | escape",
+          "meaning": "What happens if the party leaves the map mid-battle: \"keep\" keeps the battle, anything else counts as an escape."
+        },
+        {
+          "name": "view",
+          "type": "string",
+          "meaning": "\"map\" keeps the map's own camera on a 3D map; any other value uses the battle's own view; left out, the game's setting decides."
+        },
+        {
+          "name": "canEscape",
+          "type": "boolean",
+          "meaning": "Whether the party may run away."
+        },
+        {
+          "name": "canLose",
+          "type": "boolean",
+          "meaning": "Whether the game goes on after a loss instead of ending."
+        },
+        {
+          "name": "wait",
+          "type": "boolean",
+          "meaning": "Holds the event until the battle ends, then takes the If Win / If Escape / If Lose branch."
+        },
+        {
+          "name": "resultVariable",
+          "type": "number",
+          "meaning": "A variable that gets the result (0 win, 1 escape, 2 lose); 0 for none."
+        }
+      ]
+    },
+    {
+      "name": "SpawnUnit",
+      "label": "Spawn Unit",
+      "section": "Battles on the Map",
+      "summary": "Puts a new actor or enemy unit on the map, which joins a battle that is running.",
+      "args": [
+        {
+          "name": "record",
+          "type": "actor | enemy",
+          "meaning": "The kind of database record; anything else is enemy."
+        },
+        {
+          "name": "id",
+          "type": "number",
+          "meaning": "The actor's or enemy's database number."
+        },
+        {
+          "name": "team",
+          "type": "ally | enemy | neutral",
+          "meaning": "Its side; left out, ally for an actor and enemy for an enemy. Any other value spawns nothing."
+        },
+        {
+          "name": "at",
+          "type": "cell | event | variables",
+          "meaning": "\"event\" places it on a free spot next to a character, \"variables\" reads the tile from two variables, anything else uses x and y as the tile."
+        },
+        {
+          "name": "x",
+          "type": "number",
+          "meaning": "The tile's x, or with at = variables the variable holding it."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "meaning": "The tile's y, or with at = variables the variable holding it."
+        },
+        {
+          "name": "eventId",
+          "type": "number",
+          "meaning": "For at = event: the character to stand next to (0 this event, -1 the player, or an event number)."
+        },
+        {
+          "name": "height",
+          "type": "number",
+          "meaning": "On a tile with several floors, which floor (a height); left out, the ground."
+        },
+        {
+          "name": "direction",
+          "type": "number",
+          "meaning": "The way it faces: 2 down, 4 left, 6 right, 8 up; 0 or left out keeps the default."
+        },
+        {
+          "name": "template",
+          "type": "number",
+          "meaning": "An event on this map whose pages the unit copies; 0 for none."
+        }
+      ]
+    },
+    {
+      "name": "ChangeUnitSide",
+      "label": "Change Unit Side",
+      "section": "Battles on the Map",
+      "summary": "Moves a unit to another side, in a battle running now and in later battles on this map.",
+      "args": [
+        {
+          "name": "eventId",
+          "type": "number",
+          "meaning": "The unit's event number; 0 is this event."
+        },
+        {
+          "name": "team",
+          "type": "ally | enemy | neutral",
+          "meaning": "The new side; any other value (or none) gives the unit back its own side from its event."
+        }
+      ]
+    },
+    {
+      "name": "RemoveUnit",
+      "label": "Remove Unit",
+      "section": "Battles on the Map",
+      "summary": "Takes a unit out of the battle on the map.",
+      "args": [
+        {
+          "name": "eventId",
+          "type": "number",
+          "meaning": "The unit's event number; 0 is this event."
+        },
+        {
+          "name": "keep",
+          "type": "boolean",
+          "meaning": "Leaves the event standing on the map instead of erasing it."
+        }
+      ]
+    },
+    {
+      "name": "EndMapBattle",
+      "label": "End Battle on Map",
+      "section": "Battles on the Map",
+      "summary": "Ends the battle on the map with the result given.",
+      "args": [
+        {
+          "name": "result",
+          "type": "win | lose | escape",
+          "meaning": "How it ends; anything else is win."
+        }
+      ]
+    },
+    {
+      "name": "ChangeBattleGoal",
+      "label": "Change Battle Goal",
+      "section": "Battles on the Map",
+      "summary": "Changes what wins the battle that is running on the map, checked at once.",
+      "args": [
+        {
+          "name": "objective",
+          "type": "defeatAll | survive | defeatUnit | switch | variable",
+          "meaning": "What wins the battle; anything else is defeatAll."
+        },
+        {
+          "name": "turnsToSurvive",
+          "type": "number",
+          "meaning": "For survive: the turns to last (at least 1)."
+        },
+        {
+          "name": "unitEventId",
+          "type": "number",
+          "meaning": "For defeatUnit: the event number of the unit to beat; it joins the battle if it is not in it."
+        },
+        {
+          "name": "goalSwitchId",
+          "type": "number",
+          "meaning": "For switch: the battle is won when this switch is ON."
+        },
+        {
+          "name": "goalVariableId",
+          "type": "number",
+          "meaning": "For variable: the variable that is checked."
+        },
+        {
+          "name": "goalValue",
+          "type": "number",
+          "meaning": "For variable: the battle is won when the variable is at least this value."
+        }
+      ]
+    },
+    {
+      "name": "ChangeBattleMode",
+      "label": "Change Battle Mode",
+      "section": "Battles on the Map",
+      "summary": "Sets which kind of battle the game, this map, or only the next battle uses.",
+      "args": [
+        {
+          "name": "mode",
+          "type": "classic | tactical | action | firstPerson | default",
+          "meaning": "The battle mode; \"default\" or any other value clears the setting for that scope."
+        },
+        {
+          "name": "scope",
+          "type": "game | map | next",
+          "meaning": "Where it applies: \"map\" this map, \"next\" the next battle only, anything else the whole game."
+        }
+      ]
+    },
+    {
+      "name": "SetTerrainCost",
+      "label": "Set Terrain Cost",
+      "section": "Battles on the Map",
+      "summary": "Sets how many steps it costs to move onto a region or terrain tag in tactical battles from now on.",
+      "args": [
+        {
+          "name": "type",
+          "type": "region | terrain",
+          "meaning": "\"terrain\" means a terrain tag; anything else a region."
+        },
+        {
+          "name": "id",
+          "type": "number",
+          "meaning": "The region (1 and up) or terrain tag (0 and up)."
+        },
+        {
+          "name": "cost",
+          "type": "number",
+          "meaning": "Steps it costs, up to 20; 0 blocks it, 1 or a non-number is the ordinary step."
+        }
+      ]
+    },
+    {
+      "name": "ShowVideoSurface",
+      "label": "Show Media Surface",
+      "section": "Media Surfaces",
+      "summary": "Shows a video or picture as a flat surface on the map, on a character, or on the screen; a new surface with the same number replaces the old one.",
+      "args": [
+        {
+          "name": "id",
+          "type": "number",
+          "meaning": "The surface's number, 1 to 999999 (also read as surfaceId or videoId); required."
+        },
+        {
+          "name": "movie",
+          "type": "string",
+          "meaning": "The file (also read as file or filename): a .webm or .mp4 in movies/, or a .png, .jpg, .webp or .jxl in img/pictures/; required."
+        },
+        {
+          "name": "target",
+          "type": "map | event | this-event | player | screen",
+          "meaning": "What it is placed on (also read as bindTo); map when left out."
+        },
+        {
+          "name": "eventId",
+          "type": "number",
+          "meaning": "For target event: the event's number."
+        },
+        {
+          "name": "x",
+          "type": "number",
+          "meaning": "On the map the tile x; on a character an offset in pixels; on the screen the pixel x of its centre. 0 when left out."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "meaning": "On the map the tile y; on a character an offset in pixels; on the screen the pixel y of its centre. 0 when left out."
+        },
+        {
+          "name": "z",
+          "type": "number",
+          "meaning": "Height above the ground in tiles, on 3D maps only; 0 when left out."
+        },
+        {
+          "name": "width",
+          "type": "number",
+          "meaning": "Width in pixels, 1 to 8192; 320 when left out."
+        },
+        {
+          "name": "height",
+          "type": "number",
+          "meaning": "Height in pixels, 1 to 8192; 180 when left out."
+        },
+        {
+          "name": "rotationX",
+          "type": "number",
+          "meaning": "Turn about the x axis in degrees; 0 when left out."
+        },
+        {
+          "name": "rotationY",
+          "type": "number",
+          "meaning": "Turn about the y axis in degrees; 0 when left out."
+        },
+        {
+          "name": "rotationZ",
+          "type": "number",
+          "meaning": "Turn about the z axis in degrees (also read as rotation); 0 when left out."
+        },
+        {
+          "name": "scaleX",
+          "type": "number",
+          "meaning": "Horizontal scale; 1 when left out."
+        },
+        {
+          "name": "scaleY",
+          "type": "number",
+          "meaning": "Vertical scale; 1 when left out."
+        },
+        {
+          "name": "opacity",
+          "type": "number",
+          "meaning": "Opacity 0 to 255 (or alpha, 0 to 1); fully opaque when left out."
+        },
+        {
+          "name": "loop",
+          "type": "boolean",
+          "meaning": "Plays the video over and over; true when left out, and turned off when wait is on."
+        },
+        {
+          "name": "muted",
+          "type": "boolean",
+          "meaning": "Plays without sound; true when left out unless audio is given."
+        },
+        {
+          "name": "audio",
+          "type": "boolean",
+          "meaning": "The opposite of muted, read when muted is left out."
+        },
+        {
+          "name": "volume",
+          "type": "number",
+          "meaning": "Volume 0 to 100; 100 when left out."
+        },
+        {
+          "name": "playbackRate",
+          "type": "number",
+          "meaning": "Playback speed, 0.05 to 16; 1 when left out."
+        },
+        {
+          "name": "layer",
+          "type": "number",
+          "meaning": "Drawing layer, a number or below (0), ground (1), characters (3), above (5), screen (10); 3 when left out."
+        },
+        {
+          "name": "depth",
+          "type": "number",
+          "meaning": "On a 3D map, moves it toward the camera in tiles; in 2D it orders surfaces within a layer. 0 when left out."
+        },
+        {
+          "name": "cullingDistance",
+          "type": "number",
+          "meaning": "Hides it when it is this far outside the screen (2D, pixels) or from the camera (3D); 0 never hides it."
+        },
+        {
+          "name": "scanlines",
+          "type": "number",
+          "meaning": "Draws TV scanlines over it: true/false, or a strength from 0 to 1; 0 when left out."
+        },
+        {
+          "name": "corners",
+          "type": "json",
+          "meaning": "Four {x, y} points for a bent shape instead of the width × height rectangle (also x0..y3 one by one); left out, the rectangle."
+        },
+        {
+          "name": "worldCorners",
+          "type": "json",
+          "meaning": "Four {x, y} points the surface is stretched to in the world; left out, not used."
+        },
+        {
+          "name": "wait",
+          "type": "boolean",
+          "meaning": "Holds the event until the video ends; ignored for a picture."
+        }
+      ]
+    },
+    {
+      "name": "TransformVideoSurface",
+      "label": "Transform Media Surface",
+      "section": "Media Surfaces",
+      "summary": "Changes a media surface that is showing: only the fields given change, at once.",
+      "args": [
+        {
+          "name": "id",
+          "type": "number",
+          "meaning": "The number of a surface that is showing; required."
+        },
+        {
+          "name": "target",
+          "type": "map | event | this-event | player | screen",
+          "meaning": "What it is placed on."
+        },
+        {
+          "name": "eventId",
+          "type": "number",
+          "meaning": "For target event: the event's number."
+        },
+        {
+          "name": "x",
+          "type": "number",
+          "meaning": "As in Show Media Surface."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "meaning": "As in Show Media Surface."
+        },
+        {
+          "name": "z",
+          "type": "number",
+          "meaning": "As in Show Media Surface."
+        },
+        {
+          "name": "width",
+          "type": "number",
+          "meaning": "Width in pixels; also resizes its shape unless it has corners set by hand."
+        },
+        {
+          "name": "height",
+          "type": "number",
+          "meaning": "Height in pixels; also resizes its shape unless it has corners set by hand."
+        },
+        {
+          "name": "rotationX",
+          "type": "number",
+          "meaning": "As in Show Media Surface."
+        },
+        {
+          "name": "rotationY",
+          "type": "number",
+          "meaning": "As in Show Media Surface."
+        },
+        {
+          "name": "rotationZ",
+          "type": "number",
+          "meaning": "As in Show Media Surface."
+        },
+        {
+          "name": "scaleX",
+          "type": "number",
+          "meaning": "As in Show Media Surface."
+        },
+        {
+          "name": "scaleY",
+          "type": "number",
+          "meaning": "As in Show Media Surface."
+        },
+        {
+          "name": "opacity",
+          "type": "number",
+          "meaning": "Opacity 0 to 255 (or alpha, 0 to 1)."
+        },
+        {
+          "name": "loop",
+          "type": "boolean",
+          "meaning": "As in Show Media Surface."
+        },
+        {
+          "name": "muted",
+          "type": "boolean",
+          "meaning": "As in Show Media Surface."
+        },
+        {
+          "name": "audio",
+          "type": "boolean",
+          "meaning": "The opposite of muted, read when muted is left out."
+        },
+        {
+          "name": "volume",
+          "type": "number",
+          "meaning": "Volume 0 to 100."
+        },
+        {
+          "name": "playbackRate",
+          "type": "number",
+          "meaning": "Playback speed, 0.05 to 16."
+        },
+        {
+          "name": "layer",
+          "type": "number",
+          "meaning": "As in Show Media Surface."
+        },
+        {
+          "name": "depth",
+          "type": "number",
+          "meaning": "As in Show Media Surface."
+        },
+        {
+          "name": "cullingDistance",
+          "type": "number",
+          "meaning": "As in Show Media Surface."
+        },
+        {
+          "name": "scanlines",
+          "type": "number",
+          "meaning": "As in Show Media Surface."
+        },
+        {
+          "name": "corners",
+          "type": "json",
+          "meaning": "Four {x, y} points (also x0..y3 one by one); setting them marks the corners as set by hand."
+        },
+        {
+          "name": "worldCorners",
+          "type": "json",
+          "meaning": "As in Show Media Surface."
+        }
+      ]
+    },
+    {
+      "name": "StopVideoSurface",
+      "label": "Stop Media Surface",
+      "section": "Media Surfaces",
+      "summary": "Removes a media surface and releases any event waiting on it.",
+      "args": [
+        {
+          "name": "id",
+          "type": "number",
+          "meaning": "The surface's number (also read as surfaceId or videoId)."
+        }
+      ]
+    },
+    {
+      "name": "WaitForModelAnimation",
+      "label": "Scoped Wait (old name)",
+      "section": "",
+      "picker": false,
+      "summary": "The first name of Scoped Wait, kept so events saved with it still work; it does exactly what Scoped Wait does.",
+      "args": [
+        {
+          "name": "target",
+          "type": "string",
+          "meaning": "As in Scoped Wait."
+        },
+        {
+          "name": "mode",
+          "type": "actions | duration | switch | variable",
+          "meaning": "As in Scoped Wait."
+        },
+        {
+          "name": "duration",
+          "type": "number",
+          "meaning": "As in Scoped Wait."
+        },
+        {
+          "name": "switchId",
+          "type": "number",
+          "meaning": "As in Scoped Wait."
+        },
+        {
+          "name": "switchValue",
+          "type": "boolean",
+          "meaning": "As in Scoped Wait."
+        },
+        {
+          "name": "variableId",
+          "type": "number",
+          "meaning": "As in Scoped Wait."
+        },
+        {
+          "name": "op",
+          "type": ">= | > | = | < | <= | !=",
+          "meaning": "As in Scoped Wait."
+        },
+        {
+          "name": "value",
+          "type": "number",
+          "meaning": "As in Scoped Wait."
+        },
+        {
+          "name": "resume",
+          "type": "boolean",
+          "meaning": "As in Scoped Wait."
+        }
+      ]
+    },
+    {
+      "name": "BattleRoomEvent",
+      "label": "Call Battle Room Event",
+      "section": "",
+      "picker": false,
+      "summary": "In a battle fought in a Battle Room, runs the current page of one of that room's events (the Battle Presentation editor adds it to a troop page).",
+      "args": [
+        {
+          "name": "eventId",
+          "type": "number",
+          "meaning": "The event's number on the Battle Room's map."
+        }
+      ]
+    },
+    {
+      "name": "BattleSequenceSkip",
+      "label": "Skip Battle Sequence",
+      "section": "",
+      "picker": false,
+      "summary": "Skips the battle action sequence that is playing, landing all its hits at once.",
+      "args": []
+    },
+    {
+      "name": "BattleRoomCamera",
+      "label": "Battle Room Camera",
+      "section": "",
+      "picker": false,
+      "summary": "In a battle fought in a Battle Room, moves the room's camera to a set place and angle.",
+      "args": [
+        {
+          "name": "x",
+          "type": "number",
+          "meaning": "Where it looks, across the room in tiles; left out keeps the current value."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "meaning": "Where it looks, down the room in tiles; left out keeps the current value."
+        },
+        {
+          "name": "z",
+          "type": "number",
+          "meaning": "Height of the point it looks at, in tiles; left out keeps the current value."
+        },
+        {
+          "name": "yaw",
+          "type": "number",
+          "meaning": "Turn in degrees; left out keeps the current value."
+        },
+        {
+          "name": "pitch",
+          "type": "number",
+          "meaning": "Tilt in degrees; left out keeps the current value."
+        },
+        {
+          "name": "distance",
+          "type": "number",
+          "meaning": "Distance from the point it looks at, in tiles; left out keeps the current value."
+        }
+      ]
+    },
+    {
+      "name": "SetVehicleLocation",
+      "label": "Set Reactor Vehicle Location",
+      "section": "",
+      "picker": false,
+      "summary": "Moves a parked Reactor vehicle to a tile on this map, or takes it out of the world.",
+      "args": [
+        {
+          "name": "vehicle",
+          "type": "string",
+          "meaning": "Which vehicle: left out or \"this\" is the event running the command; also an event number on this map, a vehicle's identity such as \"0:3\", \"nearest\" or \"ridden\"."
+        },
+        {
+          "name": "remove",
+          "type": "boolean",
+          "meaning": "Takes the vehicle out of the world instead of moving it; false when left out."
+        },
+        {
+          "name": "x",
+          "type": "number",
+          "meaning": "The tile's x; required to move it."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "meaning": "The tile's y; required to move it."
+        },
+        {
+          "name": "yaw",
+          "type": "number",
+          "meaning": "The way it faces, in degrees; 0 when left out."
+        },
+        {
+          "name": "z",
+          "type": "number",
+          "meaning": "On a tile with several floors, the height to stand on; left out, the ground."
+        }
+      ]
+    }
+  ]
+}

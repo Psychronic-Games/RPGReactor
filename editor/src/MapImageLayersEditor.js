@@ -41,6 +41,12 @@
     /** The words without the marks around names. */
     const plain = (text) => String(text).replace(/[\u2066-\u2069]/g, '');
     const isLayer = (layer) => !!layer && typeof layer === 'object';
+    /**
+     * A layer made for a placed 2D structure (`structure2d`, the placement's id). The editor makes those again
+     * from the map's rrStructures2D whenever a structure is placed, moved or saved, so this tool lists them and
+     * changes, moves and removes none of them.
+     */
+    const isStructure = (layer) => isLayer(layer) && layer.structure2d !== undefined && layer.structure2d !== null;
 
     // What Add makes. Each is a layer that works before a setting is touched; a 3D map is offered only those it draws.
     const CHOICES = [
@@ -51,17 +57,19 @@
         { key: 'solid', label: 'Solid scenery', hint: 'Trees, fences and houses the characters cannot walk through.', spec: { layer: 'same', fit: 'map' } }
     ];
     const DEPTH_KEYS = { ground: 'event.belowCharacters', same: 'event.sameAsCharacters', over: 'event.aboveCharacters' };
-    const FIT_LABELS = { map: 'Locked to the map', repeat: 'Repeating', fill: 'Fills the screen' };
+    const FIT_LABELS = { map: 'Locked to the map', repeat: 'Repeating', fill: 'Fills the screen', place: 'Placed at a tile' };
     const FIT_HINTS = {
         map: 'One picture as large as the map. It scrolls with the tiles.',
         repeat: 'Repeats across the view and can scroll: fog, clouds, rain, a far background.',
-        fill: 'Stretched over the screen and fixed to it: a vignette, a light.'
+        fill: 'Stretched over the screen and fixed to it: a vignette, a light.',
+        place: 'At its own size, its top-left corner on one tile. It scrolls with the tiles.'
     };
     // A few words for each placement in the list it is chosen from, short enough that the list needs no scrollbar.
     const FIT_WORDS = {
         map: 'For a painted map and scenery.',
         repeat: 'For fog, clouds, rain and far backgrounds. It can scroll.',
-        fill: 'For a vignette, a light or a frame.'
+        fill: 'For a vignette, a light or a frame.',
+        place: 'For a placed structure.'
     };
     const REPEAT_LABELS = { both: 'Across and down', x: 'Across only', y: 'Down only' };
     const REPEAT_HINTS = {
@@ -128,6 +136,7 @@
     function describe(layer) {
         const r = runtime().normalize(layer);
         const depth = typeof r.z === 'number' ? fill(tt('Custom depth {z}'), { z: r.z }) : depthLabel(r.layer);
+        if (r.fit === 'place') return `${depth}, ${fill(tt('Placed at tile {x}, {y}'), { x: r.at[0], y: r.at[1] })}`;
         return `${depth}, ${fitLabel(r.fit)}`;
     }
 
@@ -165,6 +174,8 @@
     function note3D(layer, is3D) {
         const R = runtime();
         if (!is3D || R.drawnOn3D(R.normalize(layer))) return null;
+        // A structure's picture is not this tool's to change: there is nothing to set.
+        if (isStructure(layer)) return { row: tt('Not drawn on a 3D map'), text: tt('A 3D map shows layers placed on the screen, above characters.') };
         const fix = fill(tt('Set {placement} to {repeating} or {fills}, and {depth} to {above}.'), {
             placement: tt('Placement'), repeating: fitLabel('repeat'), fills: fitLabel('fill'), depth: tt('Depth'), above: depthLabel('over')
         });
@@ -174,7 +185,9 @@
     /** A row of the list: the picture's name and the lines under it. */
     function rowLines(layer, names, is3D = false) {
         const r = runtime().normalize(layer), note = note3D(layer, is3D);
-        return { title: r.name || tt('(None)'), lines: [describe(layer), ...conditionWords(layer, names)], warning: note ? note.row : '' };
+        const lines = [describe(layer), ...conditionWords(layer, names)];
+        if (isStructure(layer)) lines.push(tt('Part of a placed structure'));
+        return { title: r.name || tt('(None)'), lines, warning: note ? note.row : '' };
     }
 
     /** What changing the picture with a variable is for, in one line. */
@@ -365,6 +378,8 @@
     function neighbor(layers, index, direction) {
         const R = runtime(), listed = order(layers), other = listed[listed.indexOf(index) + direction];
         if (other === undefined || !layers[index]) return -1;
+        // A placed structure's layers keep their places, and nothing is moved past them.
+        if (isStructure(layers[index]) || isStructure(layers[other])) return -1;
         return R.depth(R.normalize(layers[index]), 0) === R.depth(R.normalize(layers[other]), 0) ? other : -1;
     }
     const canMove = (layers, index, direction) => neighbor(layers, index, direction) >= 0;
@@ -385,6 +400,8 @@
      * name pattern belongs to the picture it was loaded with, and comes back with the variable for that picture.
      */
     function change(layers, index, patch, loaded = null) {
+        // A placed structure's layer is made from the structure, never edited here.
+        if (isStructure(layers[index])) return layers;
         const R = runtime(), before = R.normalize(layers[index]), next = Object.assign({}, before, patch);
         // A depth chosen in the tool is the layer's depth: one the file set by number gives way to it.
         if (patch && 'layer' in patch && !('z' in patch)) next.z = null;
@@ -405,7 +422,7 @@
         return out;
     }
     const add = (layers, layer) => (layers || []).concat([layer]);
-    const remove = (layers, index) => layers.filter((layer, at) => at !== index);
+    const remove = (layers, index) => (isStructure(layers[index]) ? layers : layers.filter((layer, at) => at !== index));
     /** Whether two lists would be the same in the map file. */
     const sameStored = (a, b) => JSON.stringify(a || []) === JSON.stringify(b || []);
 
@@ -573,7 +590,7 @@
         namesFrom, conditionWords, note3D, rowLines, sizeNote,
         versionsIntro, versionRows, versionParts, versionWords, versionsRest, versionValue, nextValue, setVersion, removeVersion, moveVersion,
         numberedPattern, matching, importWords, found, listed, lookChoices,
-        order, neighbor, canMove, move, change, add, remove, Session, load, read, fill, ltr, own, plain, isLayer
+        order, neighbor, canMove, move, change, add, remove, Session, load, read, fill, ltr, own, plain, isLayer, isStructure
     };
     root.RRMapImageLayers = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;

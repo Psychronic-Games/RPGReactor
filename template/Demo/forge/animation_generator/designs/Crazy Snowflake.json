@@ -1,0 +1,38 @@
+{
+  "builder": "animation",
+  "version": 1,
+  "recipe": {
+    "outputName": "Crazy Snowflake",
+    "frameWidth": 192,
+    "frameHeight": 192,
+    "frameCount": 100,
+    "interpolation": "nearest",
+    "previewMode": "single",
+    "previewSingle": {
+      "categoryId": "elements",
+      "animationId": "frost-crystal",
+      "params": {
+        "crystalColor": "#6bc7f1",
+        "glintColor": "#d941e9",
+        "centerX": 0.5,
+        "centerY": 0.5,
+        "size": 0.56,
+        "armCount": 11,
+        "branchDepth": 1,
+        "shimmerCycles": 5,
+        "sparkleCount": 19,
+        "lineWidth": 2,
+        "glowIntensity": 0.05,
+        "tiltX": 45,
+        "tiltY": 100,
+        "tiltZ": 11,
+        "cycX": -2,
+        "cycY": -2,
+        "cycZ": 3
+      }
+    },
+    "layers": [],
+    "activeLayer": 0,
+    "textures": []
+  }
+}

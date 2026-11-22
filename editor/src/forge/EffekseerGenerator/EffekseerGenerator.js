@@ -28,6 +28,14 @@
  *     ├── recipes/*.js           — each pushes one recipe into the registry
  *     └── EffekseerGenerator.js  — THIS FILE: UI + preview loop + export
  */
+// A slider's value shown beside it (RRSliderNumbers, a number box one can type into; plain text where it is absent).
+function rrSliderShow(el, value, digits) {
+    if (globalThis.RRSliderNumbers) return globalThis.RRSliderNumbers.show(el, value, digits);
+    if (!el) return;
+    const text = digits === undefined ? String(value) : Number(value).toFixed(digits);
+    if (el.tagName === 'INPUT') el.value = text; else el.textContent = text;
+}
+
 class EffekseerGenerator {
     constructor() {
         this.projectController = null;
@@ -74,6 +82,15 @@ class EffekseerGenerator {
         this._bakeCache = new Map();     // baked AG sprite sheets (per layer/params)
         this._updateTick = 0;            // total simulation updates (drives deferred release)
         this._retiredEffects = [];       // [{ effect, tick }] — released ≥2 updates after stop
+        // Save Design / Open (RRForgeDesigns): the group Save Design keeps
+        // into, the design last opened or saved ({ group, name, typed }),
+        // and a name box value waiting for the page (openDesign before
+        // renderInto).
+        this.designGroup = '';
+        this._openedDesign = null;
+        this._pendingName = null;
+        this._rebuildPending = false;
+        this._efkLoading = false;
     }
 
     /** Step the simulation once (all update() calls go through here). */
@@ -118,6 +135,13 @@ class EffekseerGenerator {
     /** Verbatim-label translation (recipe/param names live in data). */
     _tx(label) {
         return window.I18n && window.I18n.tText ? window.I18n.tText(label) : label;
+    }
+
+    /** An English sentence in the language now set, with {name}-style values put in (the Prop Builder's _t). */
+    _td(text, vars) {
+        let out = typeof window !== 'undefined' && window.I18n && window.I18n.tText ? window.I18n.tText(text) : text;
+        if (vars) for (const k of Object.keys(vars)) out = out.split('{' + k + '}').join(String(vars[k]));
+        return out;
     }
 
     _escapeHtml(value) {
@@ -1014,12 +1038,12 @@ class EffekseerGenerator {
         const categories = buildEfkRecipeCategories();
 
         let sidebarHtml = `<div style="padding: 8px 10px 2px;">
-            <input class="rr-efk-search rr-input" type="text" placeholder="${this._t('efk.search')}"
+            <input class="rr-efk-search rr-input rr-gen-search" type="text" placeholder="${this._t('efk.search')}"
                    value="${(this._searchTerm || '').replace(/"/g, '&quot;')}"
                    style="width: 100%; box-sizing: border-box; font-size: 11px; padding: 4px 8px;">
         </div>`;
         for (const [category, recipes] of categories) {
-            sidebarHtml += `<div class="rr-efk-cat" style="padding: 8px 12px 4px; font-size: 9px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.5px;">${this._tx(category)}</div>`;
+            sidebarHtml += `<div class="rr-efk-cat lit-section-header rr-gen-cat">${this._tx(category)}</div>`;
             for (const r of recipes) {
                 const active = r.id === this._layer().recipeId;
                 sidebarHtml += `
@@ -1033,11 +1057,11 @@ class EffekseerGenerator {
         const playIcon = '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><polygon points="5,3 21,12 5,21"/></svg>';
 
         contentEl.innerHTML = `
-            <div class="rr-efk-layout" style="display: grid; grid-template-columns: 170px minmax(0, 1fr) 250px; flex: 1; min-height: 0;">
-                <div class="rr-efk-sidebar" style="background: var(--color-bg-panel); border-right: 1px solid var(--color-border); overflow-y: auto; padding-bottom: 8px;">
+            <div class="rr-efk-layout rr-gen rr-gen-efk" style="position: relative; display: grid; grid-template-columns: 170px minmax(0, 1fr) 250px; flex: 1; min-height: 0;">
+                <div class="rr-efk-sidebar rr-accent-scrollbar" style="background: var(--color-bg-panel); border-right: 1px solid var(--color-border); overflow-y: auto; padding-bottom: 8px;">
                     ${sidebarHtml}
                 </div>
-                <div class="rr-efk-center" style="display: flex; flex-direction: column; min-width: 0; background: var(--color-bg-surface); overflow: auto; container-type: inline-size;">
+                <div class="rr-efk-center rr-accent-scrollbar" style="display: flex; flex-direction: column; min-width: 0; background: var(--color-bg-surface); overflow: auto; container-type: inline-size;">
                     <style>
                         .rr-efk-layout input[type="number"] {
                             -moz-appearance: textfield;
@@ -1093,18 +1117,21 @@ class EffekseerGenerator {
                         </label>
                         <span class="rr-efk-frame" style="font-size: 11px; color: var(--color-text-muted); min-width: 76px;"></span>
                         <span class="rr-efk-status" style="font-size: 11px; color: var(--color-text-muted); flex: 1 0 140px; text-align: right;"></span>
+                        <button class="rr-efk-open rr-btn-chip" style="padding: 4px 12px;">${this._escapeHtml(this._td('Open'))}</button>
+                        <label class="rr-c3d-name rr-c3d-group-pick"><span>${this._escapeHtml(this._td('Group'))}</span><select class="rr-select rr-efk-design-group" title="${this._escapeHtml(this._td('Where Save Design keeps this effect'))}" style="font-size: 11px; padding: 3px 6px;"></select></label>
+                        <button class="rr-efk-keep rr-btn-chip" title="${this._escapeHtml(this._td('Keep this effect\'s settings in the Forge to open and change later. No file is exported.'))}" style="padding: 4px 12px;">${this._escapeHtml(this._td('Save Design'))}</button>
                         <input class="rr-efk-name rr-input" type="text" placeholder="${this._t('efk.effectName')}" style="width: 150px; font-size: 12px; padding: 5px 8px;">
                         <button class="rr-efk-export rr-btn-chip" style="padding: 5px 14px; font-size: 12px; font-weight: 700; color: var(--color-accent-bright); border-color: var(--color-accent-border-strong); white-space: nowrap;">${this._t('efk.export')}</button>
                     </div>
                 </div>
-                <div style="background: var(--color-bg-panel); border-left: 1px solid var(--color-border); overflow-y: auto; display: flex; flex-direction: column;">
-                    <div style="padding: 10px 14px 4px; font-size: 9px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.5px;">${this._t('efk.orientation')}</div>
+                <div class="rr-efk-right rr-accent-scrollbar" style="background: var(--color-bg-panel); border-left: 1px solid var(--color-border); overflow-y: auto; display: flex; flex-direction: column;">
+                    <div class="lit-section-header rr-gen-head">${this._t('efk.orientation')}</div>
                     <div style="display: flex; flex-direction: column; gap: 6px; align-items: center; padding: 4px 14px 10px; border-bottom: 1px solid var(--color-border-subtle);">
                         <canvas class="rr-efk-gizmo" width="148" height="148" style="cursor: grab; display: block; touch-action: none;"></canvas>
                         <button class="rr-efk-gizmo-reset rr-btn-chip" style="padding: 3px 10px; font-size: 10px;" title="${this._tx("Reset the active keyframe's orientation (tilts to 0)")}">${this._tx('Reset')}</button>
                     </div>
-                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px 4px;">
-                        <span style="font-size: 9px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.5px;">${this._t('efk.parameters')}</span>
+                    <div class="lit-section-header rr-gen-head" style="margin-bottom: 6px;">
+                        <span style="flex: 1;">${this._t('efk.parameters')}</span>
                         <button class="rr-efk-randomize rr-btn-chip" style="padding: 3px 10px; font-size: 10px;" title="${this._t('efk.randomize')}">🎲 ${this._t('efk.randomize')}</button>
                     </div>
                     <div style="display: flex; gap: 4px; align-items: center; padding: 2px 14px 6px;">
@@ -1115,6 +1142,7 @@ class EffekseerGenerator {
                     <div class="rr-efk-params" style="padding: 4px 14px 14px; display: flex; flex-direction: column; gap: 10px;"></div>
 
                 </div>
+                <div class="rr-c3d-gallery rr-efk-gallery" hidden style="z-index: 20;"></div>
             </div>
         `;
 
@@ -1163,11 +1191,21 @@ class EffekseerGenerator {
         contentEl.querySelector('.rr-efk-preset-save').addEventListener('click', () => this._savePreset());
         contentEl.querySelector('.rr-efk-preset-del').addEventListener('click', () => this._deletePreset());
         this._refreshPresetList();
+        contentEl.querySelector('.rr-efk-open').addEventListener('click', () => this._showGallery());
+        contentEl.querySelector('.rr-efk-keep').addEventListener('click', () => this.saveDesign());
+        contentEl.querySelector('.rr-efk-design-group').addEventListener('change', async (e) => {
+            this.designGroup = await RRForgeDesigns.chooseGroup(e.target.value, this.designGroup, (s, v) => this._td(s, v));
+            this._renderDesignGroups();
+        });
+        this._renderDesignGroups();
         this._bindOrbitControls(contentEl.querySelector('.rr-efk-canvas'));
 
         const nameInput = contentEl.querySelector('.rr-efk-name');
         const recipe = this._recipe();
-        if (recipe) nameInput.value = this._defaultExportName();
+        // A design opened before the page was drawn keeps the name it was opened with.
+        if (this._pendingName != null) nameInput.value = this._pendingName;
+        else if (recipe) nameInput.value = this._defaultExportName();
+        this._pendingName = null;
 
         const sidebarEl = contentEl.querySelector('.rr-efk-sidebar');
         if (sidebarEl) sidebarEl.scrollTop = this._sidebarScroll;
@@ -1213,9 +1251,9 @@ class EffekseerGenerator {
     _renderLayerBar() {
         const bar = this.contentEl && this.contentEl.querySelector('.rr-efk-layerbar');
         if (!bar) return;
-        const header = `<div style="display: flex; justify-content: space-between; align-items: center; padding: 2px 2px 6px;">
-            <span style="font-size: 9px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.5px;">${this._t('efk.layers')}</span>
-            <span style="font-size: 10px; color: var(--color-text-muted);">${this._stack.length} ${this._stack.length === 1 ? this._t('efk.layerSingular') : this._t('efk.layerPlural')}</span>
+        const header = `<div class="lit-section-header rr-gen-head rr-gen-head-inset">
+            <span style="flex: 1;">${this._t('efk.layers')}</span>
+            <span class="rr-gen-head-meta">${this._stack.length} ${this._stack.length === 1 ? this._t('efk.layerSingular') : this._t('efk.layerPlural')}</span>
         </div>`;
         const cards = this._stack.map((entry, i) => {
             const r = this._recipeOf(entry);
@@ -1462,17 +1500,17 @@ class EffekseerGenerator {
                 <input type="number" class="rr-efk-kf-frame rr-input" min="0" max="3600" step="1" value="${layer.kfTimes[layer.activeKf]}" style="width: 100%; min-width: 0; box-sizing: border-box; font-size: 11px; padding: 3px 6px;">
             </div>`;
         const dur = (layer.end || 0) > (layer.start || 0) ? layer.end - (layer.start || 0) : 0;
-        const timingHtml = `<div style="border: 1px solid var(--color-border-subtle); border-radius: 4px; padding: 8px; display: flex; flex-direction: column; gap: 8px;">
-            <span style="font-size: 9px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.5px;">${this._t('efk.timing')}</span>
+        const timingHtml = `<div class="rr-gen-card" style="border: 1px solid var(--color-border-subtle); border-radius: 4px; padding: 8px; display: flex; flex-direction: column; gap: 8px;">
+            <div class="lit-section-header rr-gen-head rr-gen-head-inset">${this._t('efk.timing')}</div>
             <div style="display: flex; align-items: center; gap: 8px;">
-                <label style="font-size: 10px; color: var(--color-text-muted); flex: 1; white-space: nowrap;">${this._t('efk.startFrame')}</label>
+                <label class="rr-gen-param-label" style="flex: 1; white-space: nowrap;">${this._t('efk.startFrame')}</label>
                 <input type="number" data-timing="start" min="0" max="600" step="1" value="${layer.start || 0}" class="rr-input" style="width: 72px; font-size: 11px; padding: 3px 6px;">
             </div>
             <div style="display: flex; align-items: center; gap: 8px;">
-                <label style="font-size: 10px; color: var(--color-text-muted); flex: 1; white-space: nowrap;">${this._t('efk.durationShort')}</label>
+                <label class="rr-gen-param-label" style="flex: 1; white-space: nowrap;">${this._t('efk.durationShort')}</label>
                 <input type="number" data-timing="duration" min="0" max="1200" step="1" value="${dur}" class="rr-input" style="width: 72px; font-size: 11px; padding: 3px 6px;">
             </div>
-            <div style="border-top: 1px solid var(--color-border-subtle); padding-top: 7px;"><label style="font-size: 10px; color: var(--color-text-muted); display: block; margin-bottom: 3px;">${this._t('efk.keyframes')}</label>
+            <div style="border-top: 1px solid var(--color-border-subtle); padding-top: 7px;"><label class="rr-gen-param-label" style="display: block; margin-bottom: 4px;">${this._t('efk.keyframes')}</label>
                 <div style="display: flex; gap: 4px; flex-wrap: wrap; align-items: center;">
                     ${kfChips}
                     <button class="rr-efk-kf-add rr-btn-chip" title="${this._t('efk.addKeyframe')}" style="padding: 2px 8px; font-size: 10px;">＋</button>
@@ -1484,10 +1522,12 @@ class EffekseerGenerator {
             </div>
         </div>`;
 
+        // The number beside each slider takes a typed value (RRSliderNumbers): Enter or leaving it moves the slider.
+        globalThis.RRSliderNumbers?.bind(host);
         host.innerHTML = timingHtml + recipe.params.map(s => {
             const v = values[s.key];
             if (s.type === 'layers') return this._renderLayerCards(recipe);
-            const label = `<label style="font-size: 11px; color: var(--color-text-muted); display: block; margin-bottom: 3px;">${this._tx(s.label)}</label>`;
+            const label = `<label class="rr-gen-param-label" style="display: block; margin-bottom: 4px;">${this._tx(s.label)}</label>`;
             if (s.type === 'color') {
                 return `<div>${label}<button type="button" class="rr-color-swatch-btn rr-efk-color" data-ckey="${s.key}" title="${this._tx('Click to choose color')}" style="background: ${this._safeColor(v)}; width: 100%; height: 26px; display: block;"></button></div>`;
             }
@@ -1518,7 +1558,7 @@ class EffekseerGenerator {
                 </div>`;
             }
             const numericValue = Number.isFinite(Number(v)) ? Number(v) : (Number(s.min) || 0);
-            return `<div>${label}<div style="display: flex; align-items: center; gap: 8px;"><input type="range" data-param="${s.key}" min="${s.min}" max="${s.max}" step="${s.step || 1}" value="${numericValue}" style="flex: 1;"><span data-param-value="${s.key}" style="font-size: 11px; color: var(--color-text); min-width: 26px; text-align: right;">${numericValue}</span></div></div>`;
+            return `<div>${label}<div style="display: flex; align-items: center; gap: 8px;"><input type="range" data-param="${s.key}" min="${s.min}" max="${s.max}" step="${s.step || 1}" value="${numericValue}" style="flex: 1;"><input type="number" data-param-value="${s.key}" class="rr-gen-param-val rr-slider-num" data-no-stepper min="${s.min}" max="${s.max}" step="any" value="${numericValue}" title="${this._tx('Type a value, then Enter')}"></div></div>`;
         }).join('');
 
         const kfFrameInput = host.querySelector('.rr-efk-kf-frame');
@@ -1585,8 +1625,7 @@ class EffekseerGenerator {
                 } else {
                     this._values()[key] = value;
                 }
-                const badge = host.querySelector(`[data-param-value="${key}"]`);
-                if (badge) badge.textContent = value;
+                rrSliderShow(host.querySelector(`[data-param-value="${key}"]`), value);
                 this._scheduleRebuild();
             });
         });
@@ -2017,7 +2056,7 @@ class EffekseerGenerator {
         const layers = this._composerLayers(recipe);
         const { schemas, labels } = recipe.composer;
         const field = (idx, s, v) => {
-            const lab = `<label style="font-size: 10px; color: var(--color-text-muted); display: block; margin-bottom: 2px;">${this._tx(s.label)}</label>`;
+            const lab = `<label class="rr-gen-param-label" style="display: block; margin-bottom: 3px;">${this._tx(s.label)}</label>`;
             const data = `data-lidx="${idx}" data-lkey="${s.key}"`;
             if (s.type === 'color') {
                 return `<div>${lab}<button type="button" class="rr-color-swatch-btn rr-efk-lcolor" data-clidx="${idx}" data-clkey="${s.key}" title="${this._tx('Click to choose color')}" style="background: ${this._safeColor(v)}; width: 100%; height: 22px; display: block;"></button></div>`;
@@ -2030,16 +2069,16 @@ class EffekseerGenerator {
                 return `<div>${lab}<select ${data} class="rr-input" style="width: 100%; font-size: 11px; padding: 2px 4px;">${opts}</select></div>`;
             }
             const numericValue = Number.isFinite(Number(v)) ? Number(v) : (Number(s.min) || 0);
-            return `<div>${lab}<div style="display: flex; align-items: center; gap: 5px;"><input type="range" ${data} min="${s.min}" max="${s.max}" step="${s.step || 1}" value="${numericValue}" style="flex: 1;"><span data-lval="${idx}:${s.key}" style="font-size: 10px; color: var(--color-text); min-width: 30px; text-align: right;">${numericValue}</span></div></div>`;
+            return `<div>${lab}<div style="display: flex; align-items: center; gap: 5px;"><input type="range" ${data} min="${s.min}" max="${s.max}" step="${s.step || 1}" value="${numericValue}" style="flex: 1;"><input type="number" data-lval="${idx}:${s.key}" class="rr-gen-param-val rr-slider-num" data-no-stepper min="${s.min}" max="${s.max}" step="any" value="${numericValue}" title="${this._tx('Type a value, then Enter')}"></div></div>`;
         };
 
         const cards = layers.map((ly, idx) => {
             const schema = schemas[ly.kind];
             if (!schema) return '';
             const fields = schema.map(s => field(idx, s, ly[s.key] ?? s.default)).join('');
-            return `<div style="border: 1px solid var(--color-border); border-radius: 4px; padding: 8px; display: flex; flex-direction: column; gap: 6px; background: var(--color-bg-surface);">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-size: 11px; font-weight: 700; color: var(--color-accent-bright);">${idx + 1}. ${this._tx(labels[ly.kind] || ly.kind)}</span>
+            return `<div class="rr-gen-card" style="border: 1px solid var(--color-border); border-radius: 4px; padding: 8px; display: flex; flex-direction: column; gap: 6px; background: var(--color-bg-surface);">
+                <div class="lit-section-header rr-gen-head rr-gen-head-inset">
+                    <span style="flex: 1;">${idx + 1}. ${this._tx(labels[ly.kind] || ly.kind)}</span>
                     <span style="display: flex; gap: 4px;">
                         <button class="rr-efk-layer-dup rr-btn-chip" data-lidx="${idx}" title="${this._t('efk.dupLayer')}" style="padding: 1px 7px; font-size: 10px;">⧉</button>
                         <button class="rr-efk-layer-del rr-btn-chip" data-lidx="${idx}" title="${this._t('efk.delLayer')}" style="padding: 1px 7px; font-size: 10px;">✕</button>
@@ -2075,8 +2114,7 @@ class EffekseerGenerator {
                 else if (schema.type === 'color' || schema.type === 'select') value = input.value;
                 else value = Number(input.value);
                 layers[idx][key] = value;
-                const badge = host.querySelector(`[data-lval="${idx}:${key}"]`);
-                if (badge) badge.textContent = value;
+                rrSliderShow(host.querySelector(`[data-lval="${idx}:${key}"]`), value);
                 this._scheduleRebuild();
             });
         });
@@ -2248,6 +2286,7 @@ class EffekseerGenerator {
     _teardownPreview() {
         this._generation++;
         this._playing = false;
+        this._efkLoading = false;
         if (this._gizmo) { this._gizmo.dispose(); this._gizmo = null; }
         if (this._rafId) { cancelAnimationFrame(this._rafId); this._rafId = null; }
         clearTimeout(this._rebuildTimer);
@@ -2316,6 +2355,7 @@ class EffekseerGenerator {
 
     _scheduleRebuild() {
         clearTimeout(this._rebuildTimer);
+        this._rebuildPending = true;
         this._rebuildTimer = setTimeout(() => this._loadCurrentEffect(), 180);
     }
 
@@ -2325,6 +2365,7 @@ class EffekseerGenerator {
      * slider drags read as live regeneration instead of a pause.
      */
     _loadCurrentEffect() {
+        this._rebuildPending = false;
         if (!this._efkContext) return;
         const context = this._efkContext;
         const recipe = this._recipe();
@@ -2449,8 +2490,10 @@ class EffekseerGenerator {
                 return;
             }
             clearTimeout(this._watchdogTimer);
+            this._efkLoading = false;
             this._swapEffect(pending);
         };
+        this._efkLoading = true;
         try {
             pending = context.loadEffect(
                 bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
@@ -2459,6 +2502,7 @@ class EffekseerGenerator {
                 (msg, p) => {
                     console.error('EffekseerGenerator: effect load failed:', msg, p);
                     if (gen === this._generation) {
+                        this._efkLoading = false;
                         clearTimeout(this._watchdogTimer);
                         this._overlay(this._t('efk.loadFailed'), true);
                         this._status(String(msg), true);
@@ -2478,6 +2522,7 @@ class EffekseerGenerator {
             }
         } catch (e) {
             console.error('EffekseerGenerator: loadEffect threw:', e);
+            this._efkLoading = false;
             clearTimeout(this._watchdogTimer);
             this._overlay(this._t('efk.loadFailed'), true);
             this._status(String(e.message), true);
@@ -2648,6 +2693,402 @@ class EffekseerGenerator {
         if (typeof RREffekseerStateGuard !== 'undefined') RREffekseerStateGuard.settle(this._efkContext);
     }
 
+    // ── Designs: Save Design / Open (RRForgeDesigns) ─────────────────────
+    // A design is the whole effect, named, with a picture: every layer's
+    // recipe, keyframes and values, the cycle length, loop and the name
+    // box. Kept under <project>/forge/effekseer_generator/designs/[group/]
+    // as <name>.json + <name>.png. Separate from presets (one recipe's
+    // values, no picture). The record's recipe may come from another user
+    // (Workshop): _cleanDesign checks every value against the recipe
+    // schemas before any of it reaches the stack.
+
+    _designsDir() {
+        const project = this.projectController && this.projectController.getCurrentProject && this.projectController.getCurrentProject();
+        return project && project.path ? require('path').join(project.path, 'forge', 'effekseer_generator', 'designs') : null;
+    }
+
+    _renderDesignGroups() {
+        if (typeof RRForgeDesigns === 'undefined') return;
+        RRForgeDesigns.renderGroups(this.contentEl && this.contentEl.querySelector('.rr-efk-design-group'),
+            this._designsDir(), this.designGroup, s => this._td(s));
+    }
+
+    /** A project texture file name a design may name: no folders, no "..", PNG or JPEG (as _pickTexture copies them). */
+    static designTextureName(value) {
+        const name = typeof value === 'string' ? value : '';
+        return name.length <= 120 && !name.includes('..') && /^[A-Za-z0-9_-][A-Za-z0-9_.-]*\.(?:png|jpe?g)$/i.test(name) ? name : '';
+    }
+
+    /** One param value as the schema allows it; anything else is the default. */
+    _cleanDesignValue(schema, value, recipe) {
+        const def = schema.default;
+        switch (schema.type) {
+            case 'range': {
+                const n = typeof value === 'number' || (typeof value === 'string' && value.trim() !== '') ? Number(value) : NaN;
+                if (!Number.isFinite(n)) return def;
+                const lo = Number(schema.min), hi = Number(schema.max);
+                return Math.min(Number.isFinite(hi) ? hi : n, Math.max(Number.isFinite(lo) ? lo : n, n));
+            }
+            case 'color':
+                return typeof value === 'string' && /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/i.test(value) ? value : def;
+            case 'toggle':
+                return typeof value === 'boolean' ? value : def;
+            case 'select':
+                return (schema.options || []).some(o => o.value === value) ? value : def;
+            case 'text':
+                return typeof value === 'string' ? value.slice(0, schema.maxLen || 48) : def;
+            case 'textarea':
+                return typeof value === 'string' ? value.slice(0, schema.maxLen || 500) : def;
+            case 'texture':
+                return value === '' ? '' : (EffekseerGenerator.designTextureName(value) || def);
+            case 'layers': {
+                const composer = recipe && recipe.composer;
+                if (!composer) return def;
+                const source = Array.isArray(value) ? value : (Array.isArray(def) ? def : []);
+                const out = [];
+                for (const ly of source.slice(0, 64)) {
+                    const kind = ly && typeof ly === 'object' && typeof ly.kind === 'string' ? ly.kind : '';
+                    const fields = Object.prototype.hasOwnProperty.call(composer.schemas, kind) ? composer.schemas[kind] : null;
+                    if (!fields) continue;
+                    const layer = { kind };
+                    for (const f of fields) layer[f.key] = this._cleanDesignValue(f, ly[f.key], null);
+                    out.push(layer);
+                }
+                return out;
+            }
+            default:
+                return value === undefined || value === null || typeof value !== typeof def || typeof def === 'object' ? def : value;
+        }
+    }
+
+    /** A keyframe's values: every param of the recipe, checked (missing ones at their default). */
+    _cleanDesignValues(recipe, values) {
+        const src = values && typeof values === 'object' && !Array.isArray(values) ? values : {};
+        const out = {};
+        for (const s of recipe.params) {
+            const has = Object.prototype.hasOwnProperty.call(src, s.key) && src[s.key] !== null && src[s.key] !== undefined;
+            out[s.key] = this._cleanDesignValue(s, has ? src[s.key] : undefined, recipe);
+            // Defaults are shared objects (the Composer's layer list): never alias them.
+            if (out[s.key] && typeof out[s.key] === 'object') out[s.key] = JSON.parse(JSON.stringify(out[s.key]));
+        }
+        return out;
+    }
+
+    /** The design's recipe: everything that rebuilds this effect, as plain JSON. */
+    designRecipe() {
+        const layers = [];
+        const textureFiles = new Set();
+        let activeLayer = 0;
+        this._stack.forEach((entry, index) => {
+            const recipe = this._recipeOf(entry);
+            if (!recipe) return;
+            if (index === this._activeLayer) activeLayer = layers.length;
+            const kfs = Array.isArray(entry.keyframes) && entry.keyframes.length ? entry.keyframes : [entry.values || {}];
+            const timing = { keyframes: kfs, kfTimes: Array.isArray(entry.kfTimes) ? entry.kfTimes.slice() : [],
+                start: entry.start || 0, end: entry.end || 0, activeKf: entry.activeKf || 0 };
+            this._normalizeKfTimes(timing);
+            layers.push({
+                effect: recipe.id,
+                start: entry.start || 0,
+                end: entry.end || 0,
+                opacity: entry.opacity ?? 1,
+                hidden: !!entry.hidden,
+                activeKeyframe: timing.activeKf,
+                keyframes: kfs.map((kf, i) => {
+                    const values = this._cleanDesignValues(recipe, RR_EfkRecipeUtil.resolveParams(recipe, kf));
+                    for (const s of recipe.params) if (s.type === 'texture' && values[s.key]) textureFiles.add(values[s.key]);
+                    const out = { frame: timing.kfTimes[i], values };
+                    const tilt = this._kfTilt(kf);
+                    if (tilt.x || tilt.y || tilt.z) out.tilt = { x: tilt.x, y: tilt.y, z: tilt.z };
+                    return out;
+                }),
+            });
+        });
+        const input = this.contentEl && this.contentEl.querySelector && this.contentEl.querySelector('.rr-efk-name');
+        const typed = input ? input.value : (this._pendingName || '');
+        return {
+            exportName: String(typed || this._defaultExportName()).replace(/[^A-Za-z0-9_\-]/g, '').slice(0, 128),
+            duration: this._durationFrames(),
+            loop: !!this._loopPreview,
+            activeLayer,
+            layers,
+            // Project files the layers name (Custom Texture / Planet N Texture), all in <project>/effects/Texture/.
+            textureFiles: [...textureFiles].sort(),
+        };
+    }
+
+    designRecord() {
+        return { builder: 'effekseer', version: 1, recipe: this.designRecipe() };
+    }
+
+    /**
+     * A design's recipe as the tool's state, every value checked: unknown
+     * recipes are dropped, unknown params dropped, values outside a
+     * schema replaced by its default, numbers clamped to the tool's
+     * limits. Throws when no layer is left.
+     */
+    _cleanDesign(recipe) {
+        const src = recipe && typeof recipe === 'object' && !Array.isArray(recipe) ? recipe : {};
+        const num = (v, lo, hi, def) => {
+            const n = Number(v);
+            return typeof v === 'number' || (typeof v === 'string' && v.trim() !== '')
+                ? (Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : def) : def;
+        };
+        const FRAME_MAX = 4800;      // keyframe frame (3600) + layer duration (1200), the fields' own limits
+        const TILT_MAX = 36000;      // degrees; drags unwrap past one turn
+        const STRUCTURAL = new Set(['select', 'toggle', 'text', 'textarea']);
+        const stack = [];
+        let activeLayer = 0;
+        const layersIn = Array.isArray(src.layers) ? src.layers.slice(0, 64) : [];
+        layersIn.forEach((layer, index) => {
+            if (!layer || typeof layer !== 'object' || Array.isArray(layer)) return;
+            const recipeDef = typeof layer.effect === 'string' ? RR_EFK_RECIPE_REGISTRY.find(r => r.id === layer.effect) : null;
+            if (!recipeDef) return;
+            if (index === Math.trunc(Number(src.activeLayer))) activeLayer = stack.length;
+            const kfIn = Array.isArray(layer.keyframes) && layer.keyframes.length ? layer.keyframes.slice(0, 64) : [{}];
+            const keyframes = kfIn.map((kf) => {
+                const k = kf && typeof kf === 'object' && !Array.isArray(kf) ? kf : {};
+                const values = this._cleanDesignValues(recipeDef, k.values);
+                const tilt = k.tilt && typeof k.tilt === 'object' ? k.tilt : {};
+                for (const axis of ['x', 'y', 'z']) {
+                    const deg = num(tilt[axis], -TILT_MAX, TILT_MAX, 0);
+                    if (deg) values['__tilt' + axis.toUpperCase()] = deg;
+                }
+                return values;
+            });
+            // Structural params stay in lockstep across keyframes (as the panel keeps them).
+            for (const s of recipeDef.params) {
+                if (!STRUCTURAL.has(s.type)) continue;
+                for (const values of keyframes) values[s.key] = keyframes[0][s.key];
+            }
+            const start = num(layer.start, 0, FRAME_MAX, 0);
+            const end = num(layer.end, 0, FRAME_MAX, 0);
+            const kfTimes = kfIn.map((kf, i) => num(kf && kf.frame, 0, FRAME_MAX, NaN));
+            const activeKf = Math.max(0, Math.min(keyframes.length - 1, Math.trunc(num(layer.activeKeyframe, 0, 64, 0))));
+            const entry = {
+                recipeId: recipeDef.id, keyframes, activeKf, kfTimes, start, end,
+                opacity: num(layer.opacity, 0, 1, 1), hidden: layer.hidden === true,
+            };
+            this._normalizeKfTimes(entry);   // a missing frame is spread as the panel spreads it
+            entry.values = entry.keyframes[entry.activeKf];
+            stack.push(entry);
+        });
+        if (!stack.length) throw new Error('The design names no effect this editor has.');
+        const name = typeof src.exportName === 'string' ? src.exportName.replace(/[^A-Za-z0-9_\-]/g, '').slice(0, 128) : '';
+        return {
+            stack,
+            activeLayer: Math.min(activeLayer, stack.length - 1),
+            duration: this._durationFrames(src.duration),
+            loop: typeof src.loop === 'boolean' ? src.loop : true,
+            name,
+        };
+    }
+
+    /** Put a design's recipe into the tool (and onto the page when it is drawn). Answers the cleaned state. */
+    _applyDesign(recipe, fallbackName = '') {
+        const clean = this._cleanDesign(recipe);
+        this._stack = clean.stack;
+        this._activeLayer = clean.activeLayer;
+        this._effectDuration = clean.duration;
+        this._loopPreview = clean.loop;
+        this._tiltDelta = { x: 0, y: 0, z: 0 };
+        const shownName = clean.name || String(fallbackName || '').replace(/[^A-Za-z0-9_\-]/g, '') || this._defaultExportName();
+        const page = this.contentEl && this.contentEl.querySelector && this.contentEl.querySelector('.rr-efk-layout');
+        if (page) {
+            this._closeColorPicker();
+            this._closeGallery?.();
+            const duration = this.contentEl.querySelector('.rr-efk-duration');
+            if (duration) duration.value = this._effectDuration;
+            const loop = this.contentEl.querySelector('.rr-efk-loop');
+            if (loop) loop.checked = this._loopPreview;
+            this._refreshAfterLayerChange();
+            const input = this.contentEl.querySelector('.rr-efk-name');
+            if (input) input.value = shownName;
+            this._scheduleRebuild();
+        } else {
+            this._pendingName = shownName;
+        }
+        return clean;
+    }
+
+    /** The project texture files a design names that are not in <project>/effects/Texture/. */
+    _missingDesignTextures() {
+        const project = this.projectController && this.projectController.getCurrentProject && this.projectController.getCurrentProject();
+        if (!project || !project.path) return [];
+        const fs = require('fs'), path = require('path');
+        const names = new Set();
+        for (const entry of this._stack) {
+            const r = this._recipeOf(entry);
+            if (!r) continue;
+            for (const kf of entry.keyframes || []) {
+                for (const s of r.params) if (s.type === 'texture' && kf[s.key]) names.add(kf[s.key]);
+            }
+        }
+        return [...names].filter(n => !fs.existsSync(path.join(project.path, 'effects', 'Texture', n)));
+    }
+
+    /**
+     * Open a saved design (by group and name, as the Designs folder holds
+     * it) into the tool. Public: the Workshop opens an added item with it,
+     * right after opening the tool. Answers true when it opened.
+     */
+    openDesign(group, name) {
+        return this._openDesign(String(group || ''), String(name || ''));
+    }
+
+    _openDesign(group, name) {
+        try {
+            const base = this._designsDir();
+            if (!base) throw new Error('no project');
+            const data = RRForgeDesigns.read(base, group, name);
+            if (!data || typeof data !== 'object' || (data.builder !== undefined && data.builder !== 'effekseer')) throw new Error('not an effect design');
+            this._applyDesign(data.recipe, name);
+            const input = this.contentEl && this.contentEl.querySelector && this.contentEl.querySelector('.rr-efk-name');
+            this._openedDesign = { group, name, typed: input ? input.value : this._pendingName };
+            this.designGroup = group;
+            this._renderDesignGroups();
+            const missing = this._missingDesignTextures();
+            this._status(this._td('Opened {name}.', { name })
+                + (missing.length ? ' ' + this._td('Missing from effects/Texture: {files}', { files: missing.join(', ') }) : ''), missing.length > 0);
+            return true;
+        } catch (error) {
+            console.error('[EffekseerGenerator] open design', error);
+            this._status(this._td('{name} could not be opened.', { name }), true);
+            return false;
+        }
+    }
+
+    /**
+     * The design's picture: the preview at a representative frame (the
+     * frame shown when paused, else 40% into the cycle), PNG, 384 px.
+     * Null when there is no preview to take it from.
+     */
+    /**
+     * The square of a w×h RGBA frame a design's picture shows: around the pixels brighter than the background
+     * (any channel over 40), a fifth again as margin, at least a quarter of the frame's short side, kept inside the
+     * frame; the frame's middle square when nothing is lit.
+     */
+    static designPictureCrop(data, w, h) {
+        let x0 = w, y0 = h, x1 = -1, y1 = -1;
+        for (let y = 0; y < h; y += 2) {
+            for (let x = 0; x < w; x += 2) {
+                const i = (y * w + x) * 4;
+                if (data[i] > 40 || data[i + 1] > 40 || data[i + 2] > 40) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+            }
+        }
+        const short = Math.min(w, h);
+        if (x1 < 0) return { x: Math.round((w - short) / 2), y: Math.round((h - short) / 2), size: short };
+        const size = Math.min(short, Math.max(Math.round(short / 4), Math.round(Math.max(x1 - x0, y1 - y0) * 1.2) + 4));
+        const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+        const x = Math.max(0, Math.min(w - size, Math.round(cx - size / 2)));
+        const y = Math.max(0, Math.min(h - size, Math.round(cy - size / 2)));
+        return { x, y, size };
+    }
+
+    async _designPicture() {
+        if (this._rebuildPending && this._efkContext) {
+            clearTimeout(this._rebuildTimer);
+            this._loadCurrentEffect();
+        }
+        const until = Date.now() + 3000;
+        while (this._efkContext && this._efkLoading && Date.now() < until) await new Promise(r => setTimeout(r, 50));
+        const canvas = this.contentEl && this.contentEl.querySelector('.rr-efk-canvas');
+        if (!canvas || !this._efkContext || !this._gl || !this._efkEffect || !this._efkEffect.isLoaded) return null;
+        try {
+            if (this._playing || !this._efkHandle || !this._efkHandle.exists) {
+                this._play();
+                const target = Math.min(600, Math.round(this._loopFrames * 0.4));
+                while (this._frame < target) { this._ctxUpdate(); this._frame++; }
+            }
+            // Drawn and read in one task: the WebGL canvas keeps no buffer past it.
+            this._renderFrame(canvas, null, () => 0);
+            // Framed on the effect: the lit pixels' box, squared, with a margin (an effect is often small in a
+            // wide preview, which squeezed whole into a card left a dot on black).
+            const w = canvas.width, h = canvas.height, copy = document.createElement('canvas');
+            copy.width = w; copy.height = h;
+            const cg = copy.getContext('2d');
+            cg.drawImage(canvas, 0, 0);
+            const crop = EffekseerGenerator.designPictureCrop(cg.getImageData(0, 0, w, h).data, w, h);
+            const size = 384, out = document.createElement('canvas');
+            out.width = out.height = size;
+            const og = out.getContext('2d');
+            og.fillStyle = '#000'; og.fillRect(0, 0, size, size);
+            og.drawImage(copy, crop.x, crop.y, crop.size, crop.size, 0, 0, size, size);
+            return Buffer.from(out.toDataURL('image/png').split(',')[1], 'base64');
+        } catch (error) {
+            console.error('[EffekseerGenerator] design picture', error);
+            return null;
+        }
+    }
+
+    /** Keep the whole effect in the Forge under its name, in the chosen group: opened again from Open, nothing exported. */
+    async saveDesign() {
+        const base = this._designsDir();
+        if (!base) { this._status(this._t('efk.noProject'), true); return false; }
+        const input = this.contentEl && this.contentEl.querySelector('.rr-efk-name');
+        const typed = input ? input.value : '';
+        // Saved again with the name it was opened with, it is the design it was opened from.
+        let name = this._openedDesign && typed === this._openedDesign.typed ? this._openedDesign.name : RRForgeDesigns.folderName(typed);
+        if (!name) {
+            name = RRForgeDesigns.folderName(await RRDialog.prompt(this._td('Name this effect:'), { title: this._td('Save Design'), value: this._defaultExportName() }));
+            if (!name) return false;
+            if (input) input.value = name;
+        }
+        const group = this.designGroup || '';
+        try {
+            const record = this.designRecord();
+            const picture = await this._designPicture();
+            const kept = await RRForgeDesigns.save(base, group, name, record, picture, this._openedDesign, (s, v) => this._td(s, v));
+            if (!kept) return false;
+            this._openedDesign = { group, name, typed: input ? input.value : name };
+            this._renderDesignGroups();
+            this._status(this._td('Design {name} saved.', { name }));
+            return true;
+        } catch (error) {
+            console.error('[EffekseerGenerator] save design', error);
+            this._status(this._td('{name} could not be saved.', { name }), true);
+            return false;
+        }
+    }
+
+    /** Saved designs as pictures to pick from, by group (no exported section: an .efkefc cannot be opened back into the tool). */
+    _showGallery() {
+        const box = this.contentEl && this.contentEl.querySelector('.rr-efk-gallery');
+        const base = this._designsDir();
+        if (!box) return;
+        if (!base) { this._status(this._t('efk.noProject'), true); return; }
+        const t = (s, v) => this._td(s, v);
+        box.innerHTML = `<div class="rr-c3d-gallery-head"><span>${this._escapeHtml(t('Open a saved effect'))}</span><button class="rr-c3d-remove" data-close title="${this._escapeHtml(t('Close'))}">✕</button></div>
+            <div class="rr-c3d-gallery-scroll">${RRForgeDesigns.gallery(base, null, {
+                noDesigns: this._escapeHtml(t('No designs yet. Save Design keeps an effect here without exporting it.')),
+            }, t)}</div>`;
+        box.hidden = false;
+        // One Escape listener at a time (as the Prop Builder's gallery).
+        this._closeGallery?.();
+        const close = () => { box.hidden = true; document.removeEventListener('keydown', onKey, true); if (this._closeGallery === close) this._closeGallery = null; };
+        const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+        document.addEventListener('keydown', onKey, true);
+        this._closeGallery = close;
+        box.onclick = e => {
+            if (e.target.closest('[data-close]')) { close(); return; }
+            const remove = e.target.closest('[data-delete]');
+            if (remove) {
+                const group = remove.dataset.group || '', name = remove.dataset.delete;
+                RRForgeDesigns.remove(base, group, name, t).then(done => {
+                    if (!done) return;
+                    if (this._openedDesign && this._openedDesign.group === group && this._openedDesign.name === name) this._openedDesign = null;
+                    this._renderDesignGroups();
+                    this._showGallery();
+                });
+                return;
+            }
+            const card = e.target.closest('.rr-c3d-saved');
+            if (!card) return;
+            close();
+            if (card.dataset.kind === 'design') this._openDesign(card.dataset.group || '', card.dataset.name);
+        };
+    }
+
     // ── Export ───────────────────────────────────────────────────────────
 
     async _export() {
@@ -2740,6 +3181,7 @@ class EffekseerGenerator {
     }
 
     detach() {
+        this._closeGallery?.();
         this._teardownPreview();
     }
 }

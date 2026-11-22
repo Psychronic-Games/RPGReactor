@@ -189,7 +189,7 @@ test('the module loads with no game global present, in a bare context and throug
     assert.equal(typeof bare.ReactorImageLayers.normalize, 'function');
     assert.equal(typeof bare.ReactorImageLayers.isTileBlocked, 'function');
     assert.deepEqual([...L.POSITIONS], ['back', 'ground', 'same', 'over']);
-    assert.deepEqual([...L.FITS], ['map', 'repeat', 'fill']);
+    assert.deepEqual([...L.FITS], ['map', 'repeat', 'fill', 'place']);
     assert.deepEqual([...L.BLENDS], ['normal', 'add', 'multiply', 'screen']);
     assert.deepEqual([...L.OPS], ['=', '>=', '<=']);
 });
@@ -198,10 +198,10 @@ test('normalize gives every field its default and never changes what it was give
     const stored = Object.freeze({ name: 'Town_ground' });
     assert.deepEqual(L.normalize(stored), {
         name: 'Town_ground', layer: 'ground', fit: 'map', drift: [0, 0], follow: 1, opacity: 255, blendMode: 0,
-        switch: 0, when: null, fade: 0, variable: 0, variantName: '', versions: null, repeat: 'both', z: null
+        switch: 0, when: null, fade: 0, variable: 0, variantName: '', versions: null, repeat: 'both', z: null, at: [0, 0]
     });
     const full = { name: 'Fog', layer: 'over', fit: 'repeat', drift: [12, -4], follow: 0.5, opacity: 140, blendMode: 2, switch: 7,
-        when: { variable: 3, op: '>=', value: 3 }, fade: 1.5, variable: 9, variantName: 'Fog-%1', versions: { 1: 'Fog_night', 2: 'Fog_winter' }, repeat: 'x', z: 6 };
+        when: { variable: 3, op: '>=', value: 3 }, fade: 1.5, variable: 9, variantName: 'Fog-%1', versions: { 1: 'Fog_night', 2: 'Fog_winter' }, repeat: 'x', z: 6, at: [0, 0] };
     const before = JSON.stringify(full);
     const record = L.normalize(full);
     assert.deepEqual(record, full);

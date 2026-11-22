@@ -162,6 +162,8 @@ function isStagingExcluded(relPath) {
     const parts = relPath.split(path.sep);
     // The editor's own plugins for this project (EditorPlugins.js), beside the game's in js/: never part of the game.
     if (parts[0] === 'js' && (parts[1] === 'editor-plugins' || parts[1] === 'reactor_editor_plugins.js')) return true;
+    // A 2D structure's phantom map draws its other layers into pictures of its own while it is open: never the game's.
+    if (parts[0] === 'img' && parts[1] === 'parallaxes' && parts[2] === 'structures' && parts[3] === '_workshop') return true;
     if (NEVER_SHIPPED.has(parts[0]) || NEVER_SHIPPED.has(parts[parts.length - 1])) return true;
     // The editor's own half-written files (a save or import interrupted).
     if (/\.tmp-rr-|\.partial-/.test(parts[parts.length - 1])) return true;

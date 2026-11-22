@@ -13,10 +13,17 @@
 
     const FORMAT = 'rpg-reactor-forge-design';
     const VERSION = 1;
-    /** The builders whose designs can be shared, where Save Design keeps them, and their Workshop tag. */
+    /**
+     * The builders whose designs can be shared: where Save Design keeps them, their Workshop tag (the Type tags set
+     * up in Steamworks › Workshop › Tags), the Forge tool that opens them, its menu name, and the ForgeManager property
+ * that holds the tool (`getter`; the tool opens a design by `openDesign(group, name)`, or the builders' `_openDesign`).
+     */
     const KINDS = {
-        character3d: { tag: 'Character', label: 'Character', folder: ['forge', 'character_3d', 'characters'] },
-        prop3d: { tag: 'Prop', label: 'Prop', folder: ['forge', 'prop_3d', 'props'] }
+        character3d: { tag: 'Character', label: 'Character', folder: ['forge', 'character_3d', 'characters'], tool: 'character-3d-builder', menu: 'menu.character3dBuilder', getter: 'character3dBuilder' },
+        prop3d: { tag: 'Prop', label: 'Prop', folder: ['forge', 'prop_3d', 'props'], tool: 'prop-builder', menu: 'menu.propBuilder', getter: 'propBuilder' },
+        animation: { tag: 'Animation', label: 'Animation', folder: ['forge', 'animation_generator', 'designs'], tool: 'animation-generator', menu: 'menu.animationGenerator', getter: 'animationGenerator' },
+        effekseer: { tag: 'Effect', label: 'Effect', folder: ['forge', 'effekseer_generator', 'designs'], tool: 'effekseer-generator', menu: 'menu.effekseerGenerator', getter: 'effekseerGenerator' },
+        sound: { tag: 'Sound', label: 'Sound', folder: ['forge', 'sound_effect_generator', 'designs'], tool: 'sound-effect-generator', menu: 'menu.soundEffectGenerator', getter: 'soundEffectGenerator' }
     };
     const IMPORT_GROUP = 'Workshop';
     const MAX_ITEM_JSON = 4 * 1024 * 1024;
@@ -25,6 +32,54 @@
     const MAX_PICTURE = 8 * 1024 * 1024;
     const PICTURE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp'];
     const PUBLISHED_FILE = ['forge', 'workshop.json'];
+    // The project files a design's recipe names, carried in the item's textures/ folder: an animation's textures
+    // (forge/animation_generator/textures) and an effect's custom textures (effects/Texture). Pictures (and, for an
+    // animation, short videos) only, each a plain file of at most 8 MB, at most 16 of them. `slots` finds every place
+    // the recipe names one, as [object, key] pairs; `list` is the recipe's own summary of them.
+    const MAX_TEXTURE = 8 * 1024 * 1024;
+    const MAX_TEXTURES = 16;
+    const TEXTURE_FOLDER = ['forge', 'animation_generator', 'textures'];
+    const CARRIED = {
+        animation: {
+            folder: TEXTURE_FOLDER, list: 'textures', copyName: (stem, n, ext) => `${stem} ${n}${ext}`,
+            extensions: ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.mp4', '.webm'],
+            slots(recipe) {
+                const slots = [];
+                const visit = params => { if (params && typeof params === 'object' && typeof params.texture === 'string' && params.texture) slots.push([params, 'texture']); };
+                for (const layer of Array.isArray(recipe.layers) ? recipe.layers : []) {
+                    for (const kf of Array.isArray(layer && layer.keyframes) ? layer.keyframes : []) visit(kf && kf.params);
+                }
+                if (recipe.previewSingle) visit(recipe.previewSingle.params);
+                return slots;
+            }
+        },
+        effekseer: {
+            folder: ['effects', 'Texture'], list: 'textureFiles', copyName: (stem, n, ext) => `${stem}-${n}${ext}`,
+            extensions: ['.png', '.jpg', '.jpeg'],
+            // The Effekseer generator's own rule (EffekseerGenerator.designTextureName): no spaces.
+            rule: /^[A-Za-z0-9_-][A-Za-z0-9_.-]*\.(?:png|jpe?g)$/i,
+            // Custom Texture (customTex) and the Interface's planet textures (p1tex, p2tex...).
+            slots(recipe) {
+                const slots = [];
+                for (const layer of Array.isArray(recipe.layers) ? recipe.layers : []) {
+                    for (const kf of Array.isArray(layer && layer.keyframes) ? layer.keyframes : []) {
+                        const values = kf && kf.values;
+                        if (!values || typeof values !== 'object') continue;
+                        for (const key of Object.keys(values)) if ((key === 'customTex' || /^p\d+tex$/.test(key)) && typeof values[key] === 'string' && values[key]) slots.push([values, key]);
+                    }
+                }
+                return slots;
+            }
+        }
+    };
+    /** A file name as a recipe may hold one: plain (the generators' own rule), no leading dot, of a carried kind. */
+    function textureName(name, kind = 'animation') {
+        const spec = CARRIED[kind];
+        if (!spec || typeof name !== 'string' || !name || name.length > 128 || name.trim() !== name) return '';
+        if (/[\\/:*?"<>|\u0000-\u001f]/.test(name) || name.startsWith('.')) return '';
+        if (spec.rule && (!spec.rule.test(name) || name.includes('..') || name.length > 120)) return '';
+        return spec.extensions.includes(path().extname(name).toLowerCase()) ? name : '';
+    }
 
     /** A name that can be a file or folder name (as the Forge's own folderName). */
     function cleanName(name) { return String(name || '').trim().replace(/[\\/:*?"<>|\x00-\x1f]+/g, '').replace(/\s+/g, ' ').replace(/^\.+/, '').slice(0, 48); }
@@ -100,6 +155,19 @@
             io.copyFileSync(picture, p.join(content, 'picture' + ext));
             item.picture = 'picture' + ext;
         }
+        const spec = CARRIED[design.kind];
+        if (spec) {
+            const names = [...new Set(spec.slots(record.recipe).map(([o, k]) => textureName(o[k], design.kind)).filter(Boolean))];
+            const carried = [];
+            for (const name of names.slice(0, MAX_TEXTURES)) {
+                const file = p.join(projectPath, ...spec.folder, name);
+                if (!io.existsSync(file) || !io.statSync(file).isFile() || io.statSync(file).size > MAX_TEXTURE) continue;
+                io.mkdirSync(p.join(content, 'textures'), { recursive: true });
+                io.copyFileSync(file, p.join(content, 'textures', name));
+                carried.push(name);
+            }
+            if (carried.length) item.textures = carried;
+        }
         io.writeFileSync(p.join(content, 'item.json'), JSON.stringify(item, null, 2) + '\n');
         let previewPath = '';
         if (design.picture && io.statSync(design.picture).size <= MAX_PREVIEW) {
@@ -140,7 +208,16 @@
         const preview = plainFile(folder, 'preview.png', MAX_PREVIEW) || '';
         let picture = '';
         if (typeof item.picture === 'string' && /^picture\.(png|jpe?g|webp)$/i.test(item.picture)) picture = plainFile(folder, item.picture, MAX_PICTURE) || '';
-        return { kind: item.kind, name, record, preview, picture };
+        // The files its recipe names (CARRIED): only names a recipe may hold, each a plain file in the item's textures/.
+        const textures = [];
+        if (CARRIED[item.kind] && Array.isArray(item.textures)) {
+            for (const raw of item.textures.slice(0, MAX_TEXTURES)) {
+                const name = textureName(raw, item.kind);
+                const file = name && plainFile(path().join(folder, 'textures'), name, MAX_TEXTURE);
+                if (file && !textures.some(t => t.name === name)) textures.push({ name, file });
+            }
+        }
+        return { kind: item.kind, name, record, preview, picture, textures };
     }
 
     /** A name not yet taken among `taken` (lower-cased): "Name", "Name 2", "Name 3"... */
@@ -169,6 +246,29 @@
             io.copyFileSync(item.picture, p.join(folder, name + ext));
             record.recipe.image = name;
         }
+        const spec = CARRIED[item.kind];
+        if (spec && item.textures && item.textures.length) {
+            // Into the project's folder for them: a file of that name with the same bytes is the same texture; one
+            // that differs is never overwritten: the next free name ("Name 2.png") holding the same bytes, or a new
+            // one, and the recipe follows it.
+            const folder = p.join(projectPath, ...spec.folder);
+            io.mkdirSync(folder, { recursive: true });
+            const renamed = new Map();
+            for (const texture of item.textures) {
+                const incoming = io.readFileSync(texture.file);
+                const ext = p.extname(texture.name), stem = texture.name.slice(0, -ext.length);
+                let target = texture.name;
+                for (let n = 2; ; n++) {
+                    const at = p.join(folder, target);
+                    if (!io.existsSync(at)) { io.writeFileSync(at, incoming); break; }
+                    if (io.statSync(at).isFile() && io.readFileSync(at).equals(incoming)) break;
+                    target = spec.copyName(stem.slice(0, 100), n, ext);
+                }
+                if (target !== texture.name) renamed.set(texture.name, target);
+            }
+            for (const [obj, key] of spec.slots(record.recipe)) if (renamed.has(obj[key])) obj[key] = renamed.get(obj[key]);
+            if (Array.isArray(record.recipe[spec.list])) record.recipe[spec.list] = record.recipe[spec.list].map(n => renamed.get(n) || n);
+        }
         const taken = new Set(io.readdirSync(at).filter(f => /\.json$/i.test(f)).map(f => f.replace(/\.json$/i, '').toLowerCase()));
         const name = freeName(item.name, taken);
         const atomic = root.RRWriteFileAtomicSync || ((fsm, target, data) => fsm.writeFileSync(target, data));
@@ -177,7 +277,7 @@
         return { kind: item.kind, group: IMPORT_GROUP, name };
     }
 
-    const api = { FORMAT, VERSION, KINDS, IMPORT_GROUP, MAX_PREVIEW, cleanName, designsDir, listDesigns, designKey, readPublished, writePublished, propPicture, stage, readItem, importItem };
+    const api = { FORMAT, VERSION, KINDS, IMPORT_GROUP, MAX_PREVIEW, TEXTURE_FOLDER, cleanName, textureName, designsDir, listDesigns, designKey, readPublished, writePublished, propPicture, stage, readItem, importItem };
     root.RRWorkshopItems = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

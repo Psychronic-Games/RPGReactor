@@ -95,6 +95,8 @@ class StructureWorkshop {
     /** From the Structures page: save the database, close it, and open the plot. */
     async open(entry) {
         if (!entry) return false;
+        // A 2D structure is built on a 2D plot of its own.
+        if (entry.plan && entry.plan.dimension === '2d') return this.reactor()?.structure2DWorkshop?.open(entry) || false;
         const reactor = this.reactor(), tilemap = this.tilemap();
         if (!reactor || !tilemap) return false;
         const structureId = entry.id;

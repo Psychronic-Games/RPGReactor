@@ -1934,6 +1934,8 @@ class Database3DEditor {
         const selection = this._modelSelection = (this._modelSelection || 0) + 1;
         this._clearModelPreview();
         this.selectedName = entry.name;
+        // The Battle Setup pictures of the enemies and actors drawn as this model made ready, in quiet moments.
+        if (typeof window !== 'undefined') window.RRBattleSetup?.warmModel?.(entry.name);
         // Read straight off the file, so the cost shows at once rather than
         // waiting on the model to finish loading into the preview.
         this.renderModelStats();

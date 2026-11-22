@@ -24,10 +24,27 @@
  *                                 destination
  */
 
+// ─── Seeded randomness ──────────────────────────────────────────────────────
+// Noise, the pluck's excitation and the reverb's impulse are drawn from one
+// stream seeded by the sound's seed (mulberry32), so a sound plays, exports and
+// opens from a saved design the same every time. A new seed is rolled by Randomize.
+function sfxRandom(seed) {
+    let a = seed >>> 0;
+    return () => {
+        a = (a + 0x6D2B79F5) >>> 0;
+        let t = a;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
+function sfxNewSeed() { return Math.floor(Math.random() * 4294967296) >>> 0; }
+
 // ─── Karplus-Strong string synthesis ────────────────────────────────────────
 // Pre-generates the KS output into an AudioBuffer. Pitch envelope and slide
 // are applied via BufferSource.playbackRate so the frequency stays correct.
-function generateKarplusStrong(ctx, p, noiseDuration) {
+function generateKarplusStrong(ctx, p, noiseDuration, rand = Math.random) {
     const sampleRate = ctx.sampleRate;
     const freq = Math.max(20, Math.min(4000, p.baseFreq));
     const bufSize = Math.ceil(sampleRate * Math.min(noiseDuration + 0.5, 10));
@@ -37,7 +54,7 @@ function generateKarplusStrong(ctx, p, noiseDuration) {
 
     // Excitation: noise buffer, smoothed for mellow pluck or raw for bright/clicky.
     const ring = new Float32Array(delayLen);
-    for (let i = 0; i < delayLen; i++) ring[i] = Math.random() * 2 - 1;
+    for (let i = 0; i < delayLen; i++) ring[i] = rand() * 2 - 1;
     const smoothPasses = Math.round((1 - hardness) * 4);
     for (let pass = 0; pass < smoothPasses; pass++) {
         for (let i = 1; i < delayLen; i++) ring[i] = (ring[i] + ring[i - 1]) * 0.5;
@@ -642,6 +659,12 @@ function makeDistortionCurve(amount) {
     return curve;
 }
 
+/** A pattern's notes in a fixed order (by step, then row), so one seed gives every note the same noise each time. */
+function sfxPatternOrder(pattern) {
+    const key = cell => cell.split(',').map(Number);
+    return Array.from(pattern).sort((a, b) => { const [ra, sa] = key(a), [rb, sb] = key(b); return sa - sb || ra - rb; });
+}
+
 class SfxSynth {
     constructor() {
         this.liveCtx = null;
@@ -661,31 +684,35 @@ class SfxSynth {
         this._activeNodes = [];
     }
 
-    play(params) {
+    /** The random stream for one play or render: seeded when a seed is given, else Math.random. */
+    _rand(seed) { return Number.isInteger(seed) ? sfxRandom(seed) : Math.random; }
+
+    play(params, seed) {
         this._ensureLive();
         this.stop();
         const ctx = this.liveCtx;
         const t0 = ctx.currentTime + 0.01;
-        this._activeNodes = this._buildGraph(ctx, params, t0, ctx.destination);
+        this._activeNodes = this._buildGraph(ctx, params, t0, ctx.destination, this._rand(seed));
     }
 
-    playPattern(pattern, params, bpm) {
+    playPattern(pattern, params, bpm, seed) {
         this._ensureLive();
         this.stop();
         const ctx = this.liveCtx;
         const t0 = ctx.currentTime + 0.02;
         const stepDur = 60 / bpm / 4;
-        for (const cell of pattern) {
+        const rand = this._rand(seed);
+        for (const cell of sfxPatternOrder(pattern)) {
             const [row, step] = cell.split(',').map(Number);
             const semitones = (PATTERN_ROWS - 1) - row;
             const noteFreq = params.baseFreq * Math.pow(2, semitones / 12);
             const noteParams = { ...params, baseFreq: noteFreq, freqSlide: 0 };
-            const nodes = this._buildGraph(ctx, noteParams, t0 + step * stepDur, ctx.destination);
+            const nodes = this._buildGraph(ctx, noteParams, t0 + step * stepDur, ctx.destination, rand);
             this._activeNodes.push(...nodes);
         }
     }
 
-    async renderPatternOffline(pattern, params, bpm) {
+    async renderPatternOffline(pattern, params, bpm, seed) {
         const stepDur = 60 / bpm / 4;
         const noteDur = params.attack + params.decay + params.sustain + params.release;
         const reverbTail = params.reverb > 0 ? params.reverbDecay : 0;
@@ -697,39 +724,40 @@ class SfxSynth {
         const total = (lastStep + 1) * stepDur + noteDur + reverbTail + 0.05;
         const sampleRate = 44100;
         const offline = new OfflineAudioContext(2, Math.ceil(total * sampleRate), sampleRate);
-        for (const cell of pattern) {
+        const rand = this._rand(seed);
+        for (const cell of sfxPatternOrder(pattern)) {
             const [row, step] = cell.split(',').map(Number);
             const semitones = (PATTERN_ROWS - 1) - row;
             const noteFreq = params.baseFreq * Math.pow(2, semitones / 12);
             const noteParams = { ...params, baseFreq: noteFreq, freqSlide: 0 };
-            this._buildGraph(offline, noteParams, step * stepDur, offline.destination);
+            this._buildGraph(offline, noteParams, step * stepDur, offline.destination, rand);
         }
         return await offline.startRendering();
     }
 
-    async renderOffline(params) {
+    async renderOffline(params, seed) {
         const total = params.attack + params.decay + params.sustain + params.release
             + (params.reverb > 0 ? params.reverbDecay : 0) + 0.05;
         const sampleRate = 44100;
         const offline = new OfflineAudioContext(2, Math.ceil(total * sampleRate), sampleRate);
-        this._buildGraph(offline, params, 0, offline.destination);
+        this._buildGraph(offline, params, 0, offline.destination, this._rand(seed));
         return await offline.startRendering();
     }
 
-    _makeImpulse(ctx, duration, decayPower) {
+    _makeImpulse(ctx, duration, decayPower, rand = Math.random) {
         const sampleRate = ctx.sampleRate;
         const length = Math.max(1, Math.ceil(sampleRate * duration));
         const buffer = ctx.createBuffer(2, length, sampleRate);
         for (let ch = 0; ch < 2; ch++) {
             const data = buffer.getChannelData(ch);
             for (let i = 0; i < length; i++) {
-                data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decayPower);
+                data[i] = (rand() * 2 - 1) * Math.pow(1 - i / length, decayPower);
             }
         }
         return buffer;
     }
 
-    _buildGraph(ctx, p, t0, dest) {
+    _buildGraph(ctx, p, t0, dest, rand = Math.random) {
         const duration = p.attack + p.decay + p.sustain + p.release;
         const nodes = [];
         const lpEnd = p.lowpassEnd !== undefined ? p.lowpassEnd : p.lowpassFreq;
@@ -746,7 +774,7 @@ class SfxSynth {
 
         if (p.waveform === 'karplus') {
             // Karplus-Strong: pre-generate buffer, use playbackRate for pitch.
-            const ksBuf = generateKarplusStrong(ctx, p, noiseDuration);
+            const ksBuf = generateKarplusStrong(ctx, p, noiseDuration, rand);
             mainSource = ctx.createBufferSource();
             mainSource.buffer = ksBuf;
 
@@ -773,7 +801,7 @@ class SfxSynth {
         } else if (p.waveform === 'noise') {
             const buf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * noiseDuration), ctx.sampleRate);
             const data = buf.getChannelData(0);
-            for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+            for (let i = 0; i < data.length; i++) data[i] = rand() * 2 - 1;
             mainSource = ctx.createBufferSource();
             mainSource.buffer = buf;
         } else {
@@ -827,7 +855,7 @@ class SfxSynth {
         if (p.waveform !== 'noise' && noiseMix > 0.005) {
             const noiseBuf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * noiseDuration), ctx.sampleRate);
             const nd = noiseBuf.getChannelData(0);
-            for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+            for (let i = 0; i < nd.length; i++) nd[i] = rand() * 2 - 1;
             const noiseSrc = ctx.createBufferSource();
             noiseSrc.buffer = noiseBuf;
             const noiseGain = ctx.createGain();
@@ -912,7 +940,7 @@ class SfxSynth {
         // ── Reverb / dry output ───────────────────────────────────────────────
         if (reverbAmount > 0.005) {
             const conv = ctx.createConvolver();
-            conv.buffer = this._makeImpulse(ctx, reverbDecay, 2);
+            conv.buffer = this._makeImpulse(ctx, reverbDecay, 2, rand);
             const wetGain = ctx.createGain();
             wetGain.gain.value = reverbAmount;
             const dryGain = ctx.createGain();
@@ -982,6 +1010,89 @@ const PATTERN_STEPS = 16;
 
 const JITTER_STRENGTHS = { mild: 0.15, medium: 0.30, wild: 0.55 };
 
+// ─── Designs (Save Design / Open) ────────────────────────────────────────────
+// A design is the sound's recipe, no audio: { builder: 'sound', version: 1, recipe }, kept with a picture of its
+// waveform under forge/sound_effect_generator/designs/ (RRForgeDesigns). A recipe may come from another author
+// (the Workshop), so everything read from one is checked: unknown fields dropped, numbers held to the sliders'
+// limits, choices to the tool's own.
+const SFX_DESIGN_VERSION = 1;
+const SFX_BPM = { min: 40, max: 300, fallback: 120 };
+const SFX_PICTURE_SIZE = 256;
+
+/**
+ * A design's picture: the sound's waveform, gold on dark, `size` pixels square (the gallery's cards are square).
+ * The colours are fixed, not the theme's: the picture travels with the design to other people's editors.
+ */
+function sfxDrawPicture(g, data, size = SFX_PICTURE_SIZE) {
+    const mid = size / 2, half = size * 0.42;
+    g.fillStyle = '#15171c';
+    g.fillRect(0, 0, size, size);
+    g.strokeStyle = '#3a3d46';
+    g.lineWidth = 1;
+    g.beginPath(); g.moveTo(0, mid + 0.5); g.lineTo(size, mid + 0.5); g.stroke();
+    const n = data ? data.length : 0;
+    if (!n) return;
+    let peak = 0;
+    for (let i = 0; i < n; i++) { const v = Math.abs(data[i]); if (v > peak) peak = v; }
+    // Quiet sounds are drawn to fill the picture; loud ones are never drawn past it.
+    const scale = peak > 1e-6 ? half / Math.max(peak, 0.05) : 0;
+    const per = n / size, lo = new Float32Array(size), hi = new Float32Array(size);
+    for (let x = 0; x < size; x++) {
+        const s = Math.floor(x * per), e = Math.max(s + 1, Math.floor((x + 1) * per));
+        let max = -Infinity, min = Infinity;
+        for (let i = s; i < e && i < n; i++) { const v = data[i]; if (v > max) max = v; if (v < min) min = v; }
+        if (max === -Infinity) { max = 0; min = 0; }
+        hi[x] = mid - Math.min(half, max * scale);
+        lo[x] = mid - Math.max(-half, min * scale);
+    }
+    g.fillStyle = 'rgba(255, 215, 0, 0.22)';
+    g.beginPath();
+    g.moveTo(0, hi[0]);
+    for (let x = 1; x < size; x++) g.lineTo(x, hi[x]);
+    for (let x = size - 1; x >= 0; x--) g.lineTo(x, lo[x]);
+    g.closePath(); g.fill();
+    g.strokeStyle = '#ffd700';
+    g.beginPath();
+    for (let x = 0; x < size; x++) { g.moveTo(x + 0.5, hi[x]); g.lineTo(x + 0.5, Math.max(lo[x], hi[x] + 1)); }
+    g.stroke();
+}
+
+/** A param's value when a recipe lacks it: the archetype's, else the slider's middle or the first choice. */
+function sfxFallbackParam(schema, archetype) {
+    const own = archetype && archetype.params[schema.key];
+    if (own !== undefined) return own;
+    return schema.type === 'slider' ? (schema.min + schema.max) / 2 : schema.options[0].value;
+}
+
+/** A recipe made safe to open: every param in the schema, numbers clamped, the rest dropped. */
+function sfxCleanRecipe(raw) {
+    const r = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+    const archetype = ARCHETYPES.find(a => a.id === r.archetype) || ARCHETYPES[0];
+    const given = r.params && typeof r.params === 'object' && !Array.isArray(r.params) ? r.params : {};
+    const params = {};
+    for (const schema of PARAM_SCHEMA) {
+        const value = Object.prototype.hasOwnProperty.call(given, schema.key) ? given[schema.key] : undefined;
+        if (schema.type === 'select') {
+            params[schema.key] = schema.options.some(o => o.value === value) ? value : sfxFallbackParam(schema, archetype);
+        } else {
+            const n = typeof value === 'number' ? value : NaN;
+            params[schema.key] = Number.isFinite(n) ? Math.max(schema.min, Math.min(schema.max, n)) : sfxFallbackParam(schema, archetype);
+        }
+    }
+    const seed = typeof r.seed === 'number' && Number.isFinite(r.seed) ? Math.floor(Math.abs(r.seed)) % 4294967296 : 1;
+    const pattern = [];
+    if (Array.isArray(r.pattern)) {
+        for (const cell of r.pattern) {
+            const m = typeof cell === 'string' && /^(\d{1,2}),(\d{1,2})$/.exec(cell);
+            if (!m) continue;
+            const row = +m[1], step = +m[2], key = `${row},${step}`;
+            if (row < PATTERN_ROWS && step < PATTERN_STEPS && !pattern.includes(key)) pattern.push(key);
+        }
+    }
+    const bpm = typeof r.bpm === 'number' && Number.isFinite(r.bpm) ? Math.round(Math.max(SFX_BPM.min, Math.min(SFX_BPM.max, r.bpm))) : SFX_BPM.fallback;
+    return { archetype: archetype.id, params, seed, mode: r.mode === 'pattern' ? 'pattern' : 'sound', pattern: sfxPatternOrder(pattern), bpm };
+}
+
 class SoundEffectGenerator {
     constructor() {
         this.root = null;
@@ -997,11 +1108,20 @@ class SoundEffectGenerator {
         // How a baked sound is written: the game plays WAV, OGG and MP3; the quality step sets the lossy bitrate.
         this.saveFormat = 'wav';
         this.saveQuality = 7;
+        // The random stream the sound's noise is drawn from (sfxRandom): kept with the sound so it plays the same.
+        this.seed = sfxNewSeed();
+        // The sound's name: Bake & Save's file name and Save Design's design name.
+        this.name = '';
+        // Save Design's group, and the design last opened or saved ({ group, name }) so saving it again asks nothing.
+        this.designGroup = '';
+        this._openedDesign = null;
         this._docMouseUpHandler = null;
     }
 
-    _t(text) {
-        return window.I18n ? window.I18n.tText(text) : text;
+    _t(text, params) {
+        let out = window.I18n ? window.I18n.tText(text) : text;
+        if (params) for (const k in params) out = out.split('{' + k + '}').join(params[k]);
+        return out;
     }
 
     /** The title this tool's dialogs carry. */
@@ -1020,7 +1140,7 @@ class SoundEffectGenerator {
         // fields) kept the previous project's sound, which the next change saved into it.
         if (this._loadedProjectPath !== this.projectPath) {
             const fresh = new SoundEffectGenerator();
-            for (const key of ['activeArchetypeId', 'params', 'mode', 'pattern', 'bpm', 'jitterStrength', 'saveFormat', 'saveQuality']) {
+            for (const key of ['activeArchetypeId', 'params', 'mode', 'pattern', 'bpm', 'jitterStrength', 'saveFormat', 'saveQuality', 'seed', 'name', 'designGroup', '_openedDesign']) {
                 this[key] = fresh[key];
             }
             this._loadedProjectPath = this.projectPath;
@@ -1052,6 +1172,7 @@ class SoundEffectGenerator {
 
     detach() {
         this.synth.stop();
+        if (this._closeGallery) this._closeGallery();
         if (this._docMouseUpHandler) {
             document.removeEventListener('mouseup', this._docMouseUpHandler);
             this._docMouseUpHandler = null;
@@ -1098,6 +1219,7 @@ class SoundEffectGenerator {
             if (cfg.jitterStrength && JITTER_STRENGTHS[cfg.jitterStrength]) this.jitterStrength = cfg.jitterStrength;
             if (['wav', 'ogg', 'mp3'].includes(cfg.saveFormat)) this.saveFormat = cfg.saveFormat;
             if (Number.isInteger(cfg.saveQuality) && cfg.saveQuality >= 1 && cfg.saveQuality <= 10) this.saveQuality = cfg.saveQuality;
+            if (Number.isInteger(cfg.seed) && cfg.seed >= 0 && cfg.seed < 4294967296) this.seed = cfg.seed;
         } catch (e) { /* first run */ }
         // Backfill any params missing from older saves or archetype seeds.
         for (const p of PARAM_SCHEMA) {
@@ -1138,7 +1260,8 @@ class SoundEffectGenerator {
                 bpm: this.bpm,
                 jitterStrength: this.jitterStrength,
                 saveFormat: this.saveFormat,
-                saveQuality: this.saveQuality
+                saveQuality: this.saveQuality,
+                seed: this.seed
             }, null, 2));
         } catch (e) { console.error('SoundEffectGenerator: save config:', e); }
     }
@@ -1182,12 +1305,15 @@ class SoundEffectGenerator {
             base[p.key] = Math.max(p.min, Math.min(p.max, base[p.key] + delta));
         }
         this.params = base;
+        this.seed = sfxNewSeed();
         this._saveConfig();
         this._render();
     }
 
     // ── Layout ────────────────────────────────────────────────────────────────
     _render() {
+        // The gallery's Escape listener goes with the page it was drawn on.
+        if (this._closeGallery) this._closeGallery();
         // Preserve scroll positions across full re-renders.
         const archetypeScroll = this.root.querySelector('.rr-sfx-archetypes')?.scrollTop || 0;
         const paramScroll = this.root.querySelector('.rr-sfx-params')?.scrollTop || 0;
@@ -1236,6 +1362,9 @@ class SoundEffectGenerator {
                         <div style="display: inline-flex; border-left: 1px solid var(--color-border-input);">${jitterBtns}</div>
                     </div>
                     <button class="rr-sfx-reset rr-btn-chip" style="padding: 6px 14px;">↻ ${this._t('Reset')}</button>
+                    <button class="rr-sfx-open rr-btn-chip" style="padding: 6px 14px;">${this._t('Open')}</button>
+                    <label class="rr-c3d-name rr-c3d-group-pick"><span>${this._t('Group')}</span><select class="rr-select rr-sfx-design-group" title="${this._t('Where Save Design keeps this sound')}"></select></label>
+                    <button class="rr-sfx-keep rr-btn-chip" style="padding: 6px 14px;" title="${this._t('Keep this sound\'s settings in the Forge to open and change later. No audio file is made.')}">${this._t('Save Design')}</button>
                     ${this.mode === 'pattern' ? `
                         <div style="display: flex; align-items: center; gap: 6px; margin-left: 8px;">
                             <label style="font-size: 11px; color: var(--color-text-muted);">BPM:</label>
@@ -1246,7 +1375,7 @@ class SoundEffectGenerator {
                     <div class="rr-sfx-duration" style="margin-left: auto; font-size: 11px; color: var(--color-text-muted);">${this._t('Duration:')} 0.00s</div>
                 </div>
 
-                <div style="display: grid; grid-template-columns: 240px 1fr 320px; flex: 1; min-height: 0;">
+                <div style="position: relative; display: grid; grid-template-columns: 240px 1fr 320px; flex: 1; min-height: 0;">
                     <!-- Archetypes -->
                     <div class="rr-sfx-archetypes" style="background: var(--color-bg-panel); border-right: 1px solid var(--color-border); overflow-y: auto;">
                         <div style="padding: 6px 14px 8px; font-size: 9px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--color-border-subtle);">${this._t('Archetypes')}</div>
@@ -1294,12 +1423,13 @@ class SoundEffectGenerator {
                     <div class="rr-sfx-params" style="background: var(--color-bg-panel); border-left: 1px solid var(--color-border); overflow-y: auto; padding: 14px 16px;">
                         ${this._renderParamControls()}
                     </div>
+                    <div class="rr-c3d-gallery" hidden style="z-index: 2;"></div>
                 </div>
 
                 <!-- Footer -->
                 <div style="padding: 12px 18px; border-top: 1px solid var(--color-border-subtle); background: var(--color-bg-panel); display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
                     <label style="font-size: 12px; color: var(--color-text-muted);">${this._t('Default name:')}</label>
-                    <input type="text" class="rr-sfx-name rr-input" placeholder="${this._t('MySFX')}" style="width: 200px; padding: 4px 8px; font-size: 12px;">
+                    <input type="text" class="rr-sfx-name rr-input" placeholder="${this._t('MySFX')}" value="${rrEscapeHtml(this.name)}" style="width: 200px; padding: 4px 8px; font-size: 12px;">
                     <label style="font-size: 12px; color: var(--color-text-muted);">${this._t('Format:')}</label>
                     <select class="rr-sfx-format rr-input" style="padding: 4px 6px; font-size: 12px;">${(window.RRAudioExport ? window.RRAudioExport.FORMATS : [{ id: 'wav', label: 'WAV (lossless)' }]).map(f => `<option value="${f.id}"${f.id === this.saveFormat ? ' selected' : ''}>${this._t(f.label)}</option>`).join('')}</select>
                     <label class="rr-sfx-quality-row" style="display: ${this.saveFormat === 'wav' ? 'none' : 'inline-flex'}; align-items: center; gap: 6px; font-size: 12px; color: var(--color-text-muted);">${this._t('Quality:')}<input type="range" class="rr-sfx-quality" min="1" max="10" step="1" value="${this.saveQuality}" style="width: 90px;"><span class="rr-sfx-quality-label" style="font-variant-numeric: tabular-nums; min-width: 60px;">${this._qualityLabel()}</span></label>
@@ -1381,7 +1511,7 @@ class SoundEffectGenerator {
         this._vizTimer = setTimeout(async () => {
             try {
                 if (this.mode !== 'sound') return;
-                const buffer = await this.synth.renderOffline(this.params);
+                const buffer = await this.synth.renderOffline(this.params, this.seed);
                 this._drawWaveform(buffer);
                 this._drawEnvelope();
                 this._drawPitch();
@@ -1573,15 +1703,25 @@ class SoundEffectGenerator {
 
         root.querySelector('.rr-sfx-play').addEventListener('click', () => {
             if (this.mode === 'pattern' && this.pattern.size > 0) {
-                this.synth.playPattern(this.pattern, this.params, this.bpm);
+                this.synth.playPattern(this.pattern, this.params, this.bpm, this.seed);
             } else {
-                this.synth.play(this.params);
+                this.synth.play(this.params, this.seed);
             }
         });
         root.querySelector('.rr-sfx-stop').addEventListener('click', () => this.synth.stop());
         root.querySelector('.rr-sfx-rand').addEventListener('click', () => this._randomizeFromArchetype());
         root.querySelector('.rr-sfx-reset').addEventListener('click', () => this._seedFromArchetype(this.activeArchetypeId));
         root.querySelector('.rr-sfx-save').addEventListener('click', () => this._saveSfx());
+        const nameInput = root.querySelector('.rr-sfx-name');
+        if (nameInput) nameInput.addEventListener('input', () => { this.name = nameInput.value; });
+        root.querySelector('.rr-sfx-open').addEventListener('click', () => this._showGallery());
+        root.querySelector('.rr-sfx-keep').addEventListener('click', () => this.saveDesign());
+        const groupSelect = root.querySelector('.rr-sfx-design-group');
+        groupSelect.addEventListener('change', async () => {
+            this.designGroup = await RRForgeDesigns.chooseGroup(groupSelect.value, this.designGroup, (s, v) => this._t(s, v));
+            this._renderDesignGroups();
+        });
+        this._renderDesignGroups();
         const formatSelect = root.querySelector('.rr-sfx-format'), qualityInput = root.querySelector('.rr-sfx-quality');
         if (formatSelect) formatSelect.addEventListener('change', () => {
             this.saveFormat = formatSelect.value;
@@ -1707,8 +1847,8 @@ class SoundEffectGenerator {
         let buffer;
         try {
             buffer = (this.mode === 'pattern' && this.pattern.size > 0)
-                ? await this.synth.renderPatternOffline(this.pattern, this.params, this.bpm)
-                : await this.synth.renderOffline(this.params);
+                ? await this.synth.renderPatternOffline(this.pattern, this.params, this.bpm, this.seed)
+                : await this.synth.renderOffline(this.params, this.seed);
         } catch (e) {
             console.error('SoundEffectGenerator render:', e);
             RRDialog.alert(`${this._t('Failed to render:')} ${e.message}`, { title: this._dialogTitle(), kind: 'error' });
@@ -1778,8 +1918,146 @@ class SoundEffectGenerator {
         picker.click();
     }
 
+    // ── Designs (Save Design / Open) ──────────────────────────────────────────
+    /** A recipe from anywhere (another author's design) made safe to open; see sfxCleanRecipe. */
+    static cleanRecipe(raw) { return sfxCleanRecipe(raw); }
+
+    /** Designs kept in the Forge (RRForgeDesigns): a sound's recipe and its waveform's picture, no audio file. */
+    _designsDir() {
+        const projectPath = this._syncProjectPath();
+        return projectPath ? require('path').join(projectPath, 'forge', 'sound_effect_generator', 'designs') : null;
+    }
+
+    _renderDesignGroups() {
+        RRForgeDesigns.renderGroups(this.root && this.root.querySelector('.rr-sfx-design-group'), this._designsDir(), this.designGroup, s => this._t(s));
+    }
+
+    /** Everything that makes this sound: archetype, every param, the noise seed, and the pattern with its tempo. */
+    designRecipe() {
+        return sfxCleanRecipe({
+            archetype: this.activeArchetypeId, params: this.params, seed: this.seed,
+            mode: this.mode, pattern: Array.from(this.pattern), bpm: this.bpm
+        });
+    }
+
+    /** The tool set to a recipe (cleaned first), kept as the project's current sound. */
+    _applyRecipe(raw) {
+        const recipe = sfxCleanRecipe(raw);
+        this.activeArchetypeId = recipe.archetype;
+        this.params = { ...recipe.params };
+        this.seed = recipe.seed;
+        this.mode = recipe.mode;
+        this.pattern = new Set(recipe.pattern);
+        this.bpm = recipe.bpm;
+        this.synth.stop();
+        this._saveConfig();
+        // Drawn only when this tool's page is the one showing: otherwise the next renderInto reads it from the config.
+        if (this.root && this.root.querySelector('.rr-sfx-params')) this._render();
+    }
+
+    /** The waveform's picture as a PNG Buffer: the pattern when the pattern is what Bake & Save would make. */
+    async _designPicture() {
+        const buffer = (this.mode === 'pattern' && this.pattern.size > 0)
+            ? await this.synth.renderPatternOffline(this.pattern, this.params, this.bpm, this.seed)
+            : await this.synth.renderOffline(this.params, this.seed);
+        const canvas = document.createElement('canvas');
+        canvas.width = canvas.height = SFX_PICTURE_SIZE;
+        sfxDrawPicture(canvas.getContext('2d'), buffer.getChannelData(0));
+        return Buffer.from(canvas.toDataURL('image/png').split(',')[1], 'base64');
+    }
+
+    /** Keep the sound's recipe in the Forge under its name, in the chosen group: opened again from Open, no audio made. */
+    async saveDesign() {
+        if (!this._requireProjectPath()) return false;
+        const t = (s, v) => this._t(s, v);
+        let name = RRForgeDesigns.folderName(this.name);
+        if (!name) {
+            name = RRForgeDesigns.folderName(await RRDialog.prompt(this._t('Name this sound:'), { title: this._t('Save Design'), value: this._t('MySFX') }));
+            if (!name) return false;
+            this.name = name;
+            const input = this.root && this.root.querySelector('.rr-sfx-name');
+            if (input) input.value = name;
+        }
+        const group = this.designGroup || '';
+        try {
+            let picture = null;
+            try { picture = await this._designPicture(); } catch (e) { console.warn('[SoundEffectGenerator] design picture', e); }
+            const kept = await RRForgeDesigns.save(this._designsDir(), group, name,
+                { builder: 'sound', version: SFX_DESIGN_VERSION, recipe: this.designRecipe() }, picture, this._openedDesign, t);
+            if (!kept) return false;
+            this._openedDesign = { group, name };
+            this._renderDesignGroups();
+            this._showSaveStatus(this._t('Design {name} saved.', { name }));
+            return true;
+        } catch (error) {
+            console.error('[SoundEffectGenerator] save design', error);
+            this._showSaveStatus(this._t('{name} could not be saved.', { name }));
+            return false;
+        }
+    }
+
+    /**
+     * Open the design `name` of `group` ('' for none) into the tool: its sound, name and group. Public: the Workshop
+     * calls it on the tool's instance once the Forge has opened the tool. Answers whether it opened.
+     */
+    openDesign(group, name) {
+        group = typeof group === 'string' ? group : '';
+        const plain = v => typeof v === 'string' && v === RRForgeDesigns.folderName(v) && v !== '.' && v !== '..';
+        const dir = this._designsDir();
+        try {
+            if (!dir || (group && !plain(group)) || !plain(name) || !name) throw new Error('no such design');
+            const data = RRForgeDesigns.read(dir, group, name);
+            if (!data || typeof data !== 'object' || (data.builder !== undefined && data.builder !== 'sound')) throw new Error('not a sound design');
+            this.name = name;
+            this._openedDesign = { group, name };
+            this.designGroup = group;
+            this._applyRecipe(data.recipe);
+            this._showSaveStatus(this._t('Opened {name}.', { name }));
+            return true;
+        } catch (error) {
+            console.error('[SoundEffectGenerator] open design', error);
+            this._showSaveStatus(this._t('{name} could not be opened.', { name: String(name || '') }));
+            return false;
+        }
+    }
+
+    /** The designs kept in the Forge as pictures to pick from, by group; Escape or ✕ closes it. */
+    _showGallery() {
+        const box = this.root && this.root.querySelector('.rr-c3d-gallery');
+        if (!box || !this._requireProjectPath()) return;
+        const t = (s, v) => this._t(s, v);
+        box.innerHTML = `<div class="rr-c3d-gallery-head"><span>${this._t('Open a saved sound')}</span><button class="rr-c3d-remove" data-close title="${this._t('Close')}">✕</button></div>
+            <div class="rr-c3d-gallery-scroll">${RRForgeDesigns.gallery(this._designsDir(), null, {
+                noDesigns: this._t('No designs yet. Save Design keeps a sound here without making an audio file.')
+            }, t)}</div>`;
+        box.hidden = false;
+        // One Escape listener at a time: drawing the gallery again (after a delete, or Open pressed twice) drops the one before.
+        if (this._closeGallery) this._closeGallery();
+        const close = () => { box.hidden = true; document.removeEventListener('keydown', onKey, true); if (this._closeGallery === close) this._closeGallery = null; };
+        const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+        document.addEventListener('keydown', onKey, true);
+        this._closeGallery = close;
+        box.onclick = e => {
+            if (e.target.closest('[data-close]')) { close(); return; }
+            const remove = e.target.closest('[data-delete]');
+            if (remove) {
+                const group = remove.dataset.group || '', name = remove.dataset.delete;
+                RRForgeDesigns.remove(this._designsDir(), group, name, t).then(done => {
+                    if (!done) return;
+                    if (this._openedDesign && this._openedDesign.group === group && this._openedDesign.name === name) this._openedDesign = null;
+                    this._showGallery();
+                });
+                return;
+            }
+            const card = e.target.closest('.rr-c3d-saved');
+            if (!card || card.dataset.kind !== 'design') return;
+            close();
+            this.openDesign(card.dataset.group || '', card.dataset.name);
+        };
+    }
+
     _showSaveStatus(msg) {
-        const footer = this.root.querySelector('.rr-sfx-save-status');
+        const footer = this.root && this.root.querySelector('.rr-sfx-save-status');
         if (!footer) return;
         footer.textContent = msg;
         footer.style.opacity = '1';

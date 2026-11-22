@@ -1,5 +1,7 @@
 # Writing plugins for RPG Reactor
 
+New to plugins? Start with [Your First Plugin](PLUGIN-FIRST-PLUGIN.md); then [Parameters & Plugin Commands](PLUGIN-PARAMETERS-AND-COMMANDS.md), [Reactor Globals](PLUGIN-GLOBALS.md) and the [Plugin API Reference](PLUGIN-API.md).
+
 RPG Reactor runs two kinds of plugin, and the Plugin Manager has a tab for each:
 
 | | Game plugins | Editor plugins |
@@ -18,18 +20,29 @@ Both kinds are plain JavaScript files with the same header (`@plugindesc`, `@aut
 
 MZ plugins run unchanged, and MV plugins run through Reactor's MV layer. A plugin from either can be dropped into `js/plugins` and turned on in the Plugin Manager. `Utils.RPGMAKER_NAME` stays `"MZ"`, so multi-engine plugins keep choosing the right code.
 
-### Plugins that need Reactor
+### Plugins written for RPG Reactor
 
-A plugin can use what RPG Maker does not have: 3D maps and lighting, models, Battle Rooms, tactical and action battles, vehicles, online play, Steam. Such a plugin works only in RPG Reactor. Say so in its header and check before using anything:
+A plugin's `@target` line says what it is written for. The Plugin Manager shows it beside the author, and says so when a plugin is in the wrong tab:
+
+| `@target` | What it is |
+|---|---|
+| `Reactor` | A game plugin written for RPG Reactor itself. It uses what RPG Maker does not have (3D maps and lighting, models, Battle Rooms, tactical and action battles, vehicles, online play, Steam) and Reactor's own ways of doing things, with no RPG Maker version in mind. `RPGReactor` means the same. |
+| `MZ` | An RPG Maker MZ plugin. RPG Reactor runs it unchanged. |
+| `MZ Reactor` | Written for both: MZ's way, and Reactor's features where it finds them. |
+| `MV` | An RPG Maker MV plugin, run through Reactor's MV layer. |
+| `ReactorEditor` | An editor plugin (below). |
+
+A plugin written for RPG Reactor:
 
 ```js
 /*:
- * @target MZ Reactor
- * @plugindesc [RPG Reactor only] What it does.
+ * @target Reactor
+ * @plugindesc What it does.
  */
 (() => {
+    // Copied into an RPG Maker project by mistake, it says so instead of failing halfway.
     if (typeof Reactor3D === 'undefined') {
-        console.warn('MyPlugin needs RPG Reactor; it does nothing in RPG Maker MZ or MV.');
+        console.warn('MyPlugin is written for RPG Reactor.');
         return;
     }
     // ...
@@ -38,7 +51,7 @@ A plugin can use what RPG Maker does not have: 3D maps and lighting, models, Bat
 
 `globalThis.RPG_REACTOR_RUNTIME_REVISION` names the runtime build (for example `"20261122.1"`).
 
-What a game plugin may call today:
+What a game plugin may call today (the [Plugin API Reference](PLUGIN-API.md) has each one's parameters and RPG Reactor's plugin commands with their arguments, written from the code):
 
 | Area | Functions |
 |---|---|
@@ -53,11 +66,11 @@ What a game plugin may call today:
 
 Reactor's own event commands are plugin commands of the plugin `RPGReactor` (for example `AmbientLight`, `LightSwitch`, `QuestSet`, `SteamAchievement`), so a plugin can run one as an event would: `PluginManager.callCommand(interpreter, 'RPGReactor', 'LightSwitch', { target: '#village', state: 'on' })`.
 
-The fuller API (a `Reactor` namespace, named and ordered hooks instead of aliasing, `@reactorVersion`, `@orderAfter`) is designed in [DESIGN-PLUGIN-API.md](DESIGN-PLUGIN-API.md) and not built yet.
+`@target` is the first part of a fuller API designed in [DESIGN-PLUGIN-API.md](DESIGN-PLUGIN-API.md); the rest (a `Reactor` namespace, named and ordered hooks instead of aliasing, `@reactorVersion`, `@orderAfter`) is not built yet.
 
 ### The example: RR_DayNight
 
-`template/Demo/js/plugins/RR_DayNight.js` is in the Demo, turned off. It runs an in-game clock that moves a 3D map's ambient light from night to dawn, day and dusk, and turns lamps of one tag on at night. Its clock is saved with the game, an event can read and set the hour through a variable, and it has three plugin commands: Set Hour, Pause Clock and Resume Clock. Under RPG Maker it says it needs Reactor and does nothing. To try it, turn it on in Plugin Manager › Game Plugins and playtest a 3D map: North Haven's lamps are tagged `village`.
+`template/Demo/js/plugins/RR_DayNight.js` (`@target Reactor`) is in the Demo, turned off. It runs an in-game clock that moves a 3D map's ambient light from night to dawn, day and dusk, and turns lamps of one tag on at night. Its clock is saved with the game, an event can read and set the hour through a variable, and it has three plugin commands: Set Hour, Pause Clock and Resume Clock. Copied into an RPG Maker project it says it needs RPG Reactor and does nothing. To try it, turn it on in Plugin Manager › Game Plugins and playtest a 3D map: North Haven's lamps are tagged `village`.
 
 ## Editor plugins
 
@@ -116,11 +129,11 @@ Whatever a plugin adds through its context (menu entries, panels, listeners) goe
 
 ### The example: RR_MapStats
 
-`template/Demo/js/editor-plugins/RR_MapStats.js` is in the Demo, turned on. It puts a button with its own icon (`RR_MapStats/icon.svg`) on the main toolbar and an entry under Plugins; either opens a panel over the map's corner that counts its events, building pieces, 3D models, lights and media surfaces, and counts again when a map opens or the project is saved. Change the SVG, a label or what it counts, save, and save the Editor Plugins list: the editor shows the change without being rebuilt.
+`template/Demo/js/editor-plugins/RR_MapStats.js` is in the Demo's Editor Plugins list (turn it on there to see it). It puts a button with its own icon (`RR_MapStats/icon.svg`) on the main toolbar and an entry under Plugins; either opens a panel over the map's corner that counts its events, building pieces, 3D models, lights and media surfaces, and counts again when a map opens or the project is saved. Change the SVG, a label or what it counts, save, and save the Editor Plugins list: the editor shows the change without being rebuilt.
 
 ### Still to come
 
-Version 1 is a start. Next on the list: event commands of a plugin's own in the event editor; pages in the Database; Forge tools; toolbar buttons; and a folder of editor plugins for every project, beside the per-project one.
+Version 1 is a start. Next on the list: event commands of a plugin's own in the event editor; pages in the Database; Forge tools; and a folder of editor plugins for every project, beside the per-project one.
 
 ## Safety
 

@@ -572,6 +572,8 @@ class DatabaseTroopEditor {
                 img.alt = modelSpec.name || '';
                 imgContainer.appendChild(img);
                 Promise.resolve().then(() => RRDatabase3DBindings.modelThumbnail(this.parentEditor?.reactor3dEditor, modelSpec)).then(url => {
+                    // Its picture for Battle Setup made ready too, in a quiet moment (RRBattleSetup.warm).
+                    if (url) window.RRBattleSetup?.warm?.({ record: 'enemy', id: enemy.id });
                     if (!img.isConnected) return;
                     if (url) img.src = url; else img.replaceWith(Object.assign(document.createElement('span'), { textContent: tt('No preview'), style: 'color: var(--color-text-dim); font-size: 11px;' }));
                 }).catch(() => { if (img.isConnected) img.replaceWith(Object.assign(document.createElement('span'), { textContent: tt('No preview'), style: 'color: var(--color-text-dim); font-size: 11px;' })); });

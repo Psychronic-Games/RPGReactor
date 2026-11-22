@@ -704,7 +704,10 @@ test('the card docks beside the map and redraws the events only', () => {
     assert.match(css, /\.rr-battle-setup-tile > canvas \{ width: 68px; height: 68px;/);
     assert.match(css, /\.rr-battle-setup-grid \{ display: grid; grid-template-columns: 78px minmax\(0, 1fr\);/, 'one label | field grid');
     // What is set for the map (mode, starts) first on one grid, then who is placed, then the one selected; the status and Play below, always in view.
-    assert.match(card, /<div class="rr-battle-setup-body rr-accent-scrollbar"><div class="rr-battle-setup-part" data-part="mode"><\/div><div class="rr-battle-setup-part" data-part="start"><\/div>[\s\S]{0,400}?data-part="unit" hidden><\/div><\/div><div class="rr-battle-setup-foot" data-part="foot">/);
+    assert.match(card, /<div class="rr-battle-setup-body rr-accent-scrollbar"><div class="rr-battle-setup-part" data-part="mode"><\/div><div class="rr-battle-setup-part" data-part="start"><\/div>[\s\S]{0,400}?data-part="unit" hidden><\/div><\/div><div class="rr-modal-footer rr-battle-setup-foot" data-part="foot">/)
+    // The app's panel header: its icon, the title, the close button, the accent strip (CSS).
+    assert.match(card, /<div class="rr-modal-header rr-dock-head rr-battle-setup-head"><img class="rr-dock-head-icon" src="images\/icon-battle-setup\.svg" alt=""><span class="rr-modal-title rr-battle-setup-title"><\/span><button type="button" class="rr-modal-close rr-battle-setup-close">/);
+    assert.match(css, /\.rr-battle-setup-head \{[^}]*border-left: 3px solid var\(--color-accent\);/);
     // Play is the theme's primary button.
     assert.match(card, /class="rr-button-primary rr-battle-setup-play"/);
     assert.doesNotMatch(card, /rr-btn-primary/, 'a class the theme does not style');
@@ -752,8 +755,10 @@ test('a tile\'s picture of a model does not depend on the shared thumbnail rende
     assert.match(card, /if \(sharedShots\(\)\) \{\s*try \{ shot = await root\.RREventPreviewModels\.thumbnail\(home, spec, editor, 64, facing\); \} catch \(error\) \{ state\.ownShots = true; \}\s*\}\s*if \(!shot && state\.ownShots\) shot = await ownShot\(home, spec, editor, facing\);/);
     assert.match(card, /const side = R\.frameModelSprite\(object, 64, stage\.camera\)\.pixels;/, 'framed as the game frames its sprite');
     assert.match(card, /function close\(\) \{[\s\S]{0,500}?dropStage\(\);/, 'its renderer goes when the card closes');
-    // One picture at a time, each after a frame has been drawn: the card is on screen before the first is made.
-    assert.match(card, /state\.painting = \(state\.painting \|\| Promise\.resolve\(\)\)\.then\(afterFrame\)\.then\(\(\) => \(button\.isConnected \? artOf\(unit, 2\) : null\)\)/);
+    // Every tile asks at once: kept pictures show together (each waited a frame in turn: 6 s for 14 on a 3D map);
+    // only a picture that has to be drawn waits its turn, in modelShot.
+    assert.match(card, /Promise\.resolve\(\)\.then\(\(\) => \(button\.isConnected \? artOf\(unit, 2\) : null\)\)/);
+    assert.doesNotMatch(card, /state\.painting = /);
     assert.match(card, /const afterFrame = \(\) => new Promise\(resolve => \{\s*if \(typeof requestAnimationFrame !== 'function'\) setTimeout\(resolve, 0\);\s*else requestAnimationFrame\(\(\) => setTimeout\(resolve, 0\)\);/);
 });
 
@@ -825,4 +830,45 @@ test('every word of the card is in the editor\'s table, in English and the 17 lo
     assert.equal(B.say('hint.pick'), 'Click an enemy, then click the map.');
     assert.equal(B.say('hint.place', { name: 'Raider' }), 'Click the map to place Raider. R turns it, right-click removes one, Esc stops.');
     assert.equal(B.say('starts.near', { tiles: 6 }), 'When the party comes near (6)');
+});
+
+test('a model\'s kept picture is found by what its files hold: another folder or a new file time is the same picture, new content is not', () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-card-stamp-')), kept = globalThis.Database3DEditor;
+    const spec = { name: 'Actors/Jolt', ext: '.glb', file: 'Jolt' };
+    const lay = (home, glb) => {
+        const folder = path.join(home, '3d', 'Actors', 'Jolt');
+        fs.mkdirSync(path.join(folder, 'source'), { recursive: true });
+        fs.writeFileSync(path.join(folder, 'source', 'Jolt.glb'), glb);
+        fs.writeFileSync(path.join(folder, 'model.json'), '{"variants":[]}');
+        return folder;
+    };
+    try {
+        globalThis.Database3DEditor = { thumbnailCacheRoot: () => path.join(base, 'cache') };
+        const one = path.join(base, 'one'), two = path.join(base, 'two'), three = path.join(base, 'three');
+        lay(one, 'glb bytes'); const folderTwo = lay(two, 'glb bytes'); lay(three, 'glb bytez');
+        fs.utimesSync(path.join(folderTwo, 'source', 'Jolt.glb'), new Date(2001, 1, 1), new Date(2001, 1, 1));
+        const a = B.shotFile({ path: one }, spec, 2), b = B.shotFile({ path: two }, spec, 2), c = B.shotFile({ path: three }, spec, 2);
+        assert.ok(a);
+        assert.equal(a, b, 'the same model, copied to another project folder and touched, is the same picture');
+        assert.notEqual(a, c, 'a model whose file holds something else is drawn again');
+        assert.notEqual(a, B.shotFile({ path: one }, spec, 4), 'each facing its own');
+    } finally {
+        globalThis.Database3DEditor = kept;
+        fs.rmSync(base, { recursive: true, force: true });
+    }
+});
+
+test('a model shown elsewhere makes its Battle Setup picture ready: the Database\'s Enemies list and page, a troop, the 3D Models section', () => {
+    const card = read('src/event/BattleSetup.js');
+    assert.match(card, /function warm\(unit\) \{[\s\S]{0,1600}?if \(require\('fs'\)\.statSync\(file\)\.size > 320\) return;[\s\S]{0,200}?await modelShot\(home, spec, editor, 2\);/, 'nothing when kept; else drawn, one at a time');
+    assert.match(card, /state\.warming = \(state\.warming \|\| Promise\.resolve\(\)\)\.then\(whenIdle\)/, 'in quiet moments, in turn');
+    assert.match(card, /if \(now - \(state\.warmed\.get\(key\) \|\| -Infinity\) < 60000\) return;/, 'looked at once a minute at most');
+    assert.match(card, /function warmModel\(name\) \{[\s\S]{0,700}?if \(spec && spec\.name === name\) warm\(\{ record, id: entry\.id \}\);/);
+    assert.match(read('src/DatabaseEditorUI.js'), /window\.RRBattleSetup\?\.warm\?\.\(\{ record: 'enemy', id: entry\.id \}\);/, 'the Enemies list');
+    assert.match(read('src/database/DatabaseEnemyEditor.js'), /window\.RRBattleSetup\?\.warm\?\.\(\{ record: 'enemy', id: enemy\.id \}\);/, 'an enemy\'s page');
+    assert.match(read('src/database/DatabaseTroopEditor.js'), /if \(url\) window\.RRBattleSetup\?\.warm\?\.\(\{ record: 'enemy', id: enemy\.id \}\);/, 'a troop');
+    assert.match(read('src/database/Database3DEditor.js'), /window\.RRBattleSetup\?\.warmModel\?\.\(entry\.name\);/, 'the 3D Models section');
+    assert.equal(typeof B.warm, 'function');
+    assert.doesNotThrow(() => B.warm(null));
+    assert.doesNotThrow(() => B.warmModel(''));
 });

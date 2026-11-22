@@ -5,7 +5,7 @@ var $plugins =
 [
     {
         "name": "RR_MapStats",
-        "status": true,
+        "status": false,
         "description": "Map Statistics: a panel beside the map that counts what the open map holds. An example editor plugin.",
         "parameters": {
             "Count Hidden Events": "true"

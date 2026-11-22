@@ -557,6 +557,12 @@
                 pick.addEventListener('click', () => this.select(id));
                 item.append(pick);
 
+                // A placed structure's picture is the structure's: no Move or Remove here.
+                if (RRMapImageLayers.isStructure(layer)) {
+                    item.classList.add('is-structure');
+                    list.append(item);
+                    continue;
+                }
                 const up = this._iconButton('rr-image-layer-up', 'up', tt('Move up'), () => this.moveLayer(id, -1));
                 up.disabled = !this.session.canMove(id, -1);
                 up.setAttribute('data-focus', `up-${id}`);
@@ -734,6 +740,13 @@
             const card = this._section(tt('Layer'), record.name);
             card.section.querySelector('.lit-section-meta').classList.add('rr-image-layer-file');
             const body = card.body;
+            if (M.isStructure(layer)) {
+                // Made from a placed structure and made again whenever it changes: what it is, and where to change it.
+                body.append(this._el('div', 'lit-note rr-image-layer-structure', M.describe(layer)));
+                body.append(this._el('div', 'lit-note rr-image-layer-structure',
+                    tt('Part of a placed structure. Move or remove the structure on the map; change it in Database › Structures.')));
+                return card.section;
+            }
             body.classList.add('rr-image-layer-settings');
 
             const note = M.note3D(layer, is3D);
@@ -760,7 +773,8 @@
             if (ownDepth) body.append(this._hint(ownDepth));
 
             // Each placement says in a few words what it is for; one that this depth cannot take is disabled and says why.
-            const placements = R.FITS.map(fit => { const allowed = M.fitAllowed(record.layer, fit); return [fit, M.fitLabel(fit), !allowed, allowed ? M.fitWords(fit) : M.fitBlocked()]; });
+            // Placed at a tile is what a placed structure's pictures are: offered only to a layer that already is one.
+            const placements = R.FITS.filter(fit => fit !== 'place' || record.fit === 'place').map(fit => { const allowed = M.fitAllowed(record.layer, fit); return [fit, M.fitLabel(fit), !allowed, allowed ? M.fitWords(fit) : M.fitBlocked()]; });
             body.append(this._listRow(tt('Placement'), 'placement', placements, record.fit, (value) => this.commit({ fit: value })));
             body.append(this._hint(M.fitHint(record.fit)));
             if (has('solid')) {
@@ -1345,6 +1359,8 @@
                 } else {
                     node = new PIXI.Sprite(texture);
                     if (entry.record.fit === 'fill') node.onRender = () => this._placeFill(tm, node, size);
+                    // A placed picture (a placed 2D structure) lies with its top left on its tile, at its own size.
+                    else if (entry.record.fit === 'place') node.onRender = () => this._placeAt(node, node.rrRecord);
                 }
                 node.eventMode = 'none';
                 this._dress(node, entry.record);
@@ -1419,6 +1435,8 @@
                     const small = size.width <= shown.width, low = size.height <= shown.height;
                     const x = small ? (size.width - shown.width) / 2 : 0, y = low ? (size.height - shown.height) / 2 : 0;
                     ctx.drawImage(image, x, y, small ? shown.width : size.width, low ? shown.height : size.height);
+                } else if (record.fit === 'place') {
+                    ctx.drawImage(image, record.at[0] * tile.width, record.at[1] * tile.height);
                 } else {
                     ctx.drawImage(image, 0, 0);
                 }
@@ -1458,6 +1476,14 @@
             if (node.height !== height) node.height = height;
             node.position.set(one === 'y' ? Math.round(left - o.x) : 0, one === 'x' ? Math.round(top - o.y) : 0);
             node.tilePosition.set(one === 'y' ? 0 : Math.round(left - o.x), one === 'x' ? 0 : Math.round(top - o.y));
+        }
+
+        /** A placed picture: its top-left corner on the tile `at`, as the game draws it. */
+        _placeAt(node, record) {
+            if (!node || node.destroyed || !record) return;
+            const tile = this.tile(), at = Array.isArray(record.at) ? record.at : [0, 0];
+            const x = at[0] * tile.width, y = at[1] * tile.height;
+            if (node.position.x !== x || node.position.y !== y) node.position.set(x, y);
         }
 
         /**

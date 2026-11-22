@@ -380,6 +380,7 @@ class DatabaseManager {
         const owned = records.filter(entry => entry && entry.plan && entry.file).map(entry => entry.file);
         let savedRecords = null;
         try { savedRecords = this.savedState.structures === undefined ? null : JSON.parse(this.savedState.structures); } catch (_) { savedRecords = null; }
+        const written2D = [];
         try {
             this.fs.mkdirSync(directory, { recursive: true });
             for (const [index, entry] of records.entries()) {
@@ -396,6 +397,7 @@ class DatabaseManager {
                     && JSON.stringify(savedRecords[index]) === JSON.stringify(entry) && this.fs.existsSync(target)) continue;
                 const plan = normalize(entry.plan);
                 this._writeFileAtomic(this.fs, target, (typeof RRMapElevation !== 'undefined' && RRMapElevation.stringifySidecar ? RRMapElevation.stringifySidecar(trim(plan)) : JSON.stringify(trim(plan), null, 2)) + '\n');
+                if (plan.dimension === '2d') written2D.push(entry);
             }
             for (const file of seen) {
                 if (keep.has(file)) continue;
@@ -404,10 +406,32 @@ class DatabaseManager {
             }
             this._structureFiles = keep;
             this.captureSavedState('structures');
+            if (written2D.length) this.follow2DStructures(projectPath, written2D, directory, trim);
             return true;
         } catch (error) {
             console.error('The structure plans could not be saved:', error);
             return false;
+        }
+    }
+
+    /**
+     * 2D structures just saved (docs/DESIGN-2D-STRUCTURES.md): one whose passability or layers changed on its
+     * Database page is drawn again (its pictures and cells), and every map it stands on follows it.
+     */
+    async follow2DStructures(projectPath, entries, directory, trim) {
+        if (typeof Structure2DWorkshop === 'undefined' || typeof RRStructure2D === 'undefined') return;
+        const reactor = typeof window !== 'undefined' ? window.reactor : null, tilemap = reactor?.tilemapManager || null;
+        try {
+            for (const entry of entries) {
+                if (!entry.plan || !entry.plan._needsBake) continue;
+                await Structure2DWorkshop.bake(entry.plan, entry.file, { tilemap, db: this, projectPath });
+                delete entry.plan._needsBake;
+                this._writeFileAtomic(this.fs, this.path.join(directory, entry.file), (typeof RRMapElevation !== 'undefined' && RRMapElevation.stringifySidecar ? RRMapElevation.stringifySidecar(trim(entry.plan)) : JSON.stringify(trim(entry.plan), null, 2)) + '\n');
+            }
+            this.captureSavedState('structures');
+            Structure2DWorkshop.updateMaps(projectPath, null, Structure2DWorkshop.planOfFrom(this), tilemap);
+        } catch (error) {
+            console.error('2D structures could not be brought onto their maps:', error);
         }
     }
 

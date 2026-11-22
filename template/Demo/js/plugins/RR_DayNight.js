@@ -1,6 +1,6 @@
 /*:
- * @target MZ Reactor
- * @plugindesc [RPG Reactor only] Day and night on 3D maps: an in-game clock moves the ambient light, and tagged lamps light up at night.
+ * @target Reactor
+ * @plugindesc Day and night on 3D maps: an in-game clock moves the ambient light, and tagged lamps light up at night.
  * @author Psychronic
  * @url https://psychronic.itch.io/rpg-reactor
  *

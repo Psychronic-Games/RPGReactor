@@ -42,12 +42,15 @@
     const STAGE_REST = 4000;
     // How long after the card opens a model's picture that has to be drawn waits, and the longest it waits for its programs, in milliseconds.
     const PICTURE_WAIT = 300, COMPILE_WAIT = 1500;
+    // The longest a picture that has to be drawn waits for an idle moment of the page, in milliseconds: on a 3D map
+    // there may be none, and each waited a second.
+    const IDLE_WAIT = 300;
     // The side of the picture renderer's drawing buffer, in pixels: a model one tile tall is drawn about 140 wide.
     const STAGE_SIDE = 256;
     // How far a roof's slope may end from a flat top beside it and still run up to it, in tiles; and the most tiles of one flat top looked at.
     const RIDGE_REACH = 0.3, RIDGE_TILES = 2048;
     // The pictures of models kept between sessions are drawn again when this number changes.
-    const PICTURE_VERSION = 1;
+    const PICTURE_VERSION = 2;
 
     const int = value => Math.floor(Number(value) || 0);
     const pad = id => String(id).padStart(3, '0');
@@ -628,7 +631,7 @@
     });
     /** A quiet moment of the page: its next idle period (within a second), else after its next frame. */
     const whenIdle = () => new Promise(resolve => {
-        if (typeof requestIdleCallback === 'function') requestIdleCallback(() => resolve(), { timeout: 1000 });
+        if (typeof requestIdleCallback === 'function') requestIdleCallback(() => resolve(), { timeout: IDLE_WAIT });
         else afterFrame().then(resolve);
     });
     /** The moment a picture that has to be drawn may be: the card has been open for a moment, and the page is quiet. */
@@ -720,22 +723,51 @@
     /**
      * The file a model's picture is kept in between sessions, in the
      * editor's own cache of model pictures (outside the project): named by
-     * the model's files as they are now, its spec and the facing, so a
-     * model changed in any way is drawn again. Null where there is no disk.
+     * what the model's files hold (each one's name, size and a hash of its
+     * first 64 KB and its last), its spec and the facing, so a model changed
+     * in any way is drawn again. Not by where the project is or when a file
+     * was last written: a project opened from another folder or machine, or
+     * checked out again, drew every picture anew (each enemy waited about
+     * half a second, measured 2026-11-22). Null where there is no disk.
      */
+    /** A file's content, in short: a hash of its first and last 64 KB (the whole of a smaller one), kept per file, size and time. */
+    function contentStamp(fs, crypto, file, size) {
+        const SPAN = 65536;
+        let mtime = 0;
+        try { mtime = fs.statSync(file).mtimeMs; } catch (error) { return 'x'; }
+        const known = state.stamps && state.stamps.get(file);
+        if (known && known.size === size && known.mtime === mtime) return known.stamp;
+        let stamp = 'x';
+        let fd = null;
+        try {
+            fd = fs.openSync(file, 'r');
+            const hash = crypto.createHash('sha1'), head = Buffer.alloc(Math.min(SPAN, size));
+            fs.readSync(fd, head, 0, head.length, 0);
+            hash.update(head);
+            if (size > SPAN) { const tail = Buffer.alloc(Math.min(SPAN, size - SPAN)); fs.readSync(fd, tail, 0, tail.length, size - tail.length); hash.update(tail); }
+            stamp = hash.digest('hex').slice(0, 16);
+        } catch (error) { stamp = 'x'; } finally { if (fd !== null) try { fs.closeSync(fd); } catch (error) { /* closed */ } }
+        if (!state.stamps) state.stamps = new Map();
+        state.stamps.set(file, { size, mtime, stamp });
+        return stamp;
+    }
+
     function shotFile(home, spec, facing) {
         if (typeof require !== 'function' || typeof process === 'undefined' || typeof Database3DEditor === 'undefined' || !Database3DEditor.thumbnailCacheRoot || !home || !home.path) return null;
         try {
             const fs = require('fs'), path = require('path');
             const folder = path.join(home.path, '3d', ...String(spec.name).split('/'));
-            const stamps = [];
+            const stamps = [], crypto = require('crypto');
             for (const dir of [folder, path.join(folder, 'source')]) {
                 let names = [];
                 try { names = fs.readdirSync(dir); } catch (error) { names = []; }
-                for (const name of names.sort()) { const stat = fs.statSync(path.join(dir, name)); if (stat.isFile()) stamps.push(name + ':' + stat.size + ':' + Math.round(stat.mtimeMs)); }
+                for (const name of names.sort()) {
+                    const file = path.join(dir, name), stat = fs.statSync(file);
+                    if (stat.isFile()) stamps.push(name + ':' + stat.size + ':' + contentStamp(fs, crypto, file, stat.size));
+                }
             }
             if (!stamps.length) return null;
-            const key = ['battle-setup-picture', PICTURE_VERSION, folder, stamps.join(','), JSON.stringify(spec), facing].join('|');
+            const key = ['battle-setup-picture', PICTURE_VERSION, String(spec.name), stamps.join(','), JSON.stringify(spec), facing].join('|');
             return path.join(Database3DEditor.thumbnailCacheRoot(process, path, require('os')), require('crypto').createHash('sha1').update(key).digest('hex') + '.png');
         } catch (error) { return null; }
     }
@@ -776,6 +808,49 @@
             } catch (error) { /* a home that cannot be written: drawn again next time */ }
         }
         return shot;
+    }
+
+    /**
+     * The unit's picture made ready for the card before it opens (owner, 2026-11-22): called where its model has
+     * just been shown elsewhere (the Database's Enemies list and page, a troop, the 3D Models section). Nothing when
+     * the unit stands as no model or its picture is kept already; else its picture is drawn in a quiet moment of the
+     * page, one at a time (modelShot), and kept, so the card shows it at once. Looked at once a minute at most per
+     * unit (a list drawn again asks again; a unit bound to another model since is looked at again).
+     */
+    function warm(unit) {
+        if (!unit || !unit.record || !(Number(unit.id) > 0) || typeof document === 'undefined' || !root.RREventPreviewModels) return;
+        const home = project(managerNow());
+        if (!home || !home.path) return;
+        const key = home.path + '|' + unit.record + ':' + unit.id;
+        if (!state.warmed) state.warmed = new Map();
+        const now = Date.now();
+        if (now - (state.warmed.get(key) || -Infinity) < 60000) return;
+        state.warmed.set(key, now);
+        state.warming = (state.warming || Promise.resolve()).then(whenIdle).then(async () => {
+            const look = lookOf({ team: unit.team || (unit.record === 'actor' ? 'ally' : 'enemy'), record: unit.record, id: Number(unit.id) }, null);
+            if (!look || look.kind !== 'model') return;
+            const editor = editor3D(managerNow());
+            if (!(root.Reactor3D && root.Reactor3D.normalizeModelSpec) && editor && editor.ensureLibraries) await editor.ensureLibraries();
+            const spec = root.Reactor3D && root.Reactor3D.normalizeModelSpec ? root.Reactor3D.normalizeModelSpec(look.spec) : null;
+            const file = spec && shotFile(home, spec, 2);
+            if (!file) return;
+            try { if (require('fs').statSync(file).size > 320) return; } catch (error) { /* not kept yet */ }
+            await modelShot(home, spec, editor, 2);
+        }).catch(error => { if (typeof console !== 'undefined') console.warn('Battle Setup: a picture could not be made ready', error); });
+    }
+
+    /** Every enemy (and actor) whose bound model is `name`, made ready (warm): the 3D Models section showed it. */
+    function warmModel(name) {
+        const home = project(managerNow()), bindings = root.RRDatabase3DBindings;
+        if (!home || !home.path || !name || !bindings || !bindings.get) return;
+        for (const [record, list] of [['enemy', dataOf().enemies], ['actor', dataOf().actors]]) {
+            for (const entry of list || []) {
+                if (!entry || !(entry.id > 0)) continue;
+                let spec = null;
+                try { spec = bindings.get(home.path, record === 'enemy' ? 'enemies' : 'actors', entry.id); } catch (error) { spec = null; }
+                if (spec && spec.name === name) warm({ record, id: entry.id });
+            }
+        }
     }
 
     /**
@@ -1673,7 +1748,11 @@
                 if (button.dataset.painted) return;
                 button.dataset.painted = '1';
                 const unit = { team: state.team, record: button.dataset.record, id: Number(button.dataset.id) };
-                state.painting = (state.painting || Promise.resolve()).then(afterFrame).then(() => (button.isConnected ? artOf(unit, 2) : null)).then(art => {
+                // Each tile asks at once: a picture kept from an earlier session (or this one) is read in a moment, so
+                // they all show together; only a model's picture that has to be drawn waits its turn (modelShot draws
+                // one at a time, in quiet moments). They waited for a frame each, one after another: on a 3D map,
+                // whose frames are slow, 14 kept pictures took 6 seconds (measured, 2026-11-22).
+                Promise.resolve().then(() => (button.isConnected ? artOf(unit, 2) : null)).then(art => {
                     const canvas = button.querySelector('canvas');
                     if (!art || !canvas || !button.isConnected) return;
                     const context = canvas.getContext('2d'), room = canvas.width - 12;
@@ -1907,10 +1986,11 @@
         panel.className = 'rr-battle-setup';
         panel.tabIndex = -1;
         panel.setAttribute('role', 'region');
-        panel.innerHTML = `<div class="rr-battle-setup-head"><span class="rr-battle-setup-title"></span><button type="button" class="rr-btn-secondary rr-battle-setup-close">×</button></div>`
+        // The app's panel header (its icon, the title, the accent strip) and footer, as the Lighting and Image Layers docks.
+        panel.innerHTML = `<div class="rr-modal-header rr-dock-head rr-battle-setup-head"><img class="rr-dock-head-icon" src="images/icon-battle-setup.svg" alt=""><span class="rr-modal-title rr-battle-setup-title"></span><button type="button" class="rr-modal-close rr-battle-setup-close">×</button></div>`
             + '<div class="rr-battle-setup-body rr-accent-scrollbar"><div class="rr-battle-setup-part" data-part="mode"></div><div class="rr-battle-setup-part" data-part="start"></div>'
             + '<div class="rr-battle-setup-part is-tiles" data-part="tiles"></div><div class="rr-battle-setup-hint" data-part="hint"></div>'
-            + '<div class="rr-battle-setup-unit" data-part="unit" hidden></div></div><div class="rr-battle-setup-foot" data-part="foot"></div>';
+            + '<div class="rr-battle-setup-unit" data-part="unit" hidden></div></div><div class="rr-modal-footer rr-battle-setup-foot" data-part="foot"></div>';
         panel.querySelector('.rr-battle-setup-close').addEventListener('click', () => close());
         panel.addEventListener('click', onListClick, true);
         state.parts = {};
@@ -1922,6 +2002,8 @@
             let shown = viewer.classList.contains('active');
             new MutationObserver(() => {
                 const now = viewer.classList.contains('active');
+                // A unit made ready before may be bound to another model now: it is looked at again when next shown.
+                if (shown && !now) { if (state.warmed) state.warmed.clear(); state.bound.clear(); }
                 if (shown && !now && state.open) { state.bound.clear(); state.arts.clear(); state.files.clear(); state.tilesKey = ''; render(); }
                 shown = now;
             }).observe(viewer, { attributes: true, attributeFilter: ['class'] });
@@ -2140,7 +2222,7 @@
         parseUnitText, unitOf, isStarter, census, turned, face, facingOf,
         triggerOf, withTrigger, withMode, startOf, modeInForce, setStart, setMode, ensureStart,
         unitEvent, battleStartEvent, playSpot, facingToward, sentenceParts, tileRecords, modeChoices, playsLine, say,
-        lookOf, artOf, modelShot, shotFile, previewPage, modelSpec, teamTone, ghostProp, liftAt, standNewEvent, standEvent,
+        lookOf, artOf, modelShot, shotFile, warm, warmModel, previewPage, modelSpec, teamTone, ghostProp, liftAt, standNewEvent, standEvent,
         placeAt, removeAt, turnSelected, turnHand, hover2D, hover3D, whereOf, judge, roofAt, previewGrow, fadeModel, holding, lookupsFor, spotFor, readsPlayAt, pickTile,
         open, close, toggle, focus, isOpen, sync, syncButton, syncMapTrigger, play, showAll, showEvent, _state: state
     };

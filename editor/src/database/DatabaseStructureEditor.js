@@ -182,6 +182,13 @@ class DatabaseStructureEditor {
             return Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : fallback;
         };
         plan.name = String(plan.name || 'Plan');
+        // A 2D structure (Structure2D.js): its own fields, none of a building's.
+        if (plan.dimension === '2d' && typeof RRStructure2D !== 'undefined') {
+            RRStructure2D.normalize(plan);
+            plan.description = typeof plan.description === 'string' ? plan.description : '';
+            plan.category = typeof plan.category === 'string' ? plan.category : '';
+            return plan;
+        }
         const size = Array.isArray(plan.size) ? plan.size : [];
         plan.size = [int(size[0], 12, this.SIZE_MIN, this.SIZE_MAX), int(size[1], 10, this.SIZE_MIN, this.SIZE_MAX)];
         plan.storey = int(plan.storey, 5, 3, 12);
@@ -302,6 +309,16 @@ class DatabaseStructureEditor {
     /** The file keeps only what says something: an empty list, a blank material or a default window spacing is left out. */
     static trimPlan(plan) {
         const had = new Set(plan._had || []);
+        if (plan.dimension === '2d' && typeof RRStructure2D !== 'undefined') {
+            const fields = { name: plan.name, size: plan.size.slice() };
+            if (plan.description) fields.description = plan.description;
+            if (plan.category) fields.category = plan.category;
+            RRStructure2D.trim(plan, fields);
+            const out = {};
+            for (const key of plan._had || []) if (key in fields) out[key] = fields[key];
+            for (const key of Object.keys(fields)) if (!(key in out)) out[key] = fields[key];
+            return out;
+        }
         const fields = { name: plan.name, size: plan.size.slice(), storey: plan.storey };
         const materials = Object.fromEntries(Object.entries(plan.materials).filter(([, value]) => value));
         if (Object.keys(materials).length || had.has('materials')) fields.materials = materials;
@@ -475,6 +492,14 @@ class DatabaseStructureEditor {
         this._detail = detailEl;
         entry.plan = DatabaseStructureEditor.normalizePlan(entry.plan || DatabaseStructureEditor.newPlan(entry.name || 'Plan'));
         if (entry.name) entry.plan.name = entry.name;
+        // A 2D structure has a page of its own (DatabaseStructure2DPage.js).
+        if (entry.plan.dimension === '2d' && typeof DatabaseStructure2DPage !== 'undefined') {
+            this.current = null;
+            this._detail = null;
+            if (!this.page2D) this.page2D = new DatabaseStructure2DPage(this);
+            this.page2D.show(detailEl, entry);
+            return;
+        }
         this.current = { entry, plan: entry.plan };
         this.floor = 0;
         this.selection = null;
@@ -1363,6 +1388,7 @@ class DatabaseStructureEditor {
             ${this._field(tt('Name'), `<input type="text" class="database-field-value rr-structures-name" value="${rrEscapeHtml(plan.name)}" style="width:150px;">`)}
             ${this._field(tt('Plot'), `${this._numberHtml('rr-structures-size', plan.size[0], `data-i="0" min="${DatabaseStructureEditor.SIZE_MIN}" max="${DatabaseStructureEditor.SIZE_MAX}" title="${rrEscapeHtml(tt('Width in tiles'))}"`)}<span>×</span>${this._numberHtml('rr-structures-size', plan.size[1], `data-i="1" min="${DatabaseStructureEditor.SIZE_MIN}" max="${DatabaseStructureEditor.SIZE_MAX}" title="${rrEscapeHtml(tt('Depth in tiles'))}"`)}`)}
             ${this._field(tt('Floors'), this._numberHtml('rr-structures-height', this.floorsApi() ? this._floorCount(plan) : plan.height, 'min="1" max="24"'))}
+            ${typeof RRStructure2D !== 'undefined' && DatabaseStructureEditor.isEmpty(plan) ? `<button type="button" class="rr-btn-secondary rr-structures-to2d" title="${rrEscapeHtml(tt('Make this empty structure a 2D one: tiles, pictures and media surfaces, for 2D maps'))}">${tt('Make it 2D')}</button>` : ''}
             <button type="button" class="rr-button-primary rr-structures-build" style="margin-left:auto;">${tt('Build')}</button>
             <button type="button" class="rr-btn-secondary rr-structures-use">${tt('Use on the map')}</button>`;
         bar.querySelector('.rr-structures-name').addEventListener('input', event => this.setName(event.target.value));
@@ -1386,6 +1412,15 @@ class DatabaseStructureEditor {
             if (workshop && this.current) { this.nameIfNew(); workshop.open(this.current.entry); }
         });
         bar.querySelector('.rr-structures-use').addEventListener('click', () => this.useOnMap());
+        bar.querySelector('.rr-structures-to2d')?.addEventListener('click', () => {
+            // The tileset of the map open in the editor, else the first: the tile layer it starts with.
+            const tilesetId = window.reactor?.tilemapManager?.currentMap?.tilesetId || this.databaseManager?.getTilesets?.()?.find(Boolean)?.id || 1;
+            const entry = this.current.entry, size = plan.size;
+            entry.plan = RRStructure2D.newPlan(plan.name, Math.min(size[0], RRStructure2D.SIZE_MAX), Math.min(size[1], RRStructure2D.SIZE_MAX), tilesetId);
+            this.nameIfNew();
+            this.parentEditor?._markDatabaseMutation?.();
+            this.showStructureDetail(this._detail, entry);
+        });
     }
 
     /**

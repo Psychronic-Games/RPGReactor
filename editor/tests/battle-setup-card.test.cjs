@@ -874,7 +874,7 @@ test('a model\'s picture that has to be drawn waits for the card\'s first moment
     let busy = 0, most = 0, idle = 0;
     const drawnAt = [];
     const models = { thumbnail: async () => { most = Math.max(most, ++busy); drawnAt.push(Date.now()); await tick(15); busy--; return { url }; }, templateFor: async () => null };
-    const globals = { Database3DEditor: { thumbnailCacheRoot: () => cache }, RREventPreviewModels: models, requestIdleCallback: (run, how) => { idle++; assert.deepEqual(how, { timeout: 1000 }); setTimeout(run, 0); } };
+    const globals = { Database3DEditor: { thumbnailCacheRoot: () => cache }, RREventPreviewModels: models, requestIdleCallback: (run, how) => { idle++; assert.deepEqual(how, { timeout: 300 }); setTimeout(run, 0); } };
     try {
         await withCard(flat(), { globals }, async card => {
             delete card.state.ownShots;

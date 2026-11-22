@@ -86,7 +86,8 @@
 
     /**
      * The gallery's sections: the designs with no group, each group's, then `models` (cards of what was
-     * exported). `text` gives the builder's own wording: { noDesigns, noModels }.
+     * exported). `text` gives the builder's own wording: { noDesigns, noModels }. `models` null leaves the exported
+     * section out (a tool whose exports are not things to open: sounds, effects, animation sheets).
      */
     function gallery(base, models, text, t) {
         const designs = group => names(base, group).map(name => card(name, picture(path().join(dir(base, group), name + '.png')), 'design', group, t)).join('');
@@ -95,7 +96,7 @@
         const none = !loose && !byGroup.some(g => g.cards);
         return (none ? section(t('Designs'), '', text.noDesigns)
             : (loose ? section(t('Designs'), loose) : '') + byGroup.filter(g => g.cards).map(g => section(g.group, g.cards)).join(''))
-            + section(t('Exported Models'), models, text.noModels);
+            + (models === null ? '' : section(t('Exported Models'), models, text.noModels));
     }
 
     const api = { NEW, folderName, dir, groups, names, renderGroups, chooseGroup, save, read, remove, picture, card, gallery };

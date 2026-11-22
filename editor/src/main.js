@@ -278,6 +278,15 @@ class RPGReactor {
                 if (typeof StructureWorkshop !== 'undefined') {
                     this.structureWorkshop = new StructureWorkshop(this.projectController);
                     this.projectController.structureWorkshop = this.structureWorkshop;
+                    // 2D structures are built on a phantom 2D map of their own (Structure2DWorkshop.js).
+                    if (typeof Structure2DWorkshop !== 'undefined') {
+                        this.structure2DWorkshop = new Structure2DWorkshop(this.projectController);
+                        this.projectController.structure2DWorkshop = this.structure2DWorkshop;
+                    }
+                    if (typeof Structure2DStamp !== 'undefined') {
+                        this.structure2DStamp = new Structure2DStamp(this);
+                        this.projectController.structure2DStamp = this.structure2DStamp;
+                    }
                 }
             }
             if (this.modelPropsManager) {
@@ -925,6 +934,7 @@ class RPGReactor {
                 if (terrain._stroke || terrain._foliageStroke || terrain._groundStroke) terrain.endStroke();
             },
             label: entry => (entry?.surroundSet ? 'Beyond the Border' : entry?.cliffSet ? 'Steep Ground' : entry?.roomSet ? 'Room and Sky' : entry?.biome ? (entry.label || 'Biome') : entry?.foliageSet ? 'Foliage' : entry?.groundSet ? 'Ground' : entry?.water && !entry.ground ? 'Water' : 'Terrain') });
+        if (this.structure2DStamp) history.register('structures2d', { object: this.structure2DStamp, label: () => 'Structure' });
         if (this.lightingManager) history.register('lighting', { object: this.lightingManager, undoKey: '_undo', redoKey: '_redo', label: () => 'Light' });
         const media = this.mediaSurfaceManager;
         if (media && !history.owners.has('media')) {

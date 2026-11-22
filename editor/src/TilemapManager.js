@@ -978,7 +978,9 @@ class TilemapManager {
             this.passageLayer = null;
         }
         this._passageGeneration = (this._passageGeneration || 0) + 1;
-        if (!this.currentMap || !this.passageVisible) return;
+        // A 2D structure's phantom map shows its passability marks while a mark tool is out (Structure2DWorkshop).
+        const workshopMarks = typeof this.workshopMarks === 'function' ? this.workshopMarks() : null;
+        if (!this.currentMap || (!this.passageVisible && !workshopMarks)) return;
         const map = this.currentMap;
         const flags = (this.currentTileset && this.currentTileset.flags) || [];
         const tw = this.TILE_WIDTH, th = this.TILE_HEIGHT;
@@ -989,10 +991,14 @@ class TilemapManager {
         const marks = new PIXI.Graphics();
         const inset = Math.max(2, Math.round(tw * 0.18));
         const imageSolid = (typeof window !== "undefined" && window.reactor?.mapImageLayersManager?.solidTest(map)) || null;
-        for (let y = 0; y < map.height; y++) {
+        const open = new PIXI.Graphics();
+        for (let y = 0; y < map.height && this.passageVisible; y++) {
             for (let x = 0; x < map.width; x++) {
+                // A cell a placed 2D structure says (rrPassage, read before the tiles in the game): open or blocked.
+                const marked = map.rrPassage ? Number(map.rrPassage[`${x},${y}`]) || 0 : 0;
+                if (marked === 1) { open.circle(x * tw + tw / 2, y * th + th / 2, tw / 2 - inset); continue; }
                 // A picture at the characters' depth stops movement where it is solid, as an impassable tile does.
-                const blocked = imageSolid && imageSolid(x, y) ? 0x0f
+                const blocked = marked === 2 || (imageSolid && imageSolid(x, y)) ? 0x0f
                     : TilemapManager.tilePassage(map.data, map.width, map.height, flags, x, y, roomFloor).blocked;
                 if (!blocked) continue;
                 const px = x * tw, py = y * th;
@@ -1009,10 +1015,35 @@ class TilemapManager {
             }
         }
         marks.stroke({ width: Math.max(2, Math.round(tw * 0.06)), color: 0xff4040, alpha: 0.85 });
+        open.stroke({ width: Math.max(2, Math.round(tw * 0.06)), color: 0x40d070, alpha: 0.85 });
         layer.addChild(marks);
+        layer.addChild(open);
+        if (workshopMarks) layer.addChild(TilemapManager.workshopMarkGraphics(workshopMarks, tw, th));
         this.passageLayer = layer;
         this.container.addChild(layer);
         this._drawModelPassage(layer, tw, th);
+    }
+
+    /** A 2D structure's marks on its phantom map: X blocked (red), O open (green), ★ walk underneath (gold). */
+    static workshopMarkGraphics(passage, tw, th) {
+        const g = new PIXI.Graphics(), inset = Math.max(3, Math.round(tw * 0.2)), width = Math.max(2, Math.round(tw * 0.08));
+        const fills = { X: 0xff4040, O: 0x40d070, '*': 0xffd700 };
+        for (const [cell, mark] of Object.entries(passage || {})) {
+            const m = /^(\d+),(\d+)$/.exec(cell);
+            if (!m || !fills[mark]) continue;
+            const px = Number(m[1]) * tw, py = Number(m[2]) * th, cx = px + tw / 2, cy = py + th / 2;
+            g.rect(px + 1, py + 1, tw - 2, th - 2).fill({ color: fills[mark], alpha: 0.18 });
+            if (mark === 'X') g.moveTo(px + inset, py + inset).lineTo(px + tw - inset, py + th - inset).moveTo(px + tw - inset, py + inset).lineTo(px + inset, py + th - inset);
+            else if (mark === 'O') g.circle(cx, cy, tw / 2 - inset);
+            else {
+                const outer = tw / 2 - inset, inner = outer * 0.45, points = [];
+                for (let i = 0; i < 10; i++) { const r = i % 2 ? inner : outer, a = -Math.PI / 2 + i * Math.PI / 5; points.push(cx + Math.cos(a) * r, cy + Math.sin(a) * r); }
+                g.poly(points);
+            }
+            g.stroke({ width, color: fills[mark], alpha: 0.95 });
+        }
+        g.eventMode = 'none';
+        return g;
     }
 
     /**
@@ -1081,7 +1112,8 @@ class TilemapManager {
 
     /** Redraw the passage marks after tiles or props changed, once per frame. */
     refreshPassage() {
-        if (!this.passageVisible || this._passageRefresh) return;
+        // A phantom map's marks show while a mark tool is out, the Passage view on or off.
+        if ((!this.passageVisible && typeof this.workshopMarks !== 'function') || this._passageRefresh) return;
         const schedule = typeof requestAnimationFrame === "function" ? requestAnimationFrame : (fn => setTimeout(fn, 16));
         this._passageRefresh = schedule(() => {
             this._passageRefresh = null;
@@ -1132,6 +1164,7 @@ class TilemapManager {
     }
 
     setupPanning() {
+        this.installCellPicker();
         let isDragging = false;
         let dragStart = { x: 0, y: 0 };
         const canvasContainer = document.getElementById('canvas-container');
@@ -1271,6 +1304,78 @@ class TilemapManager {
             resizeFrame = requestAnimationFrame(onResize);
         };
         window.addEventListener('resize', window.__rrTilemapResizeHandler);
+    }
+
+    /**
+     * A tool that takes the map's clicks by the tile (`this.cellPicker`: { onCell, onHover, onRight, onLeave, onEscape,
+     * cursor }): a 2D structure's passability marks on its phantom map, a 2D structure being placed. While one is set,
+     * clicks on the flat map go to it and paint no tiles. Listened for on the map's container, before the map.
+     */
+    installCellPicker() {
+        const host = typeof document !== 'undefined' ? document.getElementById('canvas-container') : null;
+        if (!host || host.__rrCellPicker) return;
+        host.__rrCellPicker = true;
+        let down = false;
+        const active = event => {
+            const picker = this.cellPicker;
+            if (!picker || !this.currentMap || window.reactor?.mapEditor3D?.enabled) return null;
+            return event.target && event.target.tagName === 'CANVAS' ? picker : null;
+        };
+        const cell = event => {
+            const canvas = this.app?.canvas || this.app?.view || host.querySelector('canvas');
+            if (!canvas || !this.container) return null;
+            const rect = canvas.getBoundingClientRect(), scale = this.container.scale.x || 1;
+            const x = Math.floor((event.clientX - rect.left - this.container.x) / (this.TILE_WIDTH * scale));
+            const y = Math.floor((event.clientY - rect.top - this.container.y) / (this.TILE_HEIGHT * scale));
+            return x >= 0 && y >= 0 && x < this.currentMap.width && y < this.currentMap.height ? [x, y] : null;
+        };
+        host.addEventListener('pointerdown', event => {
+            const picker = active(event);
+            if (!picker || event.button === 1 || event.shiftKey) return;
+            event.stopPropagation(); event.preventDefault();
+            const at = cell(event);
+            if (!at) return;
+            if (event.button === 2) { picker.onRight?.(at[0], at[1]); return; }
+            if (event.button !== 0) return;
+            down = true;
+            picker.onCell?.(at[0], at[1], event);
+        }, true);
+        host.addEventListener('pointermove', event => {
+            const picker = this.cellPicker;
+            if (!picker || !this.currentMap) return;
+            if (!active(event)) { picker.onLeave?.(); return; }
+            const at = cell(event);
+            host.style.cursor = picker.cursor || '';
+            if (!at) { picker.onLeave?.(); return; }
+            picker.onHover?.(at[0], at[1]);
+            // A mark tool paints along a drag; placing takes one click a copy.
+            if (down && picker.drag !== false && !picker.onHover) picker.onCell?.(at[0], at[1], event);
+            if (down) event.stopPropagation();
+        }, true);
+        window.addEventListener('pointerup', () => { down = false; }, true);
+        host.addEventListener('contextmenu', event => { if (active(event)) { event.preventDefault(); event.stopPropagation(); } }, true);
+        host.addEventListener('pointerleave', () => { this.cellPicker?.onLeave?.(); host.style.cursor = ''; });
+        window.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && this.cellPicker?.onEscape && this.currentMap) { this.cellPicker.onEscape(); host.style.cursor = ''; }
+        }, true);
+    }
+
+    /** Where tiles x, y to x + w, y + h stand on the screen, in the map container's own pixels (for a preview over the map). */
+    tileBox(x, y, w = 1, h = 1) {
+        const host = typeof document !== 'undefined' ? document.getElementById('canvas-container') : null;
+        const canvas = this.app?.canvas || this.app?.view || host?.querySelector('canvas');
+        if (!host || !canvas || !this.container) return null;
+        const hostRect = host.getBoundingClientRect(), rect = canvas.getBoundingClientRect(), scale = this.container.scale.x || 1;
+        return {
+            left: rect.left - hostRect.left + this.container.x + x * this.TILE_WIDTH * scale,
+            top: rect.top - hostRect.top + this.container.y + y * this.TILE_HEIGHT * scale,
+            width: w * this.TILE_WIDTH * scale, height: h * this.TILE_HEIGHT * scale
+        };
+    }
+
+    /** Database › Structures › Use on the map, for a 2D structure: place it with the next clicks (Structure2DStamp). */
+    startStructure2DStamp(file) {
+        return window.reactor?.structure2DStamp?.start?.(file) || false;
     }
 
     /** Apply the wheel steps collected since the last frame; see setupPanning. */
@@ -3851,6 +3956,8 @@ class TilemapManager {
     }
 
     isMapDirty() {
+        // A 2D structure's phantom map: its marks, layers and pictures are the structure's, not the map's tiles.
+        if (this.currentMap?.rrWorkshop?.dimension === '2d' && window.reactor?.structure2DWorkshop?.hasUnsavedWork?.()) return true;
         const data = this.getPersistedMapData();
         if (!data || this.savedMapState === null) return false;
         // The 3D sidecar lives beside the map rather than in it, and

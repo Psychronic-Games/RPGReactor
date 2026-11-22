@@ -16,6 +16,10 @@
 //   fit        "map"    locked to the map, one picture the size of the map (default)
 //              "repeat" tiled without end across the view
 //              "fill"   stretched to the screen and fixed to it
+//              "place"  at its own size, its top-left corner on tile `at`,
+//                       moving with the map (a placed 2D structure)
+//   at         [x, y] the tile a "place" layer's top-left corner is on, in
+//              whole tiles (default [0, 0]); written only for fit "place"
 //   repeat     the directions a repeating layer repeats in: left out for
 //              across and down, "x" across only (a far mountain strip), "y"
 //              down only (streaks of rain). In the other direction the picture
@@ -41,6 +45,9 @@
 //              A picture whose file is missing shows `name`.
 //   z          a number that replaces the position's depth
 //
+// Any other field is kept as it is (a placed structure's layers carry
+// `structure2d`, the placement they were made for).
+//
 // A map shown in 3D draws the screen layers only: "over" with fit "fill" or
 // "repeat" (repeating on the screen, follow counting as 0).
 //
@@ -54,7 +61,7 @@
     "use strict";
 
     const POSITIONS = Object.freeze(["back", "ground", "same", "over"]);
-    const FITS = Object.freeze(["map", "repeat", "fill"]);
+    const FITS = Object.freeze(["map", "repeat", "fill", "place"]);
     const REPEATS = Object.freeze(["both", "x", "y"]);
     const BLENDS = Object.freeze(["normal", "add", "multiply", "screen"]);
     const OPS = Object.freeze(["=", ">=", "<="]);
@@ -65,7 +72,8 @@
 
     const DEFAULTS = Object.freeze({
         layer: "ground", fit: "map", drift: Object.freeze([0, 0]), follow: 1, opacity: 255, blendMode: 0,
-        switch: 0, when: null, fade: 0, variable: 0, variantName: "", versions: null, repeat: "both", z: null
+        switch: 0, when: null, fade: 0, variable: 0, variantName: "", versions: null, repeat: "both", z: null,
+        at: Object.freeze([0, 0])
     });
 
     // A tile is blocked when at least `count` of its `samples` x `samples`
@@ -80,7 +88,7 @@
     // far above the one before it.
     const DEPTH_STEP = 0.0001;
 
-    const KNOWN = ["name", "layer", "variable", "variantName", "versions", "switch", "opacity", "blendMode", "fit", "repeat", "drift", "follow", "when", "fade", "z"];
+    const KNOWN = ["name", "layer", "variable", "variantName", "versions", "switch", "opacity", "blendMode", "fit", "repeat", "drift", "follow", "when", "fade", "z", "at"];
 
     function finite(value, fallback) {
         if (value === null || value === undefined || value === "") return fallback;
@@ -136,6 +144,9 @@
         // One direction only means something for a picture that repeats.
         record.repeat = record.fit === "repeat" && (source.repeat === "x" || source.repeat === "y") ? source.repeat : DEFAULTS.repeat;
         record.z = finite(source.z, null);
+        // A tile to stand on only means something for a placed picture.
+        const at = record.fit === "place" && Array.isArray(source.at) ? source.at : DEFAULTS.at;
+        record.at = [Math.floor(finite(at[0], 0)), Math.floor(finite(at[1], 0))];
         for (const key of Object.keys(source)) {
             if (!KNOWN.includes(key)) record[key] = source[key];
         }
@@ -159,6 +170,7 @@
         if (layer.opacity !== DEFAULTS.opacity) out.opacity = layer.opacity;
         if (layer.blendMode) out.blendMode = layer.blendMode;
         if (layer.fit !== DEFAULTS.fit) out.fit = layer.fit;
+        if (layer.fit === "place") out.at = [layer.at[0], layer.at[1]];
         if (layer.repeat !== DEFAULTS.repeat) out.repeat = layer.repeat;
         if (layer.drift[0] || layer.drift[1]) out.drift = [layer.drift[0], layer.drift[1]];
         if (layer.follow !== DEFAULTS.follow) out.follow = layer.follow;
@@ -628,6 +640,8 @@
                 pictureHeight: 0,
                 frameWidth: 0,
                 frameHeight: 0,
+                offsetX: 0,         // where a placed picture's top left lies on the map, in pixels
+                offsetY: 0,
                 fitted: 0           // the count of the view it was last fitted to
             });
         }
@@ -659,7 +673,13 @@
             }
             return;
         }
-        if (spec.fit === "map" && (set.loopX || set.loopY)) {
+        // A placed picture lies on the map as a map-sized one does, moved by its tile.
+        const placed = spec.fit === "place";
+        if (placed) {
+            layer.offsetX = spec.at[0] * set.tileWidth;
+            layer.offsetY = spec.at[1] * set.tileHeight;
+        }
+        if ((spec.fit === "map" || placed) && (set.loopX || set.loopY)) {
             // A picture locked to a map that loops is drawn once per lap in
             // view, a lap being the map's size whatever the picture's.
             layer.kind = "laps";
@@ -667,7 +687,7 @@
             for (let i = 0; i < set.copiesX * set.copiesY; i++) layer.copies.push(plainSprite(set, z, spec.blendMode));
             return;
         }
-        if (spec.fit === "map") {
+        if (spec.fit === "map" || placed) {
             layer.kind = "map";
             layer.sprite = plainSprite(set, z, spec.blendMode);
             return;
@@ -958,12 +978,12 @@
             if (layer.paint !== layer.level) paint(layer);
             if (!layer.entry) continue;
             if (layer.kind === "map") {
-                layer.sprite.x = 0 - ox;
-                layer.sprite.y = 0 - oy;
+                layer.sprite.x = layer.offsetX - ox;
+                layer.sprite.y = layer.offsetY - oy;
             } else if (layer.kind === "strips") {
                 placeStrips(set, layer, displayX, displayY);
             } else if (layer.kind === "laps") {
-                placeCopies(set, layer, ox, oy);
+                placeCopies(set, layer, ox - layer.offsetX, oy - layer.offsetY);
             }
         }
     }

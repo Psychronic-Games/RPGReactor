@@ -31,8 +31,12 @@ Guides for authoring with the engine, the current verified state, and maintainer
 - [Model face points and speech](3D-FACE-AND-SPEECH.md): eye placement, mouth and lip authoring, spoken dialogue, per-prop animation speed.
 - [Media surfaces](MEDIA-SURFACES.md): image and video placement on maps, models and the screen; transforms and proportions.
 - [Custom user interfaces](DESIGN-USER-INTERFACES.md): the User Interfaces database section, its node set, actor bindings, opt-in stock-scene replacement and explicit boundaries.
+- [2D structures](DESIGN-2D-STRUCTURES.md): a building made once on a phantom 2D map (any mix of tilesets, pictures, media surfaces, passability marked X, O or ★) and placed on 2D maps as an object that follows it.
 - [Building 3D worlds from 2D tilesets](DESIGN-3D-WORLDS.md): the tileset-class, facing and per-face model behind HD-2D maps, with the phasing table marked to what shipped.
-- [Reactor plugin API](DESIGN-PLUGIN-API.md): proposal for `@target Reactor` headers, named and ordered hooks in place of raw aliasing, and a plugin reference generated from the runtime. Not built yet.
+- [Your first plugin](PLUGIN-FIRST-PLUGIN.md), [Parameters & plugin commands](PLUGIN-PARAMETERS-AND-COMMANDS.md), [Reactor globals](PLUGIN-GLOBALS.md): a game plugin step by step.
+- [Plugin API Reference](PLUGIN-API.md): generated from the code: every function and RPG Reactor plugin command a plugin may use, and the editor plugin interface; a test keeps it in step.
+- [Writing plugins](PLUGIN-DEVELOPMENT.md): game plugins (RPG Maker's, and `@target Reactor` ones written for RPG Reactor) and editor plugins (`ReactorEditor`: menu entries, toolbar buttons with their own icons, panels), what each may call, the two examples in the Demo, safety and testing.
+- [Reactor plugin API](DESIGN-PLUGIN-API.md): `@target` (built: the Plugin Manager shows what a plugin is written for), and the proposal for named and ordered hooks in place of raw aliasing and a plugin reference generated from the runtime (not built yet).
 - [Reactor Features](REACTOR-FEATURES.md): turning Reactor's versions of plugin-provided features on and off, per project.
 - [Resource pools](RESOURCE-POOLS.md): turning MP and TP off (built) and extra pools such as Stamina or Rage (proposed).
 - [Online worlds](DESIGN-ONLINE.md): using Character Creation and Build › Online Server today, Engine mode, avatar voice, and the design for collaboration, live editing and god mode on one project server, with measured capacity.

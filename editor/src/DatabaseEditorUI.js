@@ -2398,6 +2398,8 @@ class DatabaseEditorUI {
             if (spec) {
                 Promise.resolve(window.RRDatabase3DBindings.modelThumbnail(this.reactor3dEditor, spec)).then(url => {
                     if (!url || !span.isConnected || span._listIconRequest !== request || this.currentProject !== project) return;
+                    // Its picture for Battle Setup made ready too, in a quiet moment (RRBattleSetup.warm).
+                    window.RRBattleSetup?.warm?.({ record: 'enemy', id: entry.id });
                     span.style.backgroundImage = `url("${url}")`;
                     span.style.backgroundSize = 'contain';
                     span.style.backgroundPosition = 'center';

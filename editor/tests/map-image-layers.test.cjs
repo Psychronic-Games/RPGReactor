@@ -63,8 +63,8 @@ test('the settings rows are the ones that apply to the layer', () => {
     // A 3D map draws a repeating layer on the screen: how far it follows the map has nothing to say.
     assert.equal(rows({ name: 'A', layer: 'over', fit: 'repeat' }, true), 'picture depth placement repeats drift opacity blend shown versions');
     // Same as Characters takes a picture locked to the map and nothing else.
-    assert.deepEqual(R.FITS.map(fit => M.fitAllowed('same', fit)), [true, false, false]);
-    assert.deepEqual(R.FITS.map(fit => M.fitAllowed('over', fit)), [true, true, true]);
+    assert.deepEqual(R.FITS.map(fit => M.fitAllowed('same', fit)), [true, false, false, false]);
+    assert.deepEqual(R.FITS.map(fit => M.fitAllowed('over', fit)), [true, true, true, true]);
 });
 
 test('a row of the list says what the layer is and the conditions it is shown under, in words', () => {
@@ -645,7 +645,7 @@ test('the passage overlay is told the tiles a Same as Characters picture blocks,
     assert.equal(haven.manager.solidTest(map), null);
     const flat = read('src/TilemapManager.js');
     assert.match(flat, /const imageSolid = [^\n]*mapImageLayersManager\?\.solidTest\(map\)/);
-    assert.match(flat, /const blocked = imageSolid && imageSolid\(x, y\) \? 0x0f\s*: TilemapManager\.tilePassage\(/);
+    assert.match(flat, /const blocked = marked === 2 \|\| \(imageSolid && imageSolid\(x, y\)\) \? 0x0f\s*: TilemapManager\.tilePassage\(/);
 });
 
 test('a repeating layer drifts in the editor only while the tool is open, and only when a shown layer drifts', () => {
@@ -842,6 +842,63 @@ test('a null in the stored list has no row and breaks nothing; it keeps its plac
     assert.equal(panel().querySelectorAll('.rr-image-layer-item').length, 1);
     manager.close();
     assert.equal(document.body.querySelectorAll('.rr-image-layers-panel').length, 0);
+});
+
+test('a placed structure\'s pictures are listed as part of it and never changed, moved or removed by the tool', async () => {
+    const below = { name: 'Inn-below', layer: 'ground', fit: 'place', at: [3, 4], structure2d: 1 };
+    const over = { name: 'Inn-over', layer: 'over', fit: 'place', at: [3, 4], structure2d: 1 };
+    const town = { name: 'Town', layer: 'ground' }, light = { name: 'Light', layer: 'over' };
+    assert.deepEqual([below, over, town].map(M.isStructure), [true, true, false]);
+    assert.equal(M.describe(below), 'Below Characters, Placed at tile 3, 4');
+    assert.deepEqual(plain(M.rowLines(below, names).lines), ['Below Characters, Placed at tile 3, 4', 'Part of a placed structure']);
+    assert.deepEqual(plain(M.rowLines(town, names).lines), ['Below Characters, Locked to the map']);
+    // The pure edits leave the list as it was; a neighbor of a structure's picture does not swap past it.
+    const layers = [town, below, light, over];
+    assert.equal(M.change(layers, 1, { opacity: 10 }), layers);
+    assert.equal(M.remove(layers, 3), layers);
+    assert.deepEqual([M.canMove(layers, 1, -1), M.canMove(layers, 0, -1), M.canMove(layers, 2, 1), M.canMove(layers, 3, 1)], [false, false, false, false]);
+    assert.equal(M.fitWords('place').length > 0 && M.fitHint('place').length > 0, true);
+
+    const map = { width: 21, height: 15, rrImageLayers: layers };
+    const { manager, panel, tm } = makeEditor(map, { files: ['Town', 'Light', 'Inn-below', 'Inn-over'] });
+    assert.equal(await manager.open(), true);
+    const rows = panel().querySelectorAll('.rr-image-layer-item');
+    assert.deepEqual(rows.map(row => row.querySelector('.rr-image-layer-name').textContent), ['Inn-over', 'Light', 'Inn-below', 'Town']);
+    const structureRows = rows.filter(row => row.classList.contains('is-structure'));
+    assert.equal(structureRows.length, 2);
+    for (const row of structureRows) {
+        assert.deepEqual([row.querySelector('.rr-image-layer-up'), row.querySelector('.rr-image-layer-remove')], [null, null], 'no Move, no Remove');
+        assert.ok(row.querySelector('.rr-image-layer-eye'), 'the eye, which is never saved, stays');
+    }
+    // Its card says what it is and where to change it, and holds no control.
+    manager.select(manager.session.idOf(over));
+    assert.equal(panel().querySelector('[data-focus="placement"]'), null);
+    assert.equal(panel().querySelector('[data-focus="opacity"]'), null);
+    assert.ok(panel().querySelectorAll('.rr-image-layer-structure').length === 2);
+    const id = manager.session.idOf(over);
+    assert.deepEqual([manager.edit({ opacity: 10 }), manager.removeLayer(id), manager.moveLayer(id, 1)], [false, false, false]);
+    // An edit of another layer leaves them the very objects they were, in their places.
+    manager.select(manager.session.idOf(light));
+    assert.equal(manager.commit({ opacity: 100 }), true);
+    assert.deepEqual([map.rrImageLayers[1], map.rrImageLayers[3]], [below, over]);
+    assert.deepEqual(below, { name: 'Inn-below', layer: 'ground', fit: 'place', at: [3, 4], structure2d: 1 });
+    // A layer placed at a tile offers that placement; any other layer is not offered it.
+    manager.select(manager.session.idOf(town));
+    const fits = () => panel().querySelector('[data-focus="placement"]').querySelectorAll('option').map(option => option.value);
+    assert.deepEqual(fits(), ['map', 'repeat', 'fill'], 'no "place" for a layer locked to the map');
+    map.rrImageLayers = map.rrImageLayers.concat([{ name: 'Sign', layer: 'over', fit: 'place', at: [1, 2] }]);
+    manager.select(manager.session.idOf(map.rrImageLayers[4]));
+    assert.deepEqual(fits(), ['map', 'repeat', 'fill', 'place'], 'a placed layer of the map\'s own shows its placement');
+    assert.equal(panel().querySelector('[data-focus="placement"]').value, 'place');
+    assert.equal(manager.commit({ opacity: 50 }), true);
+    assert.deepEqual(map.rrImageLayers[4], { name: 'Sign', layer: 'over', opacity: 50, fit: 'place', at: [1, 2] }, 'an edit keeps its tile');
+    // The flat view puts the structure's pictures at their tile.
+    await manager.drawFlat(tm);
+    const placed = tm.layers.imageGround.children.find(node => pictureOf(node) === 'Inn-below');
+    assert.deepEqual([placed.position.x, placed.position.y], [144, 192]);
+    const plainTown = tm.layers.imageGround.children.find(node => pictureOf(node) === 'Town');
+    assert.deepEqual([plainTown.position.x, plainTown.position.y], [0, 0]);
+    manager.close();
 });
 
 test('the flat view draws each layer in the container of its depth, with its opacity and blend; the eye and a 3D map leave layers out', async () => {

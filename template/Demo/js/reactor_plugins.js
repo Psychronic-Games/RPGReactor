@@ -1189,7 +1189,7 @@ var $plugins =
     {
         "name": "RR_DayNight",
         "status": false,
-        "description": "[RPG Reactor only] Day and night on 3D maps: an in-game clock moves the ambient light, and tagged lamps light up at night.",
+        "description": "Day and night on 3D maps: an in-game clock moves the ambient light, and tagged lamps light up at night.",
         "parameters": {
             "hourVariable": "0",
             "secondsPerHour": "60",

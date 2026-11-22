@@ -2219,6 +2219,7 @@ class PluginManager {
                             plugin.help = meta.help || plugin.help || '';
                             plugin.author = meta.author || plugin.author || '';
                             plugin.url = meta.url || plugin.url || '';
+                            plugin.targets = meta.targets || [];
                         }
                     } catch (err) {
                         console.warn(`Could not load metadata for plugin ${plugin.name}:`, err);
@@ -2292,7 +2293,8 @@ class PluginManager {
             description: this.parsePluginDescription(source) || '',
             help: this.parsePluginHelp(source) || '',
             author: this.parsePluginAuthor(source) || '',
-            url: this.parsePluginUrl(source) || ''
+            url: this.parsePluginUrl(source) || '',
+            targets: this.parsePluginTargets(source)
         };
         this._pluginMetadataCache.set(pluginPath, meta);
         return meta;
@@ -3134,6 +3136,7 @@ class PluginManager {
                 description: description,
                 author: author,
                 url: url,
+                targets: this.parsePluginTargets(pluginSource),
                 help: help,
                 parameters: parameters
             };
@@ -3284,6 +3287,52 @@ class PluginManager {
     /**
      * Parse plugin URL from source
      */
+    /**
+     * What a plugin is written for, from its `@target` line(s), in a fixed order:
+     *   'Reactor'        a game plugin written for RPG Reactor itself, with no RPG Maker underneath it in mind
+     *                    (`@target Reactor`; `RPGReactor` is the same);
+     *   'MZ', 'MV'       an RPG Maker plugin, which RPG Reactor runs too (`@target MZ Reactor` is one written for
+     *                    both: MZ's way, Reactor's features where it finds them);
+     *   'ReactorEditor'  an editor plugin (EditorPlugins.js).
+     * Other words are left out; no `@target` is [].
+     */
+    static targetsFrom(source) {
+        const block = String(source || '').match(/\/\*:([\s\S]*?)\*\//);
+        if (!block) return [];
+        const found = new Set();
+        for (const line of block[1].split('\n')) {
+            const match = line.replace(/^\s*\*?\s*/, '').match(/^@target\s+(.+)/i);
+            if (!match) continue;
+            for (const word of match[1].split(/[\s,]+/)) {
+                const w = word.toLowerCase();
+                if (w === 'reactor' || w === 'rpgreactor') found.add('Reactor');
+                else if (w === 'reactoreditor' || w === 'rpgreactoreditor') found.add('ReactorEditor');
+                else if (w === 'mz') found.add('MZ');
+                else if (w === 'mv') found.add('MV');
+            }
+        }
+        return ['Reactor', 'MZ', 'MV', 'ReactorEditor'].filter(t => found.has(t));
+    }
+
+    parsePluginTargets(source) { return PluginManager.targetsFrom(source); }
+
+    /**
+     * What the plugin's targets mean in the tab it is listed in: a note when it belongs in the other tab, or carries no
+     * `@target`. Answers { level: 'warn' | 'note', text } or null.
+     */
+    targetNote(targets) {
+        const list = Array.isArray(targets) ? targets : [];
+        const editorOnly = list.length && list.every(t => t === 'ReactorEditor');
+        if (this.scope === 'editor' && list.length && !list.includes('ReactorEditor')) {
+            return { level: 'warn', text: this._tt('This is a game plugin (@target {targets}): it belongs in Game Plugins, in js/plugins. The editor does not run it.').replace('{targets}', list.join(' ')) };
+        }
+        if (this.scope !== 'editor' && editorOnly) {
+            return { level: 'warn', text: this._tt('This is an editor plugin (@target ReactorEditor): it belongs in Editor Plugins, in js/editor-plugins. The game does not need it.') };
+        }
+        if (!list.length) return { level: 'note', text: this._tt(this.scope === 'editor' ? 'No @target line: an editor plugin says @target ReactorEditor.' : 'No @target line: taken as an RPG Maker plugin.') };
+        return null;
+    }
+
     parsePluginUrl(source) {
         const commentBlock = source.match(/\/\*:([\s\S]*?)\*\//);
         if (!commentBlock) return '';
@@ -3421,8 +3470,36 @@ class PluginManager {
             metaInfo.appendChild(urlDiv);
         }
 
-        if (plugin.author || plugin.url) {
+        // What it is written for (@target): RPG Reactor, RPG Maker MZ / MV, the editor.
+        const targets = Array.isArray(plugin.targets) ? plugin.targets : [];
+        if (targets.length) {
+            const runsDiv = document.createElement('div');
+            runsDiv.className = 'plugin-meta-item rr-plugin-targets';
+            const runsLabel = document.createElement('span');
+            runsLabel.className = 'plugin-meta-label';
+            runsLabel.textContent = this._tt('Written for:') + ' ';
+            runsDiv.appendChild(runsLabel);
+            const names = { Reactor: 'RPG Reactor', MZ: 'RPG Maker MZ', MV: 'RPG Maker MV', ReactorEditor: 'RPG Reactor\'s editor' };
+            for (const target of targets) {
+                const chip = document.createElement('span');
+                chip.className = 'rr-plugin-target is-' + target.toLowerCase();
+                chip.textContent = this._tt(names[target]);
+                runsDiv.appendChild(chip);
+            }
+            metaInfo.appendChild(runsDiv);
+        }
+
+        if (plugin.author || plugin.url || targets.length) {
             header.appendChild(metaInfo);
+        }
+
+        const targetNote = this.targetNote(targets);
+        if (targetNote) {
+            const note = document.createElement('div');
+            note.className = 'rr-plugin-target-note is-' + targetNote.level;
+            note.setAttribute('role', targetNote.level === 'warn' ? 'alert' : 'note');
+            note.textContent = targetNote.text;
+            header.appendChild(note);
         }
 
         this.detailsContainer.appendChild(header);

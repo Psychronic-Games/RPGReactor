@@ -695,7 +695,27 @@ Game_Map.prototype.autotileType = function(x, y, z) {
     return tileId >= 2048 ? Math.floor((tileId - 2048) / 48) : -1;
 };
 
+/**
+ * A cell's passability set on the map itself (`$dataMap.rrPassage`, keys "x,y"):
+ * 1 open, 2 blocked, 0 when the map leaves the cell to its tiles. A placed 2D
+ * structure writes it (docs/DESIGN-2D-STRUCTURES.md).
+ */
+Game_Map.prototype.rrPassageAt = function(x, y) {
+    const cells = $dataMap && $dataMap.rrPassage;
+    if (!cells) return 0;
+    const value = Number(cells[x + "," + y]);
+    return value === 1 || value === 2 ? value : 0;
+};
+
+// Walking asks here, before the tiles: a cell the map marks open can be entered and
+// left in every direction, one it marks blocked in none. It is read here and not in
+// checkPassage, which the legacy passage rule, a room's bare floor and solid image
+// layers each wrap (some answering without the tiles), so the mark wins over all of
+// them whatever order they load in; boats, ships and landing ask checkPassage and
+// keep to the tiles.
 Game_Map.prototype.isPassable = function(x, y, d) {
+    const marked = this.rrPassageAt(x, y);
+    if (marked) return marked === 1;
     return this.checkPassage(x, y, (1 << (d / 2 - 1)) & 0x0f);
 };
 

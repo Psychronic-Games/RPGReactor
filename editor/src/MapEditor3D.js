@@ -2135,7 +2135,9 @@ class MapEditor3D {
      * 1 down, 2 left, 4 right, 8 up; 15 nothing walks), and `signature`
      * changes when the tileset's flags, the room's floor or the map's image
      * layers do. A picture at the characters' depth shuts the tiles it is
-     * solid on, as it does on the flat map.
+     * solid on, as it does on the flat map. A cell the map marks itself
+     * (`rrPassage`, a placed 2D structure: 1 open, 2 blocked) is that before
+     * anything else, as the game's Game_Map.isPassable reads it.
      */
     passageTiles(mapData) {
         if (!mapData || typeof TilemapManager === 'undefined' || !TilemapManager.tilePassage) return null;
@@ -2147,10 +2149,16 @@ class MapEditor3D {
         for (let i = 0; i < flags.length; i++) hash = (hash * 31 + (flags[i] | 0)) | 0;
         const imageSolid = (typeof window !== 'undefined' && window.reactor?.mapImageLayersManager?.solidTest?.(mapData)) || null;
         const layers = imageSolid ? JSON.stringify(mapData.rrImageLayers) : '';
+        const marked = mapData.rrPassage && typeof mapData.rrPassage === 'object' ? mapData.rrPassage : null;
         return {
-            signature: `${mapData.tilesetId}|${roomFloor ? 1 : 0}|${hash}|${layers}`,
-            read: (x, y) => (imageSolid && imageSolid(x, y) ? 0x0f
-                : TilemapManager.tilePassage(mapData.data, mapData.width, mapData.height, flags, x, y, roomFloor).blocked)
+            signature: `${mapData.tilesetId}|${roomFloor ? 1 : 0}|${hash}|${layers}|${marked ? JSON.stringify(marked) : ''}`,
+            read: (x, y) => {
+                const mark = marked ? Number(marked[`${x},${y}`]) : 0;
+                if (mark === 1) return 0;
+                if (mark === 2) return 0x0f;
+                return imageSolid && imageSolid(x, y) ? 0x0f
+                    : TilemapManager.tilePassage(mapData.data, mapData.width, mapData.height, flags, x, y, roomFloor).blocked;
+            }
         };
     }
 

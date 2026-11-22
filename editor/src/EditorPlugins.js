@@ -79,7 +79,9 @@
     function makeContext(name, parameters) {
         const own = { menu: [], panels: [], listeners: [], disposers: [], buttons: [] };
         const context = {
+            /** The plugin's name: its file's, without .js. */
             name,
+            /** Its settings as the Plugin Manager saved them (each a string, as a game plugin's are). */
             parameters: Object.assign({}, parameters || {}),
 
             /** A file of the plugin's own folder, js/editor-plugins/<its name>/ (its icon, a picture), as a URL the editor can load. */
@@ -127,6 +129,7 @@
                 return button;
             },
 
+            /** An entry under the editor's Plugins menu: its label, what choosing it does. Answers the menu entry. */
             addMenuItem({ label, action } = {}) {
                 if (!label || typeof action !== 'function') return null;
                 const id = `editor-plugin:${name}:${own.menu.length}`;
@@ -148,6 +151,11 @@
                 return item;
             },
 
+            /**
+             * A panel over the map's corner with the editor's panel header (its icon, title, close button):
+             * render(body, panel) fills it each time it opens or is refreshed; onToggle(open) hears it open and
+             * close. Answers the panel: panel.open(), close(), toggle(), refresh().
+             */
             addPanel({ id, title, icon, render, onToggle } = {}) {
                 if (typeof render !== 'function') return null;
                 let element = null;
@@ -203,6 +211,7 @@
                 return panel;
             },
 
+            /** Hear one of the editor's moments (ReactorEditor.events): handler(detail). Answers a function that stops listening. */
             on(event, handler) {
                 if (!EVENTS.includes(event) || typeof handler !== 'function') return () => {};
                 const entry = { event, handler };
@@ -210,8 +219,10 @@
                 return () => { const at = own.listeners.indexOf(entry); if (at >= 0) own.listeners.splice(at, 1); };
             },
 
+            /** Run fn when the plugin is unloaded (the project closes, or the list is saved again): undo what it changed itself. */
             onDispose(fn) { if (typeof fn === 'function') own.disposers.push(fn); },
 
+            /** A short message in the editor's own dialog, titled with the plugin's name. */
             notify(text) {
                 if (root.RRDialog?.alert) root.RRDialog.alert(String(text), { title: name });
                 else console.log(`[${name}]`, text);
@@ -226,7 +237,9 @@
     }
 
     const ReactorEditor = {
+        /** The interface's version: 1. A later one keeps what this one has. */
         version: VERSION,
+        /** The editor's moments a plugin can hear with plugin.on(event, handler). */
         events: EVENTS.slice(),
 
         /** A plugin's context: made the first time it is asked for, while the plugin's script runs. */
@@ -237,11 +250,14 @@
             return loaded.get(key);
         },
 
+        /** The open project: { path, name }, or null. */
         get project() {
             const project = root.reactor?.projectController?.currentProject;
             return project ? { path: project.path, name: project.name } : null;
         },
+        /** The project's Database as the editor holds it: read it; change it through the Database. */
         get database() { return root.reactor?.projectController?.databaseManager?.data || null; },
+        /** The map open in the editor, or null. */
         currentMap() { return root.reactor?.projectController?.getTilemapManager?.()?.currentMap || null; },
 
         _parameters: {}

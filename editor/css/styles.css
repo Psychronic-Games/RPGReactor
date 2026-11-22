@@ -6887,8 +6887,8 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 /* Battle Setup (map view): the card docked beside the map. Everything but the tiles keeps its height; the tiles take the rest and scroll. */
 .rr-battle-setup { width: 320px; display: flex; flex-direction: column; gap: 10px; padding: 10px 12px 12px; box-sizing: border-box; background: var(--color-bg-panel); font-size: 12px; color: var(--color-text); outline: none; }
 #map-side-dock > .rr-battle-setup { flex: 1; width: auto; min-height: 0; }
-.rr-battle-setup-head { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; user-select: none; }
-.rr-battle-setup-title { flex: 1; font-weight: 700; font-size: 13px; color: var(--color-text-strong); }
+.rr-battle-setup-head { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; user-select: none; margin: -10px -12px 0; padding: 10px 12px 10px 11px; border-left: 3px solid var(--color-accent); border-radius: 0; }
+.rr-battle-setup-title { flex: 1; min-width: 0; font-weight: 700; font-size: 13px; color: var(--color-text-strong); }
 .rr-battle-setup-close { width: 24px; height: 24px; padding: 0; line-height: 1; flex: 0 0 auto; }
 .rr-battle-setup-body { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: 8px; overflow-x: hidden; overflow-y: auto; }
 .rr-battle-setup-part { flex: 0 0 auto; display: flex; flex-direction: column; gap: 4px; min-height: 0; }
@@ -6928,7 +6928,7 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 .rr-battle-setup-remove { flex: 0 0 auto; min-height: 24px; padding: 2px 10px; font-size: 11px; }
 .rr-battle-setup-distance { display: flex; align-items: center; gap: 6px; color: var(--color-text-muted); }
 .rr-battle-setup-distance > input { width: 56px; text-align: center; }
-.rr-battle-setup-foot { flex: 0 0 auto; display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid var(--color-border); }
+.rr-battle-setup-foot { flex: 0 0 auto; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 8px; margin: 0 -12px -12px; padding: 10px 12px 12px; border-top: 1px solid var(--color-border); }
 .rr-battle-setup-sentence { line-height: 1.4; color: var(--color-text); }
 .rr-battle-setup-sentence.is-warn { color: var(--color-warning-text, var(--color-text)); }
 .rr-battle-setup-count { padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
@@ -8732,3 +8732,92 @@ input[type="search"]::-webkit-search-cancel-button:hover { background-color: var
 }
 .rr-plugin-add-button:hover .rr-plugin-add-plus { transform: rotate(90deg) scale(1.08); }
 .rr-plugin-add-button:active { transform: translateY(1px); background: var(--color-accent-tint-15); }
+.rr-workshop-open-design { margin-left: 8px; padding: 3px 10px; font-size: 11px; }
+
+/* The Forge's Animation and Effekseer generators in the theme (owner, 2026-11-22): the app's section header (an accent
+   strip on a toolbar band) for the catalog's categories and the panels' headings, the accent scrollbars, livelier
+   parameter labels and values, and the fields on the accent's border, not grey on grey. Their markup is inline-styled,
+   hence a few !important. */
+.rr-gen .lit-section-header { font-size: 11px; letter-spacing: 0.06em; color: var(--color-text-strong); background-color: var(--rr-forge-header-bg, var(--color-bg-deep)); }
+.rr-gen .rr-gen-cat { padding: 6px 10px 6px 9px; margin-top: 6px; }
+.rr-gen .rr-gen-head { padding: 7px 10px 7px 9px; gap: 8px; }
+.rr-gen .rr-gen-head .rr-btn-chip { text-transform: none; letter-spacing: 0; }
+.rr-gen .rr-gen-head-meta { font-size: 10px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--color-text-muted); }
+.rr-gen .rr-gen-head-params { margin: 14px -12px 10px; }
+.rr-gen-ag .rr-gen-head-inset { margin: -10px -10px 8px; border-radius: 4px 4px 0 0; }
+.rr-gen-efk .rr-gen-card > .rr-gen-head-inset { margin: -8px -8px 2px; border-radius: 4px 4px 0 0; }
+.rr-gen-efk .rr-efk-layerbar > .rr-gen-head-inset { margin: -8px -14px 8px; }
+.rr-gen-efk .rr-efk-right > .rr-gen-head:first-child { margin-bottom: 6px; }
+
+/* Parameters: each one a row of its own, its name in the strong text, its value on the accent's tint. */
+.rr-gen .rr-gen-param { margin-bottom: 8px; padding: 7px 9px 6px; background: var(--color-bg-deep); border: 1px solid var(--color-border-subtle); border-left: 2px solid var(--color-accent-border); border-radius: 4px; transition: border-color 0.15s; }
+.rr-gen .rr-gen-param:hover { border-color: var(--color-accent-border); border-left-color: var(--color-accent-bright); }
+.rr-gen .rr-gen-param-color { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.rr-gen .rr-gen-param-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.rr-gen .rr-gen-param-label { font-size: 12px !important; font-weight: 600; color: var(--color-text-strong) !important; line-height: 1.3; }
+.rr-gen .rr-gen-param-val { font-size: 11px !important; font-weight: 700; color: var(--color-accent-bright) !important; background: var(--color-accent-tint-15); border: 1px solid var(--color-accent-border); border-radius: 3px; padding: 1px 6px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rr-gen-efk .rr-efk-params > div:not(.rr-gen-card) { padding: 7px 9px; background: var(--color-bg-deep); border: 1px solid var(--color-border-subtle); border-left: 2px solid var(--color-accent-border); border-radius: 4px; }
+.rr-gen-efk .rr-efk-params > div:not(.rr-gen-card):hover { border-left-color: var(--color-accent-bright); }
+
+/* Fields: the search, the frame fields, the choices. */
+.rr-gen :is(input[type="text"], input[type="number"], input[type="search"], select, textarea).rr-input,
+.rr-gen select.rr-select, .rr-gen .rr-gen-search {
+    background-color: var(--color-bg-deep) !important; border-color: var(--color-accent-border) !important; color: var(--color-text-strong) !important; font-weight: 600;
+}
+.rr-gen :is(input, textarea)::placeholder { color: var(--color-text-muted); font-weight: 400; }
+.rr-gen :is(.rr-input, .rr-select, .rr-gen-search):hover { border-color: var(--color-accent-border-strong) !important; }
+.rr-gen :is(.rr-input, .rr-select, .rr-gen-search):focus { border-color: var(--color-accent-bright) !important; outline: none; box-shadow: 0 0 0 1px var(--color-accent-tint-15); }
+.rr-gen .rr-gen-search { font-size: 12px !important; padding: 6px 9px !important; }
+.rr-gen .rr-number-stepper { background: var(--color-bg-deep) !important; border-color: var(--color-accent-border) !important; }
+.rr-gen .rr-number-stepper:focus-within { border-color: var(--color-accent-bright) !important; }
+.rr-gen .rr-number-stepper .rr-input { border: 0 !important; background: transparent !important; box-shadow: none; }
+.rr-gen .rr-number-stepper-buttons { border-left-color: var(--color-accent-border); }
+.rr-gen .rr-number-stepper-buttons button { background: var(--color-accent-tint-15); color: var(--color-accent-bright); }
+.rr-gen .rr-number-stepper-buttons button + button { border-top-color: var(--color-accent-border); }
+.rr-gen .rr-number-stepper-buttons button:hover { background: var(--color-accent-tint-25); }
+/* A slider's value as a number box (RRSliderNumbers): the accent chip, typed into; no browser spinner. */
+.rr-gen input.rr-slider-num { width: 62px; box-sizing: border-box; text-align: right; font-family: inherit; cursor: text; outline: none; -moz-appearance: textfield; appearance: textfield; }
+.rr-gen input.rr-slider-num::-webkit-inner-spin-button, .rr-gen input.rr-slider-num::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.rr-gen input.rr-slider-num:hover { border-color: var(--color-accent-border-strong); }
+.rr-gen input.rr-slider-num:focus { border-color: var(--color-accent-bright); background: var(--color-bg-deep); color: var(--color-text-strong) !important; box-shadow: 0 0 0 1px var(--color-accent-tint-15); }
+.rr-gen-efk .rr-efk-params input.rr-slider-num { width: 54px; flex: 0 0 auto; }
+/* Plugin Manager: what a plugin is written for (@target), and a note when it is in the wrong tab. */
+.rr-plugin-targets { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 5px; }
+.rr-plugin-target { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; border: 1px solid var(--color-border-input); background: var(--color-bg-deep); color: var(--color-text); }
+.rr-plugin-target.is-reactor, .rr-plugin-target.is-reactoreditor { border-color: var(--color-accent-border-strong); background: var(--color-accent-tint-15); color: var(--color-accent-bright); }
+.rr-plugin-target-note { margin-top: 8px; padding: 7px 10px; border-left: 3px solid var(--color-border-input); background: var(--color-bg-deep); font-size: 12px; line-height: 1.45; color: var(--color-text-muted); border-radius: 0 3px 3px 0; }
+.rr-plugin-target-note.is-warn { border-left-color: var(--color-warning, #e0af68); color: var(--color-text); }
+
+/* 2D structures (Structure2DWorkshop.js, DatabaseStructure2DPage.js): the phantom map's Layers panel and the Database page. */
+.rr-structure2d-panel { width: 300px; }
+.rr-structure2d-layers { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.rr-structure2d-layer { display: flex; align-items: center; gap: 4px; padding: 5px 6px; border: 1px solid var(--color-border-subtle); border-left: 3px solid transparent; border-radius: 4px; background: var(--color-bg-deep); cursor: pointer; }
+.rr-structure2d-layer:hover { border-color: var(--color-accent-border); }
+.rr-structure2d-layer.is-active { border-left-color: var(--color-accent-bright); background: var(--color-accent-tint-15); }
+.rr-structure2d-layer-name { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 12px; font-weight: 600; color: var(--color-text-strong); overflow: hidden; }
+.rr-structure2d-layer-name small { font-size: 10px; font-weight: 400; color: var(--color-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rr-structure2d-layer .rr-btn-chip { padding: 1px 6px; font-size: 10px; }
+.rr-structure2d-eye { width: 20px; padding: 0; border: 0; background: none; color: var(--color-accent-bright); cursor: pointer; font-size: 12px; }
+.rr-structure2d-eye.is-off { color: var(--color-text-muted); }
+.rr-structure2d-add { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.rr-structure2d-add select { flex: 1 1 100%; }
+.rr-structure2d-field { display: grid; grid-template-columns: 70px minmax(0, 1fr); align-items: center; gap: 6px; margin: 4px 0; font-size: 12px; color: var(--color-text-strong); }
+.rr-structure2d-tools { display: flex; flex-wrap: wrap; gap: 4px; }
+.rr-structure2d-tool { min-width: 34px; font-weight: 700; }
+.rr-structure2d-tool.is-on { background: var(--color-accent-tint-25); border-color: var(--color-accent-bright); color: var(--color-accent-bright); }
+.rr-structure2d-note { margin: 6px 0 0; font-size: 11px; line-height: 1.45; color: var(--color-text-muted); }
+.rr-structure2d-page { display: flex; flex-direction: column; height: 100%; min-height: 0; gap: 10px; }
+.rr-structure2d-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.rr-structure2d-label { display: flex; align-items: center; gap: 6px; color: var(--color-text-muted); white-space: nowrap; }
+.rr-structure2d-kind { padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; color: var(--color-accent-bright); background: var(--color-accent-tint-15); border: 1px solid var(--color-accent-border-strong); }
+.rr-structure2d-body { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 12px; flex: 1; min-height: 0; }
+.rr-structure2d-view { position: relative; overflow: auto; background: var(--color-bg-deep); border: 1px solid var(--color-border); border-radius: 4px; padding: 10px; }
+.rr-structure2d-canvas { display: block; cursor: crosshair; image-rendering: pixelated; }
+.rr-structure2d-empty { margin: 10px 0 0; color: var(--color-text-muted); }
+.rr-structure2d-side { display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow: auto; }
+.rr-structure2d-summary-row { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--color-border-subtle); font-size: 12px; }
+.rr-structure2d-summary-row span { color: var(--color-text-muted); }
+/* A 2D structure being placed: its pictures follow the pointer, tile by tile (Structure2DStamp). */
+.rr-structure2d-ghost { position: absolute; z-index: 30; pointer-events: none; opacity: 0.75; outline: 2px dashed var(--color-accent-bright); outline-offset: -1px; }
+.rr-structure2d-ghost img { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
+.rr-image-layer-item.is-structure { grid-template-columns: 22px minmax(0, 1fr); }

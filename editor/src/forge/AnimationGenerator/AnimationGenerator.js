@@ -48,6 +48,14 @@ const ANIMATION_CATEGORIES = buildAnimationCategories();
 const MAX_FRAMES = 100; // MZ animation system constraint
 const SHEET_COLUMNS = 5; // MZ convention
 
+// A slider's value shown beside it (RRSliderNumbers, a number box one can type into; plain text where it is absent).
+function rrSliderShow(el, value, digits) {
+    if (globalThis.RRSliderNumbers) return globalThis.RRSliderNumbers.show(el, value, digits);
+    if (!el) return;
+    const text = digits === undefined ? String(value) : Number(value).toFixed(digits);
+    if (el.tagName === 'INPUT') el.value = text; else el.textContent = text;
+}
+
 class AnimationGenerator {
     constructor() {
         this.root = null;
@@ -96,11 +104,22 @@ class AnimationGenerator {
         // Reusable offscreen canvas for compositing each layer before blitting
         // it onto the main canvas with blend mode + opacity. Lazily allocated.
         this._layerTmp = null;
+
+        // The name Bake & Save offers (img/animations/<name>.png), which Save Design also keeps.
+        this.outputName = '';
+        // Save Design / Open (RRForgeDesigns): the group a design is saved into, the design last
+        // opened or saved ({ group, name }), and one asked for before the tool was on screen.
+        this.designGroup = '';
+        this._openedDesign = null;
+        this._pendingDesign = null;
+        this._mounted = false;
     }
 
-    /** Verbatim-label translation (animation/param names live in data). */
-    _tx(label) {
-        return window.I18n && window.I18n.tText ? window.I18n.tText(label) : label;
+    /** Verbatim-label translation (animation/param names live in data); {key} tokens filled from `params`. */
+    _tx(label, params) {
+        let out = window.I18n && window.I18n.tText ? window.I18n.tText(label) : label;
+        if (params) for (const k in params) out = out.split('{' + k + '}').join(String(params[k]));
+        return out;
     }
 
     /** The title this tool's dialogs carry. */
@@ -134,6 +153,11 @@ class AnimationGenerator {
         this._initLayersIfEmpty();
         this._render();
         this._startPlayback();
+        this._mounted = true;
+        // A design asked for before the tool was on screen (openDesign, e.g. after a Workshop item came in).
+        const pending = this._pendingDesign;
+        this._pendingDesign = null;
+        if (pending) this._openDesign(pending.group, pending.name);
     }
 
     _syncProjectPath() {
@@ -161,6 +185,8 @@ class AnimationGenerator {
         if (this._playTimer) { clearInterval(this._playTimer); this._playTimer = null; }
         if (this._sheetUpdateTimer) { clearTimeout(this._sheetUpdateTimer); this._sheetUpdateTimer = null; }
         this._sheetRenderGen = (this._sheetRenderGen || 0) + 1;   // stops an async sheet render in flight
+        this._mounted = false;
+        this._closeGallery?.();
         // Closing the Forge writes the last tweaks; after a project switch they belong to the
         // previous project and are dropped. Play/pause is the user's and survives a close.
         this._flushPendingSave();
@@ -180,7 +206,8 @@ class AnimationGenerator {
     _resetProjectState() {
         const fresh = new AnimationGenerator();
         for (const key of ['frameWidth', 'frameHeight', 'frameCount', 'layers', 'activeLayerId',
-            'previewMode', 'previewSingle', 'previewFrame', 'interpolation']) {
+            'previewMode', 'previewSingle', 'previewFrame', 'interpolation',
+            'outputName', 'designGroup', '_openedDesign']) {
             this[key] = fresh[key];
         }
     }
@@ -239,6 +266,7 @@ class AnimationGenerator {
             if (cfg.frameHeight) this.frameHeight = parseInt(cfg.frameHeight) || this.frameHeight;
             if (cfg.frameCount)  this.frameCount  = Math.max(1, Math.min(MAX_FRAMES, parseInt(cfg.frameCount) || this.frameCount));
             if (cfg.interpolation === 'nearest' || cfg.interpolation === 'linear') this.interpolation = cfg.interpolation;
+            if (typeof cfg.outputName === 'string') this.outputName = AnimationGenerator.cleanOutputName(cfg.outputName);
             if (cfg.previewMode === 'single' || cfg.previewMode === 'composite') this.previewMode = cfg.previewMode;
             if (cfg.previewSingle && cfg.previewSingle.categoryId && cfg.previewSingle.animationId) {
                 const ps = cfg.previewSingle;
@@ -349,6 +377,7 @@ class AnimationGenerator {
                 frameHeight: this.frameHeight,
                 frameCount: this.frameCount,
                 interpolation: this.interpolation,
+                outputName: this.outputName,
                 layers: layersForSave,
                 activeLayerId: this.activeLayerId,
                 previewMode: this.previewMode,
@@ -641,6 +670,8 @@ class AnimationGenerator {
     // -- Layout ---------------------------------------------------------------
     _render() {
         this._initLayersIfEmpty();
+        // The rebuild below drops the gallery's box: drop its Escape listener with it.
+        this._closeGallery?.();
 
         // Preserve scroll positions of scrollable panes across the full HTML
         // rebuild. Otherwise clicking an animation near the bottom of the
@@ -681,7 +712,7 @@ class AnimationGenerator {
         const previewDisp = Math.min(384, this.frameWidth * 2);
 
         this.root.innerHTML = `
-            <div style="display: flex; flex-direction: column; height: 100%; min-height: 0;">
+            <div class="rr-gen rr-gen-ag" style="position: relative; display: flex; flex-direction: column; height: 100%; min-height: 0;">
                 <!-- Toolbar -->
                 <div style="padding: 10px 16px; background: var(--color-bg-panel); border-bottom: 1px solid var(--color-border-subtle); display: flex; align-items: center; gap: 14px; flex-shrink: 0; flex-wrap: wrap;">
                     <div style="display: flex; align-items: center; gap: 6px;">
@@ -702,6 +733,12 @@ class AnimationGenerator {
                             <option value="nearest" ${this.interpolation === 'nearest' ? 'selected' : ''}>${this._tx('Nearest (sharp)')}</option>
                         </select>
                     </div>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <button class="rr-btn-chip rr-ag-open" style="padding: 3px 10px; font-size: 11px;" title="${this._tx('Open a saved animation design')}">${this._tx('Open')}</button>
+                        <label class="rr-c3d-name rr-c3d-group-pick"><span>${this._tx('Group')}</span><select class="rr-select rr-ag-design-group" style="padding: 3px 6px; font-size: 11px;" title="${this._tx('Where Save Design keeps this animation')}"></select></label>
+                        <button class="rr-btn-chip rr-ag-keep" style="padding: 3px 10px; font-size: 11px;" title="${this._tx('Keep this animation\'s layers and settings in the Forge to open and change later. No sheet is made.')}">${this._tx('Save Design')}</button>
+                        <span class="rr-c3d-status" aria-live="polite"></span>
+                    </div>
                     <div style="font-size: 10px; color: var(--color-text-dim); margin-left: auto;">
                         ${this._tx('Sheet:')} ${sheetW}×${sheetH} (${sheetCols}×${sheetRows})
                     </div>
@@ -709,11 +746,11 @@ class AnimationGenerator {
 
                 <!-- Body: animation catalog (left) | preview + layer stack (center) | params (right) -->
                 <div style="display: grid; grid-template-columns: 240px 1fr 300px; flex: 1; min-height: 0;">
-                    <div class="rr-ag-anim-list" style="background: var(--color-bg-panel); border-right: 1px solid var(--color-border); overflow-y: auto;">
+                    <div class="rr-ag-anim-list rr-accent-scrollbar" style="background: var(--color-bg-panel); border-right: 1px solid var(--color-border); overflow-y: auto;">
                         ${this._renderAnimationList()}
                     </div>
 
-                    <div class="rr-dark-surface" style="display: flex; flex-direction: column; padding: 14px 18px; gap: 12px; overflow-y: auto;">
+                    <div class="rr-dark-surface rr-accent-scrollbar" style="display: flex; flex-direction: column; padding: 14px 18px; gap: 12px; overflow-y: auto;">
                         <!-- Editing area: preview + layer stack on the LEFT, sheet preview on the RIGHT.
                              Layer stack sits directly under the live preview — most prominent spot
                              for editing the active animation. -->
@@ -755,7 +792,7 @@ class AnimationGenerator {
                             <!-- RIGHT sub-column: sheet preview + bake button -->
                             <div style="display: flex; flex-direction: column; gap: 6px; align-items: center; flex: 1; min-width: 0;">
                                 <div style="font-size: 10px; color: var(--color-text-muted);">${this._tx('Sheet Preview')} (${sheetW}×${sheetH})</div>
-                                <div style="background: var(--color-bg-deep); border: 1px solid var(--color-border-input); border-radius: 4px; padding: 10px; max-width: 100%; overflow: auto;">
+                                <div class="rr-accent-scrollbar" style="background: var(--color-bg-deep); border: 1px solid var(--color-border-input); border-radius: 4px; padding: 10px; max-width: 100%; overflow: auto;">
                                     <canvas class="rr-ag-sheet" width="${sheetW}" height="${sheetH}" style="max-width: 100%; image-rendering: ${this.interpolation === 'nearest' ? 'pixelated' : 'auto'}; display: block;"></canvas>
                                 </div>
                                 <button class="rr-ag-bake rr-btn-chip" style="padding: 5px 14px;">↻ ${this._tx('Bake Sheet Preview')}</button>
@@ -767,7 +804,7 @@ class AnimationGenerator {
                         </div>
                     </div>
 
-                    <div class="rr-ag-right-pane" style="background: var(--color-bg-panel); border-left: 1px solid var(--color-border); overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px;">
+                    <div class="rr-ag-right-pane rr-accent-scrollbar" style="background: var(--color-bg-panel); border-left: 1px solid var(--color-border); overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px;">
                         ${this._renderEditingHeader(editingTarget, editingAnim)}
                         ${editingAnim && editingTarget ? this._renderParamControls(editingAnim, editingTarget.params) : ''}
                     </div>
@@ -776,7 +813,7 @@ class AnimationGenerator {
                 <!-- Footer: save -->
                 <div style="padding: 12px 18px; border-top: 1px solid var(--color-border-subtle); background: var(--color-bg-panel); display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
                     <label style="font-size: 12px; color: var(--color-text-muted);">${this._tx('Save as:')}</label>
-                    <input type="text" class="rr-ag-name rr-input" placeholder="${this._tx('MyAnimation')}" style="width: 220px; padding: 4px 8px; font-size: 12px;">
+                    <input type="text" class="rr-ag-name rr-input" value="${this._escapeHtml(this.outputName)}" placeholder="${this._tx('MyAnimation')}" style="width: 220px; padding: 4px 8px; font-size: 12px;">
                     <div style="font-size: 10px; color: var(--color-text-dim);">→ img/animations/&lt;name&gt;.png</div>
                     <div style="margin-left: auto; display: flex; gap: 8px;">
                         <button class="rr-ag-randomize rr-btn-chip" style="padding: 6px 14px;" title="${this._tx('Randomize all sliders and colors for the current animation (textures untouched)')}">⟳ ${this._tx('Randomize')}</button>
@@ -785,6 +822,7 @@ class AnimationGenerator {
                         <button class="rr-ag-save-gif rr-btn-chip" style="padding: 6px 18px; color: var(--color-accent-bright);" title="${this._tx('Export the live animation preview as an animated GIF (handy tool, not for in-game use)')}">${this._tx('Save GIF')}</button>
                     </div>
                 </div>
+                <div class="rr-c3d-gallery" style="z-index: 5;" hidden></div>
             </div>
         `;
 
@@ -842,7 +880,7 @@ class AnimationGenerator {
         return `
             <div>
                 ${banner}
-                <div style="font-size: 11px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.3px; margin-top: 12px; margin-bottom: 8px;">${this._tx('Parameters')}</div>
+                <div class="lit-section-header rr-gen-head rr-gen-head-params">${this._tx('Parameters')}</div>
             </div>
         `;
     }
@@ -851,7 +889,7 @@ class AnimationGenerator {
         if (this.layers.length === 0) {
             return `
                 <div>
-                    <div style="font-size: 11px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 8px;">${this._tx('Layers')}</div>
+                    <div class="lit-section-header rr-gen-head rr-gen-head-inset">${this._tx('Layers')}</div>
                     <div style="font-size: 11px; color: var(--color-text-muted); text-align: center; padding: 12px; border: 1px dashed var(--color-border-subtle); border-radius: 4px;">
                         ${this._tx('Click an animation on the left to add a layer.')}
                     </div>
@@ -941,9 +979,9 @@ class AnimationGenerator {
         }).join('');
         return `
             <div>
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <div style="font-size: 11px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.3px;">${this._tx('Layers')}</div>
-                    <div style="font-size: 10px; color: var(--color-text-dim);">${this.layers.length} ${this.layers.length === 1 ? this._tx('layer') : this._tx('layers')}</div>
+                <div class="lit-section-header rr-gen-head rr-gen-head-inset">
+                    <span style="flex: 1;">${this._tx('Layers')}</span>
+                    <span class="rr-gen-head-meta">${this.layers.length} ${this.layers.length === 1 ? this._tx('layer') : this._tx('layers')}</span>
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 4px;">
                     ${rowsHtml}
@@ -959,7 +997,7 @@ class AnimationGenerator {
         // Filter header — sticky filter UI at the top of the left pane.
         let html = `
             <div style="padding: 10px 10px 8px; display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid var(--color-border-subtle); position: sticky; top: 0; background: var(--color-bg-panel); z-index: 1;">
-                <input type="text" class="rr-ag-search rr-input" placeholder="${this._tx('Search animations…')}" value="${this._escapeHtml(search)}" style="padding: 4px 8px; font-size: 11px;">
+                <input type="text" class="rr-ag-search rr-input rr-gen-search" placeholder="${this._tx('Search animations…')}" value="${this._escapeHtml(search)}" style="padding: 4px 8px; font-size: 11px;">
                 <select class="rr-ag-cat-filter rr-select" style="padding: 4px 6px; font-size: 11px;">
                     <option value="all" ${catFilter === 'all' ? 'selected' : ''}>${this._tx('All Categories')}</option>
                     ${ANIMATION_CATEGORIES.map(c => `<option value="${c.id}" ${catFilter === c.id ? 'selected' : ''}>${this._tx(c.name)}</option>`).join('')}
@@ -987,7 +1025,7 @@ class AnimationGenerator {
             );
             if (animations.length === 0) continue;
             matchCount += animations.length;
-            html += `<div style="padding: 8px 12px 4px; font-size: 9px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--color-border-subtle);">${this._tx(cat.name)}</div>`;
+            html += `<div class="lit-section-header rr-gen-cat">${this._tx(cat.name)}</div>`;
             for (const anim of animations) {
                 const active = isPreviewing(cat.id, anim.id);
                 html += `
@@ -1010,8 +1048,8 @@ class AnimationGenerator {
             const val = params[p.key];
             if (p.type === 'color') {
                 html += `
-                    <div style="margin-bottom: 10px; display: grid; grid-template-columns: 90px 1fr; gap: 8px; align-items: center;">
-                        <label style="font-size: 11px; color: var(--color-text-muted);">${this._tx(p.label)}</label>
+                    <div class="rr-gen-param rr-gen-param-color">
+                        <label class="rr-gen-param-label">${this._tx(p.label)}</label>
                         <button type="button" class="rr-color-swatch-btn" data-key="${p.key}" title="${this._tx('Click to choose color')}" style="background: ${val}; justify-self: start;"></button>
                     </div>
                 `;
@@ -1020,10 +1058,10 @@ class AnimationGenerator {
                 // the right pane compact so users don't need to scroll past
                 // paragraph text to reach each slider.
                 html += `
-                    <div style="margin-bottom: 6px;" title="${p.description ? this._tx(p.description).replace(/"/g, '&quot;') : ''}">
-                        <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--color-text-muted); margin-bottom: 2px;">
-                            <span><strong style="color: var(--color-text);">${this._tx(p.label)}</strong></span>
-                            <span class="rr-ag-param-val" data-key="${p.key}">${(+val).toFixed(2)}</span>
+                    <div class="rr-gen-param" title="${p.description ? this._tx(p.description).replace(/"/g, '&quot;') : ''}">
+                        <div class="rr-gen-param-row">
+                            <span class="rr-gen-param-label">${this._tx(p.label)}</span>
+                            <input type="number" class="rr-ag-param-val rr-gen-param-val rr-slider-num" data-key="${p.key}" data-digits="2" data-no-stepper min="${p.min}" max="${p.max}" step="any" value="${(+val).toFixed(2)}" title="${this._tx('Type a value, then Enter')}">
                         </div>
                         <input type="range" class="rr-ag-param rr-range" data-key="${p.key}" min="${p.min}" max="${p.max}" step="${p.step}" value="${val}" style="width: 100%;">
                     </div>
@@ -1033,8 +1071,8 @@ class AnimationGenerator {
                 // Empty = no texture (wireframe mode).
                 const fileName = (val || '').replace(/\\/g, '/').split('/').pop();
                 html += `
-                    <div style="margin-bottom: 10px;">
-                        <div style="font-size: 11px; color: var(--color-text-muted); margin-bottom: 3px;">${this._tx(p.label)}</div>
+                    <div class="rr-gen-param">
+                        <div class="rr-gen-param-label" style="margin-bottom: 4px;">${this._tx(p.label)}</div>
                         <div style="display: flex; gap: 4px; align-items: center;">
                             <div class="rr-ag-tex-name" data-key="${p.key}" style="flex: 1; padding: 4px 8px; background: var(--color-bg-input-alt); border: 1px solid var(--color-border-input); border-radius: 3px; font-size: 11px; color: var(--color-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${this._escapeHtml(fileName || this._tx('(none)'))}</div>
                             <button class="rr-ag-tex-pick rr-btn-chip" data-key="${p.key}" title="${this._tx('Pick texture file')}" style="padding: 4px 10px; font-size: 11px;">…</button>
@@ -1050,6 +1088,8 @@ class AnimationGenerator {
 
     _wireEvents() {
         const root = this.root;
+        // The number beside each slider takes a typed value (RRSliderNumbers): Enter or leaving it moves the slider.
+        globalThis.RRSliderNumbers?.bind(root);
 
         const fwInput = root.querySelector('.rr-ag-fw');
         const fhInput = root.querySelector('.rr-ag-fh');
@@ -1234,6 +1274,18 @@ class AnimationGenerator {
             this._lightRefresh();
         });
         root.querySelector('.rr-ag-save').addEventListener('click', () => this._saveSheet());
+        const nameInput = root.querySelector('.rr-ag-name');
+        if (nameInput) nameInput.addEventListener('input', () => {
+            this.outputName = nameInput.value;
+            this._scheduleSaveConfig();
+        });
+        root.querySelector('.rr-ag-open').addEventListener('click', () => this._showGallery());
+        root.querySelector('.rr-ag-keep').addEventListener('click', () => this.saveDesign());
+        root.querySelector('.rr-ag-design-group').addEventListener('change', async e => {
+            this.designGroup = await RRForgeDesigns.chooseGroup(e.target.value, this.designGroup, (s, v) => this._tx(s, v));
+            this._renderDesignGroups();
+        });
+        this._renderDesignGroups();
         const gifBtn = root.querySelector('.rr-ag-save-gif');
         if (gifBtn) gifBtn.addEventListener('click', () => this._saveAnimatedGif(gifBtn));
 
@@ -1281,7 +1333,7 @@ class AnimationGenerator {
                     const slider = root.querySelector(`.rr-ag-param[data-key="${key}"]`);
                     if (slider) slider.value = tgt.params[key];
                     const readout = root.querySelector(`.rr-ag-param-val[data-key="${key}"]`);
-                    if (readout) readout.textContent = (+tgt.params[key]).toFixed(2);
+                    rrSliderShow(readout, +tgt.params[key], 2);
                 }
                 this._drawPreviewCanvas();
                 // Debounce config save + sheet redraw so dragging stays fluid.
@@ -1307,7 +1359,7 @@ class AnimationGenerator {
                     const slider = root.querySelector(`.rr-ag-param[data-key="${key}"]`);
                     if (slider) slider.value = 0;
                     const readout = root.querySelector(`.rr-ag-param-val[data-key="${key}"]`);
-                    if (readout) readout.textContent = '0.00';
+                    rrSliderShow(readout, 0, 2);
                 }
                 this._saveConfig();
                 this._drawPreviewCanvas();
@@ -1503,7 +1555,7 @@ class AnimationGenerator {
                 if (el.type === 'range') v = parseFloat(v);
                 target.params[key] = v;
                 const valEl = root.querySelector(`.rr-ag-param-val[data-key="${key}"]`);
-                if (valEl && typeof v === 'number') valEl.textContent = v.toFixed(2);
+                if (typeof v === 'number') rrSliderShow(valEl, v, 2);
                 // Push tilt slider changes into the 3D gizmo so it visually
                 // mirrors the slider state.
                 if (this._gizmo && (key === 'tiltX' || key === 'tiltY' || key === 'tiltZ')) {
@@ -2476,5 +2528,385 @@ class AnimationGenerator {
             reader.readAsArrayBuffer(blob);
         });
         gif.render();
+    }
+
+    // -- Designs (Save Design / Open) -----------------------------------------
+    // A design is the tool's whole state as a recipe, kept with a picture under
+    // forge/animation_generator/designs/[<group>/]<name>.json (RRForgeDesigns):
+    //   { builder: 'animation', version: 1, recipe: { ... } }
+    // Opened again it rebuilds the same sheet. A recipe may come from someone
+    // else (Steam Workshop), so everything read from one goes through
+    // cleanRecipe: unknown animations and params are dropped, numbers clamped
+    // to the tool's own limits, colours and texture names checked.
+
+    /** Limits a recipe is held to (the toolbar's own, and caps a hand-made recipe could blow past). */
+    static get DESIGN_LIMITS() {
+        return { minFrameSize: 16, maxFrameSize: 512, maxFrames: MAX_FRAMES, maxLayers: 64, maxKeyframes: MAX_FRAMES };
+    }
+
+    /** A name Bake & Save can use: no folders, no characters a file name cannot hold. */
+    static cleanOutputName(value) {
+        if (typeof value !== 'string') return '';
+        return value.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '').replace(/\s+/g, ' ').trim().replace(/\.png$/i, '').slice(0, 64);
+    }
+
+    /** A texture as a plain file name in forge/animation_generator/textures, or '' (none) for anything else. */
+    static cleanTextureName(value) {
+        if (typeof value !== 'string' || !value || value.length > 128) return '';
+        if (/[\\/:*?"<>|\u0000-\u001f]/.test(value) || value === '.' || value === '..' || value.trim() !== value) return '';
+        return value;
+    }
+
+    /** The animations' own params only, each checked against its kind; values that cannot be used fall back to the default. */
+    static _cleanParams(anim, source) {
+        const src = source && typeof source === 'object' && !Array.isArray(source) ? source : {};
+        const out = {};
+        const has = key => Object.prototype.hasOwnProperty.call(src, key);
+        for (const p of anim.params) {
+            if (!has(p.key)) continue;
+            const v = src[p.key];
+            if (p.type === 'slider') {
+                const n = typeof v === 'number' ? v : (typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN);
+                if (!Number.isFinite(n)) { out[p.key] = p.default; continue; }
+                let c = n;
+                if (Number.isFinite(p.min)) c = Math.max(p.min, c);
+                if (Number.isFinite(p.max)) c = Math.min(p.max, c);
+                out[p.key] = c;
+            } else if (p.type === 'color') {
+                out[p.key] = typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v) ? v : p.default;
+            } else if (p.type === 'texture') {
+                out[p.key] = AnimationGenerator.cleanTextureName(v);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * A recipe as the tool can use it, whatever was handed in (another user's file, an array, nonsense):
+     *   { outputName, frameWidth, frameHeight, frameCount, interpolation, previewMode,
+     *     previewSingle: { categoryId, animationId, params } | null,
+     *     layers: [{ categoryId, animationId, blend, opacity, visible, activeKeyframe,
+     *                keyframes: [{ params: { <param key>: value }, opacity? }] }],
+     *     activeLayer,                  // index into layers
+     *     textures: [<file name>] }     // every texture the recipe uses, from forge/animation_generator/textures
+     * Plain JSON only; nothing in it is ever run.
+     */
+    static cleanRecipe(input) {
+        const L = AnimationGenerator.DESIGN_LIMITS;
+        const plain = v => !!v && typeof v === 'object' && !Array.isArray(v);
+        const r = plain(input) ? input : {};
+        const num = v => typeof v === 'number' ? v : (typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN);
+        const int = (v, min, max, fallback) => { const n = Math.round(num(v)); return Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : fallback; };
+        const unit = (v, fallback) => { const n = num(v); return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : fallback; };
+        const find = (catId, animId) => {
+            if (typeof catId !== 'string' || typeof animId !== 'string') return null;
+            const cat = ANIMATION_CATEGORIES.find(c => c.id === catId);
+            const id = animId === 'globe' ? 'sphere' : animId;
+            return (cat && cat.animations.find(a => a.id === id)) || null;
+        };
+        const blends = new Set(BLEND_MODES.map(b => b.value));
+
+        const layers = [];
+        let activeLayer = -1;
+        const wantActive = int(r.activeLayer, 0, Number.MAX_SAFE_INTEGER, -1);
+        const layersIn = Array.isArray(r.layers) ? r.layers : [];
+        for (let i = 0; i < layersIn.length && layers.length < L.maxLayers; i++) {
+            const l = layersIn[i];
+            if (!plain(l)) continue;
+            const anim = find(l.categoryId, l.animationId);
+            if (!anim) continue;
+            const kfsIn = Array.isArray(l.keyframes) && l.keyframes.length ? l.keyframes.slice(0, L.maxKeyframes) : [{ params: l.params }];
+            const keyframes = kfsIn.map(kf => {
+                const src = plain(kf) ? kf : {};
+                const out = { params: AnimationGenerator._cleanParams(anim, src.params) };
+                const op = unit(src.opacity, null);
+                if (op !== null) out.opacity = op;
+                return out;
+            });
+            const activeKeyframe = int(l.activeKeyframe, 0, keyframes.length - 1, 0);
+            // The keyframe being edited holds every param (as a config load leaves it); the others may
+            // leave some out, and then take the neighbouring keyframe's value, as in the tool.
+            const editing = keyframes[activeKeyframe].params;
+            for (const p of anim.params) if (editing[p.key] === undefined) editing[p.key] = p.default;
+            if (i === wantActive) activeLayer = layers.length;
+            layers.push({
+                categoryId: l.categoryId,
+                animationId: anim.id,
+                blend: blends.has(l.blend) ? l.blend : (blends.has(anim.defaultBlend) ? anim.defaultBlend : 'source-over'),
+                opacity: unit(l.opacity, 1),
+                visible: l.visible !== false,
+                activeKeyframe,
+                keyframes
+            });
+        }
+        if (activeLayer < 0) activeLayer = Math.max(0, layers.length - 1);
+
+        let previewSingle = null;
+        if (plain(r.previewSingle)) {
+            const anim = find(r.previewSingle.categoryId, r.previewSingle.animationId);
+            if (anim) {
+                const params = AnimationGenerator._cleanParams(anim, r.previewSingle.params);
+                for (const p of anim.params) if (params[p.key] === undefined) params[p.key] = p.default;
+                previewSingle = { categoryId: r.previewSingle.categoryId, animationId: anim.id, params };
+            }
+        }
+
+        const textures = new Set();
+        const textureKeys = (catId, animId) => (find(catId, animId)?.params || []).filter(p => p.type === 'texture').map(p => p.key);
+        for (const l of layers) {
+            const keys = textureKeys(l.categoryId, l.animationId);
+            for (const kf of l.keyframes) for (const k of keys) if (kf.params[k]) textures.add(kf.params[k]);
+        }
+        if (previewSingle) for (const k of textureKeys(previewSingle.categoryId, previewSingle.animationId)) if (previewSingle.params[k]) textures.add(previewSingle.params[k]);
+
+        return {
+            outputName: AnimationGenerator.cleanOutputName(r.outputName),
+            frameWidth: int(r.frameWidth, L.minFrameSize, L.maxFrameSize, 192),
+            frameHeight: int(r.frameHeight, L.minFrameSize, L.maxFrameSize, 192),
+            frameCount: int(r.frameCount, 1, L.maxFrames, 30),
+            interpolation: r.interpolation === 'nearest' ? 'nearest' : 'linear',
+            previewMode: r.previewMode === 'composite' && layers.length ? 'composite' : 'single',
+            previewSingle,
+            layers,
+            activeLayer,
+            textures: [...textures].sort()
+        };
+    }
+
+    /** The tool's state as a recipe (cleanRecipe's shape). */
+    _designRecipe() {
+        const raw = {
+            outputName: this.outputName,
+            frameWidth: this.frameWidth,
+            frameHeight: this.frameHeight,
+            frameCount: this.frameCount,
+            interpolation: this.interpolation,
+            previewMode: this.previewMode,
+            previewSingle: this.previewSingle,
+            // A layer whose animation is missing draws nothing: it is left out, and the active index follows.
+            layers: [],
+            activeLayer: -1
+        };
+        for (const l of this.layers) {
+            if (!this._findAnimation(l.categoryId, l.animationId)) continue;
+            if (l.id === this.activeLayerId) raw.activeLayer = raw.layers.length;
+            const kfs = Array.isArray(l.keyframes) && l.keyframes.length ? l.keyframes : [l.params || {}];
+            raw.layers.push({
+                categoryId: l.categoryId,
+                animationId: l.animationId,
+                blend: l.blend,
+                opacity: l.opacity !== undefined ? l.opacity : 1,
+                visible: l.visible !== false,
+                activeKeyframe: l.activeKeyframe || 0,
+                keyframes: kfs.map(kf => {
+                    const { _layerOpacity, ...params } = kf || {};
+                    return typeof _layerOpacity === 'number' ? { params, opacity: _layerOpacity } : { params };
+                })
+            });
+        }
+        if (raw.activeLayer < 0) raw.activeLayer = raw.layers.length - 1;
+        return AnimationGenerator.cleanRecipe(raw);
+    }
+
+    /** Put a recipe's state into the tool (cleaned first). Does not draw or save. */
+    _applyRecipe(recipe) {
+        const r = AnimationGenerator.cleanRecipe(recipe);
+        this.frameWidth = r.frameWidth;
+        this.frameHeight = r.frameHeight;
+        this.frameCount = r.frameCount;
+        this.interpolation = r.interpolation;
+        this.outputName = r.outputName;
+        this.layers = r.layers.map(l => {
+            const layer = {
+                id: this._newLayerId(),
+                categoryId: l.categoryId,
+                animationId: l.animationId,
+                keyframes: l.keyframes.map(kf => {
+                    const out = { ...kf.params };
+                    if (typeof kf.opacity === 'number') out._layerOpacity = kf.opacity;
+                    return out;
+                }),
+                activeKeyframe: l.activeKeyframe,
+                blend: l.blend,
+                opacity: l.opacity,
+                visible: l.visible
+            };
+            this._relinkLayerParams(layer);
+            return layer;
+        });
+        this.activeLayerId = this.layers[r.activeLayer]?.id || null;
+        this.previewSingle = r.previewSingle ? { categoryId: r.previewSingle.categoryId, animationId: r.previewSingle.animationId, params: { ...r.previewSingle.params } } : null;
+        this.previewMode = r.previewMode;
+        this.previewFrame = 0;
+        this._layerTmp = null;
+        this._blendTmp = null;
+        this._initLayersIfEmpty();
+        return r;
+    }
+
+    /**
+     * The design's picture: up to four frames spread over the loop, two by two, each at most 192 px
+     * (one frame alone up to 384), so at most 384×384. PNG bytes, or null when it cannot be drawn.
+     */
+    _designPicture() {
+        try {
+            const fw = this.frameWidth, fh = this.frameHeight;
+            const n = Math.max(1, Math.min(4, this.frameCount));
+            const cols = n > 1 ? 2 : 1, rows = Math.ceil(n / cols);
+            const scale = Math.min(1, (n > 1 ? 192 : 384) / Math.max(fw, fh));
+            const cw = Math.max(1, Math.round(fw * scale)), ch = Math.max(1, Math.round(fh * scale));
+            const sheet = document.createElement('canvas');
+            sheet.width = cols * cw;
+            sheet.height = rows * ch;
+            const ctx = sheet.getContext('2d');
+            ctx.imageSmoothingEnabled = true;
+            const frame = document.createElement('canvas');
+            frame.width = fw;
+            frame.height = fh;
+            const fCtx = frame.getContext('2d');
+            fCtx.imageSmoothingEnabled = (this.interpolation === 'linear');
+            for (let i = 0; i < n; i++) {
+                this._renderFrameInto(fCtx, fw, fh, Math.floor(i * this.frameCount / n));
+                ctx.drawImage(frame, (i % cols) * cw, Math.floor(i / cols) * ch, cw, ch);
+            }
+            return Buffer.from(sheet.toDataURL('image/png').replace(/^data:image\/png;base64,/, ''), 'base64');
+        } catch (error) {
+            console.warn('[AnimationGenerator] design picture', error);
+            return null;
+        }
+    }
+
+    _designsDir() {
+        const projectPath = this._syncProjectPath();
+        return projectPath ? require('path').join(projectPath, 'forge', 'animation_generator', 'designs') : null;
+    }
+
+    _status(text, kind) {
+        const el = this.root && this.root.querySelector('.rr-c3d-status');
+        if (!el) return;
+        el.textContent = text || '';
+        el.dataset.kind = kind || '';
+    }
+
+    _renderDesignGroups() {
+        if (typeof RRForgeDesigns === 'undefined') return;
+        RRForgeDesigns.renderGroups(this.root && this.root.querySelector('.rr-ag-design-group'), this._designsDir(), this.designGroup, s => this._tx(s));
+    }
+
+    /** Keep the animation's layers and settings in the Forge under its name, in the chosen group; no sheet is made. */
+    async saveDesign() {
+        if (!this._requireProjectPath()) return false;
+        let name = RRForgeDesigns.folderName(this.outputName);
+        if (!name) {
+            name = RRForgeDesigns.folderName(await RRDialog.prompt(this._tx('Name this animation:'), { title: this._tx('Save Design'), value: this._tx('MyAnimation') }));
+            if (!name) return false;
+            this.outputName = name;
+            const input = this.root && this.root.querySelector('.rr-ag-name');
+            if (input) input.value = name;
+            this._scheduleSaveConfig();
+        }
+        const group = this.designGroup || '';
+        try {
+            const record = { builder: 'animation', version: 1, recipe: this._designRecipe() };
+            const kept = await RRForgeDesigns.save(this._designsDir(), group, name, record, this._designPicture(), this._openedDesign, (s, v) => this._tx(s, v));
+            if (!kept) return false;
+            this._openedDesign = { group, name };
+            this._renderDesignGroups();
+            this._status(this._tx('Design {name} saved.', { name }), 'ok');
+            return true;
+        } catch (error) {
+            console.error('[AnimationGenerator] save design', error);
+            this._status(this._tx('{name} could not be saved.', { name }), 'error');
+            return false;
+        }
+    }
+
+    /** A group or design name that stays inside the designs folder. */
+    static _designPart(value, allowEmpty) {
+        if (typeof value !== 'string') return null;
+        if (!value) return allowEmpty ? '' : null;
+        const clean = typeof RRForgeDesigns !== 'undefined' ? RRForgeDesigns.folderName(value) : value;
+        return clean === value && value !== '.' && value !== '..' ? value : null;
+    }
+
+    /**
+     * Open the saved design `name` in `group` ('' = no group) into the tool, e.g. after a Workshop item
+     * came in. With the tool not on screen yet it is opened as soon as the tool is (renderInto).
+     * Answers false when the names cannot be a design's.
+     */
+    openDesign(group, name) {
+        const g = AnimationGenerator._designPart(group || '', true), n = AnimationGenerator._designPart(name, false);
+        if (g === null || n === null) return false;
+        if (!this._mounted || !this.root || !this._syncProjectPath()) {
+            this._pendingDesign = { group: g, name: n };
+            return true;
+        }
+        return this._openDesign(g, n);
+    }
+
+    _openDesign(group, name) {
+        try {
+            const data = RRForgeDesigns.read(this._designsDir(), group, name);
+            if (!data || typeof data !== 'object' || Array.isArray(data) || data.builder !== 'animation'
+                || !data.recipe || typeof data.recipe !== 'object' || Array.isArray(data.recipe)) {
+                throw new Error('not an Animation Generator design');
+            }
+            const r = this._applyRecipe(data.recipe);
+            if (!this.outputName) this.outputName = AnimationGenerator.cleanOutputName(name);
+            this._openedDesign = { group, name };
+            this.designGroup = group;
+            this._saveConfig();
+            this._render();
+            // Textures travel as file names: say which ones this project does not have.
+            const fs = require('fs'), path = require('path'), dir = this._texturesDir();
+            const missing = dir ? r.textures.filter(f => !fs.existsSync(path.join(dir, f))) : [];
+            if (missing.length) this._status(this._tx('Textures not found in forge/animation_generator/textures: {files}', { files: missing.join(', ') }), 'error');
+            else this._status('', '');
+            return true;
+        } catch (error) {
+            console.error('[AnimationGenerator] open design', error);
+            this._status(this._tx('{name} could not be opened.', { name }), 'error');
+            return false;
+        }
+    }
+
+    /**
+     * Saved designs as pictures to pick from, by group. Baked sheets are not listed: a sheet has no
+     * recipe to open (and a full sheet is too big a picture for a card).
+     */
+    _showGallery() {
+        if (!this.root || !this._requireProjectPath()) return;
+        const t = (s, v) => this._tx(s, v);
+        const box = this.root.querySelector('.rr-c3d-gallery');
+        if (!box) return;
+        box.innerHTML = `<div class="rr-c3d-gallery-head"><span>${this._tx('Open a saved animation design')}</span><button class="rr-c3d-remove" data-close title="${this._tx('Close')}">✕</button></div>
+            <div class="rr-c3d-gallery-scroll">${RRForgeDesigns.gallery(this._designsDir(), null, {
+                noDesigns: this._tx('No designs yet. Save Design keeps an animation here without making a sheet.')
+            }, t)}</div>`;
+        box.hidden = false;
+        // One Escape listener at a time: drawing the gallery again drops the one before.
+        this._closeGallery?.();
+        const close = () => { box.hidden = true; document.removeEventListener('keydown', onKey, true); if (this._closeGallery === close) this._closeGallery = null; };
+        const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+        document.addEventListener('keydown', onKey, true);
+        this._closeGallery = close;
+        box.onclick = e => {
+            if (e.target.closest('[data-close]')) { close(); return; }
+            const remove = e.target.closest('[data-delete]');
+            if (remove) {
+                const group = remove.dataset.group || '', name = remove.dataset.delete;
+                RRForgeDesigns.remove(this._designsDir(), group, name, t).then(done => {
+                    if (!done) return;
+                    if (this._openedDesign && this._openedDesign.group === group && this._openedDesign.name === name) this._openedDesign = null;
+                    this._renderDesignGroups();
+                    this._showGallery();
+                });
+                return;
+            }
+            const card = e.target.closest('.rr-c3d-saved');
+            if (!card) return;
+            close();
+            this._openDesign(card.dataset.group || '', card.dataset.name);
+        };
     }
 }

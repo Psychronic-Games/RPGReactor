@@ -1665,6 +1665,8 @@ class ProjectController {
 
             this.refreshMap3DView();
             this.structureWorkshop?.mapChanged?.();
+            this.structure2DWorkshop?.mapChanged?.();
+            this.structure2DStamp?.mapChanged?.();
 
             return true;
         } else {

@@ -385,7 +385,7 @@ test('a map the physics does not walk is read by its tiles, as the flat view rea
     assert.equal(field.sideAt(0, 0, 0, 4).reason, 'offmap');
     // The 3D view hands the field that same reader.
     const view = read('editor/src/MapEditor3D.js');
-    assert.match(view, /passageTiles\(mapData\) \{[\s\S]*?read: \(x, y\) => \(imageSolid && imageSolid\(x, y\) \? 0x0f\s*: TilemapManager\.tilePassage\(mapData\.data, mapData\.width, mapData\.height, flags, x, y, roomFloor\)\.blocked\)/);
+    assert.match(view, /passageTiles\(mapData\) \{[\s\S]*?read: \(x, y\) => \{[\s\S]*?return imageSolid && imageSolid\(x, y\) \? 0x0f\s*: TilemapManager\.tilePassage\(mapData\.data, mapData\.width, mapData\.height, flags, x, y, roomFloor\)\.blocked;/);
     // A picture at the characters' depth shuts its solid tiles in both views: the same test the flat marks ask.
     assert.match(view, /passageTiles\(mapData\) \{[\s\S]*?const imageSolid = \(typeof window !== 'undefined' && window\.reactor\?\.mapImageLayersManager\?\.solidTest\?\.\(mapData\)\) \|\| null;/);
     assert.match(read('editor/src/TilemapManager.js'), /const imageSolid = \(typeof window !== "undefined" && window\.reactor\?\.mapImageLayersManager\?\.solidTest\(map\)\) \|\| null;/);
@@ -416,7 +416,10 @@ test('one switch: nothing is built, loaded or listened to while Passage is off, 
     const main = read('editor/src/main.js');
     assert.match(main, /this\.projectController\?\.tilemapManager\?\.setPassageVisible\?\.\(event\.currentTarget\.checked\);\s*this\.mapEditor3D\?\.setPassageVisible\?\.\(event\.currentTarget\.checked\);/);
     const flat = read('editor/src/TilemapManager.js');
-    assert.match(flat, /drawPassage\(\) \{[\s\S]*?if \(!this\.currentMap \|\| !this\.passageVisible\) return;/);
+    assert.match(flat, /drawPassage\(\) \{[\s\S]*?if \(!this\.currentMap \|\| \(!this\.passageVisible && !workshopMarks\)\) return;/);
+    // A placed 2D structure's cells (rrPassage) show as the game reads them, before the tiles; a phantom map's marks while a mark tool is out.
+    assert.match(flat, /const marked = map\.rrPassage \? Number\(map\.rrPassage\[`\$\{x\},\$\{y\}`\]\) \|\| 0 : 0;/);
+    assert.match(flat, /if \(workshopMarks\) layer\.addChild\(TilemapManager\.workshopMarkGraphics\(workshopMarks, tw, th\)\);/);
     assert.match(flat, /blocked === 0x0f|blocked & 1/, 'the flat marks: an X, and an edge by direction');
     assert.doesNotMatch(flat, /RRMapEdgeLabels/);
 });

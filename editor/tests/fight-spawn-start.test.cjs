@@ -39,3 +39,31 @@ test('the event list is made again once an event is taken out of the map', () =>
     w.ReactorFight.sweepSpawned();
     assert.equal(w.$gameMap.events().includes(spawned), false);
 });
+
+test('Spawn Unit\'s How many spawns that many, the others on the nearest free tiles', () => {
+    const w = world();
+    call(w, 'SpawnUnit', { record: 'enemy', id: 1, team: 'enemy', at: 'cell', x: 8, y: 2, count: '3' });
+    const spawned = w.$gameMap.events().filter(e => e.eventId() !== 10001);
+    assert.equal(spawned.length, 3);
+    assert.equal(new Set(spawned.map(e => `${e.x},${e.y}`)).size, 3, 'each on a tile of its own');
+});
+
+test('Spawn Unit\'s Stays on the map: the unit is kept with the game for its map, through leaving it and coming back', () => {
+    const w = world();
+    // A transfer reads the map's file again: its own events, none spawned.
+    const own = w.$dataMap.events.slice(), reload = () => { w.$dataMap.events = own.slice(); };
+    call(w, 'SpawnUnit', { record: 'enemy', id: 1, team: 'enemy', at: 'cell', x: 8, y: 2, stay: 'true' });
+    call(w, 'SpawnUnit', { record: 'enemy', id: 1, team: 'enemy', at: 'cell', x: 3, y: 3 });
+    const mapId = w.$gameMap.mapId();
+    const [kept] = w.$gameMap.events().filter(e => e.eventId() !== 10001 && e.x === 8);
+    kept.setDirection(6);
+    reload(); w.$gameMap.setup(mapId + 1);
+    assert.equal(Object.keys(w.$gameSystem._rrStayingUnits[mapId]).length, 1, 'only the one that stays is kept');
+    reload(); w.$gameMap.setup(mapId);
+    const back = w.$gameMap.events().filter(e => e.eventId() !== 10001);
+    assert.equal(JSON.stringify(back.map(e => [e.x, e.y, e.direction()])), JSON.stringify([[8, 2, 6]]), 'it is back where it stood, as it faced; the other left with the map');
+    // Once it is gone from the map (fallen, or removed), it is no longer kept.
+    back[0].erase();
+    w.ReactorFight.sweepSpawned();
+    assert.equal(Object.keys(w.$gameSystem._rrStayingUnits[mapId]).length, 0);
+});

@@ -1533,6 +1533,8 @@
             map._events[id] = undefined;
             if (map.refreshEventList) map.refreshEventList();
             delete spawned[key];
+            const staying = F.stayingOf(map.mapId(), false);
+            if (staying) delete staying[key];
             // Its data stays in the map's list until the map is read again: whatever still holds the event for a
             // frame (a model's holder, an effect) reads an erased event, not a missing one, and the id is not reused.
             // The next unit to take this id starts with no self switch of the last one's.
@@ -1584,7 +1586,9 @@
             }];
         }
         const name = spec.record === "enemy" ? ($dataEnemies[spec.id] || {}).name : ($dataActors[spec.id] || {}).name;
-        return { id: eventId, name: name || "Unit", note: "", pages, x: options.x, y: options.y, rrUnit: spec, rrSpawned: true };
+        const data = { id: eventId, name: name || "Unit", note: "", pages, x: options.x, y: options.y, rrUnit: spec, rrSpawned: true };
+        if (options.stay) data.rrStay = true;
+        return data;
     };
 
     /** A unit leaves the fight; an event unit is erased unless `keep`. Removed units give no reward. */
@@ -3114,6 +3118,9 @@
         const same = mapId === this._mapId;
         const fight = typeof $gameFight !== "undefined" && $gameFight && $gameFight._active ? $gameFight : null;
         if (!same) {
+            // Units spawned to stay (Spawn Unit's "Stays on the map after the battle") are kept with the game for this
+            // map, where they stand now; the others leave with it.
+            if (this._rrSpawned && this._mapId > 0) F.keepStaying(this);
             // A battle kept on the map being left keeps the units spawned for it until the party is back.
             if (fight && fight._mapId === this._mapId && this._rrSpawned) fight._spawnedKept = this._rrSpawned;
             this._rrSpawned = null;
@@ -3124,6 +3131,13 @@
             this._rrSpawned = fight._spawnedKept;
             fight._spawnedKept = null;
         }
+        // The units that stay on this map come back to it.
+        const staying = !same ? F.stayingOf(mapId, false) : null;
+        if (staying && Object.keys(staying).length) {
+            this._rrSpawned = this._rrSpawned || {};
+            for (const [id, data] of Object.entries(staying)) if (!this._rrSpawned[id]) this._rrSpawned[id] = data;
+            F.reinstateSpawned(this);
+        }
         // The same map set up again (a load after the project changed reloads it), or the map of a battle that was
         // kept: units still standing come back, and those that fell in the battle do not.
         if ((same || back) && this._rrSpawned) F.reinstateSpawned(this);
@@ -3131,12 +3145,38 @@
         if (typeof $gameFight !== "undefined" && $gameFight) $gameFight.eraseDefeated(this);
     };
 
+    /** The spawned units kept on map `mapId` (`$gameSystem`, so saved with the game); made when `make`, else null. */
+    F.stayingOf = function(mapId, make) {
+        const system = typeof $gameSystem !== "undefined" ? $gameSystem : null;
+        if (!system || !(mapId > 0)) return null;
+        if (!system._rrStayingUnits) { if (!make) return null; system._rrStayingUnits = {}; }
+        if (!system._rrStayingUnits[mapId] && make) system._rrStayingUnits[mapId] = {};
+        return system._rrStayingUnits[mapId] || null;
+    };
+
+    /** The map is being left: its spawned units that stay are kept where they stand and as they face; the fallen are not. */
+    F.keepStaying = function(map) {
+        for (const [id, data] of Object.entries(map._rrSpawned || {})) {
+            if (!data || !data.rrStay) continue;
+            const unit = typeof $gameFight !== "undefined" && $gameFight ? $gameFight._units.find(u => u.eventId === Number(id)) : null;
+            const event = map._events[id];
+            const staying = F.stayingOf(map._mapId, true);
+            if ((unit && (unit.defeated || unit.gone)) || (event && event._erased)) { delete staying[id]; continue; }
+            if (event) { data.x = event.x; data.y = event.y; data.rrDirection = event.direction(); }
+            staying[id] = data;
+        }
+    };
+
     F.reinstateSpawned = function(map) {
         for (const id of Object.keys(map._rrSpawned || {})) {
             const unit = typeof $gameFight !== "undefined" && $gameFight ? $gameFight._units.find(u => u.eventId === Number(id)) : null;
             if (unit && (unit.defeated || unit.gone)) { delete map._rrSpawned[id]; continue; }
             if (!$dataMap.events[id]) $dataMap.events[id] = map._rrSpawned[id];
-            if (!map._events[id]) map._events[id] = new Game_Event(map.mapId(), Number(id));
+            if (!map._events[id]) {
+                map._events[id] = new Game_Event(map.mapId(), Number(id));
+                const data = map._rrSpawned[id];
+                if (data && data.rrDirection) map._events[id].setDirection(data.rrDirection);
+            }
         }
         if (map.refreshEventList) map.refreshEventList();
     };
@@ -3786,7 +3826,17 @@
                 x = $gameVariables.value(int(args.x));
                 y = $gameVariables.value(int(args.y));
             }
-            $gameFight.spawn({ record: args.record === "actor" ? "actor" : "enemy", id: int(args.id), team: args.team, x, y, height, around, template: int(args.template), direction: int(args.direction) });
+            // `count` units (1 to 99), the others on the nearest free tiles; `stay`: they stay on the map after the
+            // battle, through leaving it and coming back (both written by the dialog and read by nothing until 2026-11-22).
+            const count = Math.max(1, Math.min(99, int(args.count) || 1)), stay = bool(args.stay);
+            for (let n = 0; n < count; n++) {
+                if (n > 0 && around) {
+                    const next = $gameFight.freeSpotNear(around.x, around.y, 1);
+                    if (!next) break;
+                    x = next.x; y = next.y; height = next.height;
+                }
+                $gameFight.spawn({ record: args.record === "actor" ? "actor" : "enemy", id: int(args.id), team: args.team, x, y, height, around, template: int(args.template), direction: int(args.direction), stay });
+            }
         });
         PluginManager.registerCommand("RPGReactor", "RemoveUnit", function(args) {
             const eventId = int(args && args.eventId) || this._eventId;
