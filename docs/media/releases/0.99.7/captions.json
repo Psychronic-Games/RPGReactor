@@ -1,0 +1,47 @@
+[
+  {
+    "file": "01-demo-effects-fire.jpg",
+    "title": "A fire spell in the sample project",
+    "caption": "Every battle effect in the sample project is now made with RPG Reactor's own Effect generator, its sounds with the Sound Effect generator."
+  },
+  {
+    "file": "02-2d-structure-workshop.jpg",
+    "title": "Building a 2D structure",
+    "caption": "A 2D structure built on its own plot: its layers and videos listed on the left, the video in hand with its handles, its settings on the right."
+  },
+  {
+    "file": "03-tileset-picker.jpg",
+    "title": "The tileset picker",
+    "caption": "A tile layer's tileset chosen from a picker that shows every sheet."
+  },
+  {
+    "file": "04-place-2d-structures.jpg",
+    "title": "A 2D structure placed from the tile palette",
+    "caption": "The S tab of the tile palette: click a structure, click the map. A placed one is selected, moved and copied right on the map."
+  },
+  {
+    "file": "05-structure-database.jpg",
+    "title": "A 2D structure in the Database",
+    "caption": "Database › Structures: the structure fills the view and zooms, with its passability marks and its video."
+  },
+  {
+    "file": "06-passability-sides.jpg",
+    "title": "Blocking single sides of a cell",
+    "caption": "Sides blocks just one edge of a cell, like a fence or a ledge, and the game honours it from both directions."
+  },
+  {
+    "file": "07-map-picker-3d.jpg",
+    "title": "Choosing a place on a 3D map",
+    "caption": "Transfer Player, starting positions and other places are chosen on the map itself, in 3D or from above."
+  },
+  {
+    "file": "08-media-surface-editor.jpg",
+    "title": "The Media Surface editor",
+    "caption": "The Media Surface editor in the editor's theme."
+  },
+  {
+    "file": "09-editor-plugins.jpg",
+    "title": "Editor plugins in the Plugin Manager",
+    "caption": "Editor Plugins: plugins that change RPG Reactor's editor for a project, beside the game's own plugins."
+  }
+]
