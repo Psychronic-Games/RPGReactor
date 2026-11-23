@@ -2,7 +2,14 @@ name: CI
 
 on:
   push:
+    # Branches only: a release tag's commit is main's, already run there (it ran twice, two mails for one failure).
+    branches: ['**']
   pull_request:
+
+# A newer push to the same branch or pull request stops the run of the one it replaces: only the newest code is run.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
