@@ -254,3 +254,17 @@ test('tests do not depend on ignored private project fixtures', () => {
     assert.match(ci, /npm audit/);
     assert.match(ci, /git status --porcelain/);
 });
+
+test('a release is cut only from a commit whose CI run on GitHub passed', () => {
+    // The desktop's suite passing was not enough: release after release was tagged on code whose CI then failed on
+    // GitHub's machines (owner, 2026-11-22). cut-release asks GitHub first and stops before tagging.
+    const source = readRepo('editor/build-scripts/cut-release.cjs');
+    assert.match(source, /function ciVerdict\(sha\)/);
+    assert.match(source, /'run', 'list', '--repo', REPO, '--workflow', 'CI', '--commit', sha/);
+    assert.match(source, /if \(runOf\.status !== 'completed'\) return \{ ok: false/);
+    assert.match(source, /if \(runOf\.conclusion !== 'success'\)/);
+    const gate = source.indexOf("const verdict = ciVerdict(head);"), tagging = source.indexOf("run('git', ['tag', '-a'");
+    assert.ok(gate > 0 && tagging > gate, 'asked before anything is tagged');
+    assert.match(source, /if \(!verdict\.ok\) throw new Error/);
+    assert.match(source, /if \(require\.main === module\)/, 'loaded by a test, it cuts nothing');
+});

@@ -16,6 +16,8 @@
  * those when a release needs downloads attached. This is the announcement:
  * version surfaces, changelog, tag, and the release notes a visitor reads.
  *
+ * It refuses to cut a commit whose CI run on GitHub has not passed (ciVerdict): push main and wait for green first.
+ *
  * The token comes from GITHUB_TOKEN or GH_TOKEN. Without one, everything up to
  * the push still happens and the release step prints the URL to finish by hand,
  * so a missing token costs a click rather than a broken half-release.
@@ -149,6 +151,33 @@ function publish(version, tag, body, token) {
         + 'notes and the changelog cannot disagree.');
 }
 
+/**
+ * Whether `sha` passed the CI workflow on GitHub: its newest run there, finished and green. Read with the gh CLI
+ * (signed in as the owner); { ok, why, url }.
+ */
+function ciVerdict(sha) {
+    let runs;
+    try {
+        runs = JSON.parse(execFileSync('gh', ['run', 'list', '--repo', REPO, '--workflow', 'CI', '--commit', sha, '--limit', '5',
+            '--json', 'status,conclusion,url,event,headBranch,createdAt'], { encoding: 'utf8' }));
+    } catch (error) {
+        return { ok: false, why: `could not ask GitHub for ${sha.slice(0, 8)}'s CI runs (${String(error.message).split('\n')[0]}): the gh CLI, signed in, is needed` };
+    }
+    const runOf = (runs || []).filter(item => item.event === 'push').sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))[0];
+    if (!runOf) return { ok: false, why: `${sha.slice(0, 8)} has no CI run on GitHub yet (not pushed, or its run not started)` };
+    if (runOf.status !== 'completed') return { ok: false, why: `${sha.slice(0, 8)}'s CI run has not finished (${runOf.status}): ${runOf.url}`, url: runOf.url };
+    if (runOf.conclusion !== 'success') {
+        let failed = '';
+        try {
+            const id = runOf.url.split('/').pop();
+            const jobs = JSON.parse(execFileSync('gh', ['run', 'view', id, '--repo', REPO, '--json', 'jobs'], { encoding: 'utf8' })).jobs || [];
+            failed = jobs.filter(job => job.conclusion === 'failure').map(job => job.name).join(', ');
+        } catch (error) { /* the link says it */ }
+        return { ok: false, why: `${sha.slice(0, 8)}'s CI run failed${failed ? ` (${failed})` : ''}: ${runOf.url}`, url: runOf.url };
+    }
+    return { ok: true, url: runOf.url };
+}
+
 function main() {
     const options = parseArguments(process.argv.slice(2));
     const { version } = options;
@@ -192,6 +221,21 @@ function main() {
             const missing = run('git', ['log', '--oneline', 'HEAD..origin/main']);
             throw new Error(`GitHub's main has commits this checkout lacks:\n${missing}\nRun: git merge origin/main (then run this again)`);
         }
+    }
+
+    // The commit released must have passed CI on GitHub first. The suite passing on the desktop is not enough:
+    // GitHub's machines have no ~/.cache, slower timers and none of the desktop's files, and release after release
+    // was tagged on code whose CI then failed (owner, 2026-11-22: "it never does get fixed"). Push main, wait for
+    // its CI run to pass, then cut. --skip-ci-check only when GitHub itself cannot run CI.
+    if (!options.dryRun && !process.argv.includes('--skip-ci-check')) {
+        const head = run('git', ['rev-parse', 'HEAD']);
+        say(`Checking that ${head.slice(0, 8)} passed CI on GitHub...`);
+        const verdict = ciVerdict(head);
+        if (!verdict.ok) throw new Error(`${verdict.why}\nPush main, wait for its CI run to pass, then run this again.`);
+        say(`  CI passed: ${verdict.url}`);
+    } else if (options.dryRun) {
+        const verdict = ciVerdict(run('git', ['rev-parse', 'HEAD']));
+        say(verdict.ok ? `CI passed on GitHub: ${verdict.url}` : `A real cut would stop here: ${verdict.why}`);
     }
 
     // CI checks the syntax of every tracked JavaScript file, smoke scripts
@@ -304,9 +348,13 @@ function main() {
     publish(version, tag, body, token);
 }
 
-try {
-    main();
-} catch (error) {
-    console.error(`\nnot released: ${error.message}`);
-    process.exit(1);
+if (require.main === module) {
+    try {
+        main();
+    } catch (error) {
+        console.error(`\nnot released: ${error.message}`);
+        process.exit(1);
+    }
 }
+
+module.exports = { ciVerdict };
