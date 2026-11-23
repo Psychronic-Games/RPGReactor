@@ -11,6 +11,16 @@
     'use strict';
 
     let open = null;
+    // The browser's own right-click event can come after this menu is shown: on Linux a menu opened on the press
+    // gets it next, on Windows every menu gets it on the release, and it lands on this menu, not on what was
+    // clicked, so nothing cancelled it and NW.js's developer menu opened beside this one (owner, 2026-11-22). The
+    // menu, and the next such event within a moment of showing it, are kept from the browser.
+    let swallowUntil = 0;
+    if (typeof document !== 'undefined') {
+        document.addEventListener('contextmenu', event => {
+            if (Date.now() < swallowUntil || (open && open.menu.contains(event.target))) event.preventDefault();
+        }, true);
+    }
     const close = () => {
         if (!open) return;
         document.removeEventListener('pointerdown', open.outside, true);
@@ -22,6 +32,7 @@
     const api = {
         show(x, y, items) {
             close();
+            swallowUntil = Date.now() + 800;
             const menu = document.createElement('div');
             menu.className = 'rr-context-menu';
             menu.setAttribute('role', 'menu');

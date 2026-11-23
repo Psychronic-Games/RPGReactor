@@ -414,3 +414,36 @@ test('cliffs rise at the border; high land meets high land along a shared corner
         assert.equal(R.surroundSeamStyles(scene, surround)[0], null, 'beside low land: low');
     } finally { N.records.clear(); for (const [k, v] of records) N.records.set(k, v); }
 });
+
+test('the party\'s materials go with its models: the scene they were listed in can go without taking them', () => {
+    // Up the ladder from the Reactor room and over the High Lake's border: the party's materials stayed on the room's
+    // list, the room's scene was let go at the border, its materials disposed, and the party was not drawn until their
+    // programs were built again (owner, 2026-11-22).
+    const w = followerWorld({ flat: false, party: [1] });
+    const R = w.Reactor3D, N = R.Neighbors, T = w.THREE;
+    assert.equal(typeof R.listModelMaterial, 'function');
+    const room = { _materials: [] }, lake = { _materials: [], _modelInstances: new Map(), modelsGroup: () => new T.Group() }, pass = { _materials: [], _modelInstances: new Map(), modelsGroup: () => new T.Group() };
+    const body = new T.Mesh(new T.BoxGeometry(1, 1, 1), new T.MeshStandardMaterial());
+    const cape = new T.Mesh(new T.BoxGeometry(1, 1, 1), [new T.MeshStandardMaterial(), new T.MeshStandardMaterial()]);
+    const leader = new T.Object3D(); leader.add(body); leader.add(cape);
+    const party = [body.material, ...cape.material];
+    // Made in the room (a new game's first map).
+    for (const material of party) R.listModelMaterial(room, material);
+    room._materials.push('the room\'s own floor');
+    room._modelInstances = new Map([['p', { object: leader }]]);
+    // Up the ladder (Levels.adopt carries the party as a border does), then over the border.
+    N.carryParty(room, lake, null, null, [], { x: 0, y: 0, z: 0 });
+    N.carryParty(lake, pass, null, null, [], { x: -120, z: 0 });
+    assert.deepEqual(room._materials, ['the room\'s own floor'], 'the room keeps its own, and lists none of the party\'s');
+    assert.deepEqual(lake._materials, []);
+    assert.equal(pass._materials.length, 3);
+    for (const material of party) assert.ok(pass._materials.includes(material));
+    // The room goes (its destroy disposes what it lists): the party's materials are not among them.
+    let disposed = 0;
+    for (const material of party) material.dispose = () => disposed++;
+    for (const material of room._materials) if (material && material.dispose) material.dispose();
+    assert.equal(disposed, 0);
+    // Listed again in the scene that holds it: nothing twice.
+    R.listModelMaterial(pass, party[0]);
+    assert.equal(pass._materials.length, 3);
+});

@@ -863,23 +863,23 @@
         .custom-scrollbar-horizontal {
             bottom: 0;
             left: 0;
-            right: 14px;
-            height: 14px;
+            right: 10px;
+            height: 10px;
             border-top: 1px solid var(--color-border);
         }
 
         .custom-scrollbar-vertical {
             top: 0;
             right: 0;
-            bottom: 14px;
-            width: 14px;
+            bottom: 10px;
+            width: 10px;
             border-left: 1px solid var(--color-border);
         }
 
         .custom-scrollbar-thumb {
             position: absolute;
             background-color: var(--color-accent-bright);
-            border-radius: 7px;
+            border-radius: 5px;
             cursor: pointer;
         }
 
@@ -895,8 +895,8 @@
                input surface (6): without it the sky showed through the
                square where the two bars meet. */
             z-index: 1000;
-            width: 14px;
-            height: 14px;
+            width: 10px;
+            height: 10px;
             background-color: var(--color-bg-surface);
             border-top: 1px solid var(--color-border);
             border-left: 1px solid var(--color-border);
@@ -4269,6 +4269,9 @@
         .rr-structures-side { flex: 0 0 184px; display: flex; flex-direction: column; gap: 6px; padding: 8px; border-right: 1px solid var(--color-border); overflow-y: auto; background: var(--color-bg-surface); }
         .rr-structures-side > * { flex-shrink: 0; }
         .rr-structures-side-title { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text-muted); margin-top: 4px; }
+        /* The column's sections under the app's header band (an accent strip on a toolbar band), edge to edge. */
+        .rr-structures-side > .lit-section-header.rr-structures-side-title { margin: 8px -8px 2px; padding: 6px 10px 6px 9px; font-size: 11px; color: var(--color-text-strong); }
+        .rr-structures-side > .lit-section-header.rr-structures-side-title:first-child { margin-top: -8px; }
         .rr-structures-floorlist { display: flex; flex-direction: column; gap: 2px; max-height: 220px; overflow-y: auto; }
         .rr-structures-floor { display: flex; align-items: center; gap: 6px; width: 100%; padding: 5px 8px; border: 1px solid transparent; border-radius: 4px; background: var(--color-bg-button); color: var(--color-text); font-size: 12px; text-align: left; cursor: pointer; }
         .rr-structures-floor:hover { border-color: var(--color-border); }
@@ -8811,9 +8814,17 @@ input[type="search"]::-webkit-search-cancel-button:hover { background-color: var
 .rr-structure2d-label { display: flex; align-items: center; gap: 6px; color: var(--color-text-muted); white-space: nowrap; }
 .rr-structure2d-kind { padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; color: var(--color-accent-bright); background: var(--color-accent-tint-15); border: 1px solid var(--color-accent-border-strong); }
 .rr-structure2d-body { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 12px; flex: 1; min-height: 0; }
-.rr-structure2d-view { position: relative; overflow: auto; background: var(--color-bg-deep); border: 1px solid var(--color-border); border-radius: 4px; padding: 10px; }
-.rr-structure2d-canvas { display: block; cursor: crosshair; image-rendering: pixelated; }
-.rr-structure2d-empty { margin: 10px 0 0; color: var(--color-text-muted); }
+/* The structure's view: fills its column, the plot in its middle at the zoom (fitted at first), scrolled when larger;
+   the zoom bar over its bottom-right corner (DatabaseStructure2DPage.bindZoom). */
+.rr-structure2d-stage { position: relative; min-width: 0; min-height: 0; display: flex; }
+.rr-structure2d-view { flex: 1; min-width: 0; min-height: 320px; display: flex; overflow: auto; background: var(--color-bg-deep); border: 1px solid var(--color-border); border-radius: 4px; padding: 12px; box-sizing: border-box; }
+.rr-structure2d-view.is-panning { cursor: grabbing; }
+.rr-structure2d-canvas { display: block; flex: 0 0 auto; margin: auto; cursor: crosshair; image-rendering: pixelated; box-shadow: 0 0 0 1px var(--color-accent-border); }
+.rr-structure2d-empty { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); margin: 0; padding: 8px 14px; border-radius: 6px; background: rgba(0, 0, 0, 0.7); color: var(--color-text-muted); pointer-events: none; }
+.rr-structure2d-zoom { position: absolute; right: 18px; bottom: 18px; display: flex; align-items: center; gap: 4px; padding: 4px; border: 1px solid var(--color-accent-border); border-radius: 6px; background: rgba(10, 12, 16, 0.86); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45); }
+.rr-structure2d-zoom .rr-btn-chip { min-width: 28px; padding: 3px 8px; font-weight: 700; }
+.rr-structure2d-zoom .rr-btn-chip:hover { color: var(--color-accent-bright); border-color: var(--color-accent-bright); }
+.rr-structure2d-zoom-value { min-width: 46px; text-align: center; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--color-accent-bright); }
 .rr-structure2d-side { display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow: auto; }
 .rr-structure2d-summary-row { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--color-border-subtle); font-size: 12px; }
 .rr-structure2d-summary-row span { color: var(--color-text-muted); }
@@ -8821,3 +8832,282 @@ input[type="search"]::-webkit-search-cancel-button:hover { background-color: var
 .rr-structure2d-ghost { position: absolute; z-index: 30; pointer-events: none; opacity: 0.75; outline: 2px dashed var(--color-accent-bright); outline-offset: -1px; }
 .rr-structure2d-ghost img { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
 .rr-image-layer-item.is-structure { grid-template-columns: 22px minmax(0, 1fr); }
+/* The 3D checkbox on a structure's page (both kinds): as the map's own 3D view switch. */
+.rr-structures-3d { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--color-text-strong); cursor: pointer; user-select: none; white-space: nowrap; }
+/* A 2D structure's page and the phantom map's panel: room inside each section, nothing against its border, names that wrap. */
+.rr-structure2d-side { padding-right: 2px; }
+.rr-structure2d-side .lit-section { border: 1px solid var(--color-border-subtle); border-radius: 4px; background: var(--color-bg-panel); overflow: hidden; }
+.rr-structure2d-side .lit-section > :not(.lit-section-header) { margin: 0; padding: 10px 12px; }
+.rr-structure2d-side .lit-section > .rr-structure2d-tools { padding-bottom: 4px; }
+.rr-structure2d-side .lit-section > .rr-structure2d-note { padding-top: 4px; }
+.rr-structure2d-summary-row { align-items: baseline; padding: 6px 0; }
+.rr-structure2d-summary-row strong { flex: 0 0 auto; }
+.rr-structure2d-summary-row span { flex: 1 1 auto; min-width: 0; text-align: right; overflow-wrap: anywhere; }
+.rr-structure2d-summary { display: flex; flex-direction: column; }
+/* The panel's cards: the header is the card's top edge (a margin above it showed as a rounded strip, owner), the rest inset. */
+.rr-structure2d-panel .lit-section { padding: 0 0 10px; }
+.rr-structure2d-panel .lit-section-header { margin: 0 0 8px; }
+.rr-structure2d-panel .lit-section > :not(.lit-section-header) { margin-left: 10px; margin-right: 10px; }
+.rr-structure2d-layer-name small { white-space: normal; overflow-wrap: anywhere; }
+.rr-structure2d-tools .rr-btn-chip { padding: 5px 10px; }
+/* A button with a line icon before its word (Database › Structures › Build: a hammer). */
+.rr-btn-with-icon { display: inline-flex; align-items: center; gap: 6px; padding-left: 12px; padding-right: 14px; }
+.rr-btn-with-icon .rr-btn-icon { flex: 0 0 auto; }
+
+/* Maps sidebar: the tabs as the app's (the Plugin Manager's and the Character Builder's), the search in the theme,
+   and the fold arrow one triangle that turns (the two arrow characters were drawn at different sizes). */
+.rr-map-tabs { padding: 6px 6px 0; gap: 3px; }
+.rr-map-tabs .rr-plugin-tab { flex: 1 1 0; text-align: center; padding: 6px 8px 5px; font-size: 11px; overflow: hidden; text-overflow: ellipsis; }
+.rr-map-search { padding: 8px; background: var(--color-bg-panel); border-bottom: 1px solid var(--color-border); }
+.rr-map-search-input { width: 100%; box-sizing: border-box; padding: 6px 9px; font-size: 12px; font-weight: 600; background: var(--color-bg-deep); color: var(--color-text-strong); border: 1px solid var(--color-accent-border); border-radius: var(--radius-md, 4px); outline: none; }
+.rr-map-search-input::placeholder { color: var(--color-text-muted); font-weight: 400; }
+.rr-map-search-input:hover { border-color: var(--color-accent-border-strong); }
+.rr-map-search-input:focus { border-color: var(--color-accent-bright); box-shadow: 0 0 0 1px var(--color-accent-tint-15); }
+.rr-tree-fold, .rr-tree-fold-space { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; margin-right: 4px; flex: 0 0 auto; vertical-align: -2px; }
+.rr-tree-fold { cursor: pointer; user-select: none; color: var(--color-text-muted); border-radius: 3px; transition: transform 0.12s; }
+.rr-tree-fold:hover { color: var(--color-accent-bright); background: var(--color-accent-tint-15); }
+.rr-tree-fold.is-open { transform: rotate(90deg); }
+/* A structure's bar (3D and 2D): room from the window's header and its right edge; its buttons not tall, and the
+   secondary one (Use on the map) on the accent, not grey on grey. */
+.rr-structures-bar { padding: 12px 16px 10px 12px; box-sizing: border-box; min-width: 0; }
+.rr-structure2d-page > .rr-structures-bar { margin: 0 -2px; }
+.rr-structures-bar .rr-button-primary, .rr-structures-bar .rr-btn-secondary { padding-top: 5px; padding-bottom: 5px; line-height: 1.2; white-space: nowrap; flex: 0 0 auto; }
+.rr-structures-bar .rr-btn-secondary { padding-left: 14px; padding-right: 14px; background: var(--color-bg-deep); border-color: var(--color-accent); color: var(--color-accent-bright); }
+.rr-structures-bar .rr-btn-secondary:hover:not(:disabled) { background: var(--color-accent-tint-15); border-color: var(--color-accent-bright); color: var(--color-accent-bright); }
+/* Build and Use on the map side by side: one size, one font, each its icon before its word. */
+.rr-structures-bar .rr-btn-with-icon { min-height: 32px; padding: 5px 14px 5px 12px; font-size: 13px; font-weight: 700; border-width: 1px; border-style: solid; box-sizing: border-box; }
+.rr-structures-bar .rr-btn-secondary .rr-btn-icon { --rr-btn-icon-hole: var(--color-bg-deep); }
+.rr-structures-bar .rr-btn-secondary:disabled { opacity: 0.45; cursor: not-allowed; }
+/* The map lists: a click focuses the list itself (from code, so the browser takes it for the keyboard's), and its
+   focus ring drew a white strip along the list's top. The selected row shows where the list is. */
+#maps-list:focus, #quick-access-list:focus, #events-list:focus { outline: none; }
+/* The tabs' strip apart from the Maps header above it (both were the toolbar colour). */
+.rr-map-tabs { background: var(--color-bg-surface); border-top: 1px solid var(--color-border-subtle); }
+
+/* The map tree (ProjectController.renderMapsList): one line a map, however deep; a guide line for each of the first
+   levels; a small map before each name, a count after a map that holds others; the open map on the accent. */
+#maps-list { padding: 4px 4px 8px; background: var(--color-bg-surface); }
+.tree-item.rr-map-row { position: relative; display: flex; align-items: center; gap: 4px; min-width: 0; margin: 1px 0; padding-top: 4px; padding-bottom: 4px; padding-right: 8px; font-size: 13px; line-height: 1.35; white-space: nowrap; border-radius: 4px; border-left: 2px solid transparent;
+    /* One line under each parent's fold arrow, down past its children: measured from the row's outer edge, an arrow's
+       centre is 2 px of edge + 6 px + 7 px in, then every 14 px. */
+    background-image: repeating-linear-gradient(to right, transparent 0 0.5px, var(--rr-guide-color, var(--color-accent-tint-35)) 0.5px 1.5px, transparent 1.5px 14px);
+    background-size: var(--rr-guides, 0px) 100%; background-repeat: no-repeat; background-position: 14px 0; background-origin: border-box; background-clip: border-box; }
+.tree-item.rr-map-row:hover { background-color: var(--color-bg-hover, var(--color-bg-button)); border-left-color: var(--color-accent-border); }
+.tree-item.rr-map-row.selected { background-color: var(--color-accent-tint-25); border-left-color: var(--color-accent-bright); color: var(--color-text-strong); }
+.rr-map-glyph { display: inline-flex; flex: 0 0 auto; color: var(--color-text-muted); }
+.tree-item.rr-map-row.selected .rr-map-glyph, .tree-item.rr-map-row:hover .rr-map-glyph { color: var(--color-accent-bright); }
+.rr-map-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.rr-map-count { flex: 0 0 auto; min-width: 18px; padding: 0 5px; border-radius: 8px; font-size: 10px; font-weight: 700; line-height: 16px; text-align: center; color: var(--color-text-muted); background: var(--color-bg-deep); border: 1px solid var(--color-border-subtle); }
+.tree-item.rr-map-row.selected .rr-map-count { color: var(--color-accent-bright); border-color: var(--color-accent-border); }
+.tree-item.rr-map-row .rr-tree-fold, .tree-item.rr-map-row .rr-tree-fold-space { margin-right: 0; }
+/* Map Properties: the app's panel header (the accent strip on the left) and a footer whose buttons stand off it. */
+#map-properties-modal .rr-map-props-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 16px 11px 13px; border-left: 3px solid var(--color-accent); border-bottom: 1px solid var(--color-border); border-radius: 0; }
+#map-properties-modal .rr-map-props-head .rr-modal-title { font-size: 15px; }
+#map-properties-modal .rr-map-props-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--color-border); border-radius: 0 0 8px 8px; }
+#map-properties-modal .rr-map-props-foot button { min-width: 92px; padding: 7px 18px; }
+/* Cancel in the theme's red, as the app's own danger buttons: it leaves without what was changed. */
+#map-properties-modal .rr-map-props-cancel { background: var(--color-danger); border-color: var(--color-danger-soft); color: #fff; }
+#map-properties-modal .rr-map-props-cancel:hover { background: var(--color-danger-soft); border-color: var(--color-danger-bright); color: #fff; }
+/* The window clips to its rounded corners: the header's square corner stuck out of the top right. */
+#map-properties-modal > div { overflow: hidden; }
+
+/* Building a 2D structure (Structure2DWorkshop): the sidebar lists the structure's parts in place of the maps, the
+   map's events go, and the map's own tools are dimmed (main.workshopRefusal says why when one is asked for anyway). */
+body.rr-workshop2d-open #events-section,
+body.rr-workshop2d-open .resize-handle[data-target="events-section"] { display: none !important; }
+body.rr-workshop2d-open #toolbar [data-action="build-tool"],
+body.rr-workshop2d-open #toolbar [data-action="image-layers"],
+body.rr-workshop2d-open #toolbar [data-action="playtest"],
+body.rr-workshop2d-open #toolbar #toolbar-event-manager-btn,
+body.rr-workshop-open #toolbar [data-action="image-layers"],
+body.rr-workshop-open #toolbar [data-action="playtest"] { opacity: 0.3; pointer-events: none; }
+body.rr-workshop2d-open .html-menu-option:is([data-action="build-tool"], [data-action="build-group"], [data-action="terrain-tool"], [data-action="foliage-tool"], [data-action="models-tool"], [data-action="lighting-tool"], [data-action="media-surfaces"], [data-action="image-layers"], [data-action="toggle-event-mode"], [data-action="playtest"]),
+body.rr-workshop-open .html-menu-option:is([data-action="terrain-tool"], [data-action="foliage-tool"], [data-action="models-tool"], [data-action="image-layers"], [data-action="toggle-event-mode"], [data-action="playtest"]) { opacity: 0.4; pointer-events: none; }
+#maps-section .rr-s2d-sidebar { display: flex; flex-direction: column; flex: 1; min-height: 0; background: var(--color-bg-surface); }
+.rr-s2d-head { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.rr-s2d-head strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-accent-bright); text-transform: none; letter-spacing: 0; }
+.rr-s2d-items { flex: 1; overflow-y: auto; padding: 4px 4px 8px; }
+/* The list's section headers: the app's lit header (a darker band, the accent strip), not the list's own colour. */
+.rr-s2d-group { display: flex; align-items: baseline; gap: 6px; margin: 10px -4px 4px; padding: 6px 10px 6px 9px; background: var(--color-bg-toolbar); border-left: 3px solid var(--color-accent); border-top: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border); font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-text-strong); }
+.rr-s2d-group:first-child { margin-top: -4px; border-top: 0; }
+.rr-s2d-group span { font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--color-text-muted); }
+.tree-item.rr-s2d-item { display: flex; align-items: center; gap: 6px; margin: 1px 0; padding: 4px 6px; border-left: 2px solid transparent; border-radius: 4px; font-size: 13px; }
+.tree-item.rr-s2d-item:hover { border-left-color: var(--color-accent-border); }
+.tree-item.rr-s2d-item.selected { background-color: var(--color-accent-tint-25); border-left-color: var(--color-accent-bright); }
+.tree-item.rr-s2d-item.is-hidden .rr-s2d-text { opacity: 0.5; }
+.rr-s2d-icon { display: inline-flex; flex: 0 0 auto; color: var(--color-text-muted); }
+.rr-s2d-item.selected .rr-s2d-icon, .rr-s2d-item:hover .rr-s2d-icon { color: var(--color-accent-bright); }
+.rr-s2d-text { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; line-height: 1.25; }
+.rr-s2d-name, .rr-s2d-text small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rr-s2d-text small { font-size: 11px; color: var(--color-text-muted); }
+.rr-s2d-eye, .rr-s2d-x { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 22px; height: 22px; padding: 0; border: 1px solid transparent; border-radius: 4px; background: none; color: var(--color-accent-bright); cursor: pointer; }
+.rr-s2d-item.is-hidden .rr-s2d-eye { color: var(--color-text-muted); }
+.rr-s2d-eye:hover { border-color: var(--color-accent-border); background: var(--color-accent-tint-15); }
+.rr-s2d-x { color: var(--color-text-muted); font-size: 11px; }
+.rr-s2d-x:hover { color: #fff; border-color: var(--color-danger-soft); background: var(--color-danger); }
+.rr-s2d-empty { margin: 4px 8px; font-size: 12px; color: var(--color-text-muted); }
+.rr-s2d-add { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 8px 8px 0; border-top: 1px solid var(--color-border-subtle); }
+.rr-s2d-add button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: 0; padding: 6px 6px; font-size: 12px; font-weight: 700; background: var(--color-bg-deep); border: 1px solid var(--color-accent-border-strong); color: var(--color-accent-bright); }
+.rr-s2d-add button::before { content: '+'; font-weight: 700; }
+.rr-s2d-add button:hover { background: var(--color-accent-tint-15); border-color: var(--color-accent-bright); }
+.rr-s2d-sidebar .rr-workshop-leave { margin: 8px; }
+.rr-s2d-picture { display: flex; align-items: center; gap: 10px; width: calc(100% - 20px); margin-top: 6px; margin-bottom: 6px; padding: 6px; text-align: left; background: var(--color-bg-deep); border: 1px solid var(--color-accent-border); border-radius: 4px; color: var(--color-text-strong); cursor: pointer; }
+.rr-s2d-picture:hover { border-color: var(--color-accent-bright); background: var(--color-accent-tint-15); }
+.rr-s2d-picture-thumb { display: flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 72px; height: 54px; border-radius: 3px; background: repeating-conic-gradient(#2a2a2a 0 25%, #1c1c1c 0 50%) 0 0 / 12px 12px; color: var(--color-text-muted); overflow: hidden; }
+.rr-s2d-picture-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; image-rendering: pixelated; }
+.rr-s2d-picture-name { display: flex; flex-direction: column; min-width: 0; font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+.rr-s2d-picture-name small { margin-top: 2px; font-weight: 700; color: var(--color-accent-bright); }
+.rr-s2d-xyo { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.rr-s2d-xyo label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--color-text-muted); }
+.rr-s2d-xyo input { width: 100%; min-width: 0; box-sizing: border-box; }
+.rr-s2d-order { display: flex; gap: 6px; margin-top: 8px; }
+.rr-s2d-order button { flex: 1 1 0; }
+
+/* The media surface editor (MediaSurfaceEditor.js, for maps and for Show Media Surface): its cards have the app's lit
+   header, and its fields stand off the card (black, an accent edge, the accent when focused), not grey on grey. */
+.video-surface-editor .vs-control-section { display: block; padding: 0 10px 10px; border: 1px solid var(--color-border); border-radius: 5px; background: var(--color-bg-surface); overflow: hidden; }
+.video-surface-editor .vs-section-head { display: flex; align-items: center; gap: 6px; margin: 0 -10px 10px; padding: 6px 10px 6px 9px; background: var(--color-bg-deep); border-left: 3px solid var(--color-accent); border-bottom: 1px solid var(--color-border); font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-text-strong); user-select: none; }
+.video-surface-editor details.vs-control-section:not([open]) { padding-bottom: 0; }
+.video-surface-editor details.vs-control-section:not([open]) > .vs-section-head { margin-bottom: 0; border-bottom: 0; }
+.video-surface-editor summary.vs-section-head { cursor: pointer; list-style: none; }
+.video-surface-editor summary.vs-section-head::-webkit-details-marker { display: none; }
+.video-surface-editor summary.vs-section-head::before { content: ''; flex: 0 0 auto; width: 0; height: 0; border-style: solid; border-width: 4px 0 4px 6px; border-color: transparent transparent transparent var(--color-accent-bright); transition: transform 0.12s; }
+.video-surface-editor details[open] > summary.vs-section-head::before { transform: rotate(90deg); }
+.video-surface-editor summary.vs-section-head:hover { color: var(--color-accent-bright); }
+.video-surface-editor .vs-field > span { color: var(--color-text); font-weight: 600; }
+.video-surface-editor :is(input.vs-input:not([type="checkbox"]), select.vs-input, .vs-media-current) { background: var(--color-bg-deep); border: 1px solid var(--color-accent-border); color: var(--color-text-strong); }
+.video-surface-editor :is(input.vs-input, select.vs-input):hover { border-color: var(--color-accent-border-strong); }
+.video-surface-editor :is(input.vs-input, select.vs-input):focus { outline: none; border-color: var(--color-accent-bright); box-shadow: 0 0 0 1px var(--color-accent-tint-35); }
+.video-surface-editor .vs-stepper { background: var(--color-bg-deep); border: 1px solid var(--color-accent-border); }
+.video-surface-editor .vs-stepper:hover { border-color: var(--color-accent-border-strong); }
+.video-surface-editor .vs-stepper:focus-within { border-color: var(--color-accent-bright); box-shadow: 0 0 0 1px var(--color-accent-tint-35); }
+.video-surface-editor .vs-stepper input.vs-input { border: 0; background: transparent; box-shadow: none; }
+.video-surface-editor .vs-stepper .rr-number-stepper-buttons button { color: var(--color-accent-bright); }
+.video-surface-editor .vs-stepper .rr-number-stepper-buttons button:hover { background: var(--color-accent-tint-15); }
+.video-surface-editor select.vs-input option { background: var(--color-bg-deep); color: var(--color-text-strong); }
+.video-surface-editor input.vs-input:disabled, .video-surface-editor select.vs-input:disabled { opacity: 0.5; }
+.video-surface-editor .vs-check input { accent-color: var(--color-accent-bright); }
+/* The Surface card's first row: fields sized to their contents, wrapping when the window is narrow; the media file row
+   takes the whole width. */
+.video-surface-editor .vs-identity { display: flex !important; flex-wrap: wrap; align-items: flex-start; }
+.video-surface-editor .vs-identity > .vs-field { flex: 0 1 auto; min-width: 110px; }
+.video-surface-editor .vs-identity > .vs-field > select.vs-input { width: auto !important; max-width: 100%; padding-right: 26px; }
+.video-surface-editor .vs-identity > .vs-field-wide { flex: 1 1 100%; }
+
+/* The tileset picker (TilesetPicker.js): as the picture picker, a searchable list beside every sheet of the one chosen. */
+.rr-tileset-picker-overlay { z-index: 20000; }
+.rr-tileset-picker { display: flex; flex-direction: column; width: min(92vw, 1100px); height: min(86vh, 820px); max-width: none; padding: 0; overflow: hidden; border-radius: 8px; }
+.rr-tileset-picker .rr-modal-header { border-left: 3px solid var(--color-accent); }
+.rr-tileset-picker-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 320px minmax(0, 1fr); }
+.rr-tileset-picker-side { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--color-border); background: var(--color-bg-surface); }
+.rr-tileset-picker-search { margin: 10px; padding: 7px 10px; background: var(--color-bg-deep); border: 1px solid var(--color-accent-border); border-radius: 4px; color: var(--color-text-strong); }
+.rr-tileset-picker-search:focus { outline: none; border-color: var(--color-accent-bright); box-shadow: 0 0 0 1px var(--color-accent-tint-35); }
+.rr-tileset-picker-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0 6px 8px; }
+.rr-tileset-picker-item { display: flex; align-items: center; gap: 10px; margin: 2px 0; padding: 5px 8px 5px 6px; border-left: 2px solid transparent; border-radius: 4px; cursor: pointer; color: var(--color-text); }
+.rr-tileset-picker-item:hover { background: var(--color-bg-button); border-left-color: var(--color-accent-border); }
+.rr-tileset-picker-item.is-selected { background: var(--color-accent-tint-25); border-left-color: var(--color-accent-bright); color: var(--color-text-strong); }
+.rr-tileset-picker-thumb { flex: 0 0 auto; width: 56px; height: 42px; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 3px; background: repeating-conic-gradient(#2a2a2a 0 25%, #1c1c1c 0 50%) 0 0 / 10px 10px; border: 1px solid var(--color-border-subtle); }
+.rr-tileset-picker-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; image-rendering: pixelated; }
+.rr-tileset-picker-name { display: flex; flex-direction: column; min-width: 0; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.rr-tileset-picker-name small { font-size: 10px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.04em; }
+.rr-tileset-picker-preview { min-height: 0; overflow-y: auto; padding: 14px 18px; background: var(--color-bg-deep); }
+.rr-tileset-picker-heading { margin: 0 0 12px; padding: 6px 10px 6px 9px; border-left: 3px solid var(--color-accent); background: var(--color-bg-toolbar); font-size: 13px; font-weight: 700; color: var(--color-accent-bright); }
+.rr-tileset-picker-sheet { margin: 0 0 16px; }
+.rr-tileset-picker-sheet figcaption { margin-bottom: 6px; font-size: 12px; color: var(--color-text-muted); }
+.rr-tileset-picker-sheet figcaption strong { display: inline-block; min-width: 26px; color: var(--color-accent-bright); }
+.rr-tileset-picker-sheet img { display: block; max-width: 100%; image-rendering: pixelated; background: repeating-conic-gradient(#2a2a2a 0 25%, #1c1c1c 0 50%) 0 0 / 16px 16px; border: 1px solid var(--color-border-subtle); }
+.rr-tileset-picker-none { margin: 12px; color: var(--color-text-muted); }
+.rr-tileset-picker-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--color-border); }
+.rr-tileset-picker-foot button { min-width: 92px; padding: 7px 18px; }
+.rr-tileset-picker-cancel { background: var(--color-danger); border-color: var(--color-danger-soft); color: #fff; }
+.rr-tileset-picker-cancel:hover { background: var(--color-danger-soft); border-color: var(--color-danger-bright); color: #fff; }
+/* A layer's row in the structure's list: a grip to drag it by, ▲ ▼ ✕ on the row (shown on hover and on the chosen
+   one), and a gold line above or below the row a dragged layer will land by. */
+.tree-item.rr-s2d-layer { position: relative; gap: 4px; }
+.rr-s2d-grip { display: inline-flex; flex: 0 0 auto; color: var(--color-text-muted); opacity: 0.55; cursor: grab; }
+.rr-s2d-layer:hover .rr-s2d-grip { opacity: 1; color: var(--color-accent-bright); }
+.rr-s2d-layer.is-dragging { opacity: 0.45; }
+.rr-s2d-layer.is-drop-above::before, .rr-s2d-layer.is-drop-below::after { content: ''; position: absolute; left: 4px; right: 4px; height: 2px; border-radius: 1px; background: var(--color-accent-bright); box-shadow: 0 0 6px var(--color-accent-bright); pointer-events: none; }
+.rr-s2d-layer.is-drop-above::before { top: -2px; }
+.rr-s2d-layer.is-drop-below::after { bottom: -2px; }
+.rr-s2d-row-actions { display: inline-flex; flex: 0 0 auto; gap: 2px; visibility: hidden; }
+.rr-s2d-layer:hover .rr-s2d-row-actions, .rr-s2d-layer.selected .rr-s2d-row-actions, .rr-s2d-layer:focus-within .rr-s2d-row-actions { visibility: visible; }
+.rr-s2d-move { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; border: 1px solid var(--color-accent-border); border-radius: 4px; background: var(--color-bg-deep); color: var(--color-accent-bright); font-size: 9px; cursor: pointer; }
+.rr-s2d-move:hover:not(:disabled) { border-color: var(--color-accent-bright); background: var(--color-accent-tint-15); }
+.rr-s2d-move:disabled, .rr-s2d-x:disabled { opacity: 0.3; cursor: default; }
+.rr-s2d-x:disabled:hover { background: none; border-color: transparent; color: var(--color-text-muted); }
+/* The 2D structure's cards, in the workshop's panel and on the Database page: the body on the surface colour, the
+   header on the darker band with the accent strip (both were #111, one colour). */
+.rr-structure2d-panel .lit-section, .rr-structure2d-side .lit-section { background: var(--color-bg-surface); border: 1px solid var(--color-border); }
+.rr-structure2d-panel .lit-section-header, .rr-structure2d-side .lit-section-header { background: var(--color-bg-deep); border-left: 3px solid var(--color-accent); border-bottom: 1px solid var(--color-border); color: var(--color-text-strong); }
+.rr-structure2d-tools { display: flex; flex-wrap: wrap; gap: 5px; }
+.rr-structure2d-tools .rr-structure2d-tool { display: inline-flex; align-items: center; gap: 5px; padding: 5px 9px; font-weight: 600; }
+.rr-structure2d-tools .rr-structure2d-tool b { font-weight: 800; }
+.rr-structure2d-tool[data-tool="X"] b { color: #ff6b6b; }
+.rr-structure2d-tool[data-tool="O"] b { color: #6bff9b; }
+.rr-structure2d-tool[data-tool="*"] b { color: #ffd700; }
+/* Move Everything: four arrows round an empty middle. */
+.rr-s2d-shift { display: grid; grid-template-columns: repeat(3, 30px); grid-template-rows: repeat(3, 26px); gap: 3px; justify-content: center; }
+.rr-s2d-shift .rr-s2d-move { width: 30px; height: 26px; font-size: 11px; }
+.rr-s2d-shift [data-shift="0,-1"] { grid-area: 1 / 2; }
+.rr-s2d-shift [data-shift="-1,0"] { grid-area: 2 / 1; }
+.rr-s2d-shift [data-shift="1,0"] { grid-area: 2 / 3; }
+.rr-s2d-shift [data-shift="0,1"] { grid-area: 3 / 2; }
+/* The shared picture/media picker (index.html #image-picker-modal): the app's header with the accent strip, as large as
+   its window allows, a list that narrows in a small window, and the preview filling the rest. */
+#image-picker-modal { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.8); justify-content: center; align-items: center; }
+#image-picker-modal .rr-image-picker { display: flex; flex-direction: column; width: min(96vw, 1200px); height: min(92vh, 900px); min-width: 0; background: var(--color-bg-surface); border: 1px solid var(--color-accent-border); border-radius: 8px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6); overflow: hidden; }
+#image-picker-modal .rr-image-picker-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 14px 11px 13px; border-left: 3px solid var(--color-accent); border-bottom: 1px solid var(--color-border); }
+#image-picker-modal .rr-image-picker-head .rr-modal-title { font-size: 15px; min-width: 0; }
+#image-picker-modal .rr-image-picker-body { flex: 1; min-height: 0; display: flex; overflow: hidden; }
+#image-picker-modal #image-picker-list { flex: 0 0 clamp(200px, 28%, 320px); min-width: 0; background: var(--color-bg-list-item); border-right: 1px solid var(--color-border); overflow-y: auto; }
+#image-picker-modal #image-picker-preview { flex: 1; min-width: 0; padding: 16px; overflow-y: auto; background: var(--color-bg-deep); display: flex; flex-direction: column; align-items: center; justify-content: center; }
+#image-picker-modal #image-picker-preview > div { max-width: 100%; }
+@media (max-width: 720px) {
+    #image-picker-modal .rr-image-picker { width: 100vw; height: 100vh; border-radius: 0; }
+    #image-picker-modal .rr-image-picker-body { flex-direction: column; }
+    #image-picker-modal #image-picker-list { flex: 0 0 36%; border-right: 0; border-bottom: 1px solid var(--color-border); }
+}
+.rr-s2d-surface { align-items: flex-start; }
+.rr-s2d-surface .rr-s2d-icon { margin-top: 2px; }
+.rr-s2d-place { margin-top: 4px; padding: 3px 6px; font-size: 11px; background: var(--color-bg-deep); border: 1px solid var(--color-accent-border); border-radius: 4px; color: var(--color-text-strong); max-width: 100%; }
+.rr-s2d-place:focus { outline: none; border-color: var(--color-accent-bright); }
+.rr-s2d-xywh { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 8px; }
+.rr-s2d-xywh select { width: 100%; min-width: 0; }
+.rr-s2d-video-actions { display: flex; gap: 6px; margin-top: 10px; }
+.rr-s2d-video-actions button { flex: 1 1 0; }
+.rr-s2d-xywh label:has(select) { grid-column: 1 / -1; }
+/* The tile palette's S tab (TilesetPaletteViewer.renderStructures2D): the 2D structures as cards, a click places one. */
+.rr-s2d-palette-head { padding: 8px; border-bottom: 1px solid var(--color-border-subtle); }
+.rr-s2d-palette-search { width: 100%; box-sizing: border-box; padding: 6px 9px; background: var(--color-bg-deep); border: 1px solid var(--color-accent-border); border-radius: 4px; color: var(--color-text-strong); }
+.rr-s2d-palette-search:focus { outline: none; border-color: var(--color-accent-bright); }
+.rr-s2d-palette-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; padding: 8px; }
+.rr-s2d-card { display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 6px; text-align: left; background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 6px; color: var(--color-text); cursor: pointer; }
+.rr-s2d-card:hover { border-color: var(--color-accent-border-strong); background: var(--color-accent-tint-15); }
+.rr-s2d-card.is-placing { border-color: var(--color-accent-bright); background: var(--color-accent-tint-25); box-shadow: 0 0 0 1px var(--color-accent-bright); }
+.rr-s2d-card.is-unbuilt { opacity: 0.6; }
+.rr-s2d-card-pic { position: relative; display: block; width: 100%; max-height: 120px; overflow: hidden; border-radius: 3px; background: repeating-conic-gradient(#2a2a2a 0 25%, #1c1c1c 0 50%) 0 0 / 10px 10px; }
+.rr-s2d-card-pic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+.rr-s2d-card-pic em { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; font-style: normal; color: var(--color-text-muted); text-align: center; }
+.rr-s2d-card-name { font-size: 12px; font-weight: 600; color: var(--color-text-strong); overflow-wrap: anywhere; }
+.rr-s2d-card small { font-size: 10px; color: var(--color-text-muted); }
+.rr-s2d-palette-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 20px 12px; color: var(--color-text-muted); font-size: 12px; text-align: center; }
+.rr-s2d-palette-none { padding: 8px; color: var(--color-text-muted); font-size: 12px; }
+/* A placed 2D structure selected on the map (Structure2DStamp.drawOutline), and its line in the S tab. */
+.rr-structure2d-selected { position: absolute; z-index: 30; pointer-events: none; outline: 2px solid var(--color-accent-bright); outline-offset: -1px; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7), 0 0 12px rgba(232, 197, 71, 0.45); background: rgba(232, 197, 71, 0.08); }
+.rr-structure2d-selected.is-moving { outline-style: dashed; background: rgba(232, 197, 71, 0.18); }
+.rr-s2d-palette-selected { display: flex; flex-direction: column; gap: 6px; margin: 8px 8px 0; padding: 8px 10px; border: 1px solid var(--color-accent-border); border-left: 3px solid var(--color-accent-bright); border-radius: 4px; background: var(--color-accent-tint-15); }
+.rr-s2d-palette-selected strong { display: block; font-size: 12px; color: var(--color-text-strong); }
+.rr-s2d-palette-selected small { font-size: 10px; color: var(--color-text-muted); }
+.rr-s2d-palette-selected-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+.rr-s2d-palette-hint { margin: 8px 10px 0; font-size: 11px; color: var(--color-text-muted); }
+/* The map pickers (TransferPlayerEditor.showMapPicker: Transfer Player, the starting positions, vehicles, Set Event
+   Location, …): the Maps panel's look, its rows (ProjectController.mapTreeRow), search and accent scrollbars. */
+.rr-map-picker > .rr-modal-header { border-left: 3px solid var(--color-accent); }
+.rr-map-picker-tree { width: 300px; flex: 0 0 300px; display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--color-border); background: var(--color-bg-surface); }
+.rr-map-picker-head { border-left: 3px solid var(--color-accent); }
+.rr-map-picker-tree .map-tree-list { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 4px 8px; }
+.rr-map-picker-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 6px 8px; background: var(--color-bg-deep); border: 1px solid var(--color-border); border-left: 3px solid var(--color-accent); border-radius: 4px; }
+.rr-map-picker-zoom { min-width: 30px; padding: 4px 10px; font-weight: 700; }
+.rr-map-picker-zoom:hover { color: var(--color-accent-bright); border-color: var(--color-accent-bright); }
+.rr-map-picker-zoom-value { min-width: 50px; text-align: center; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--color-accent-bright); }

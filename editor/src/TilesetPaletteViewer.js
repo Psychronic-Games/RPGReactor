@@ -126,6 +126,7 @@ class TilesetPaletteViewer {
                     ${this.createLayerTab('G')}
                     ${this.createLayerTab('R', TilesetPaletteViewer.tabIcon('region'))}
                     ${this.createLayerTab('O', TilesetPaletteViewer.tabIcon('object3d'))}
+                    ${this.createLayerTab('S', TilesetPaletteViewer.tabIcon('structure2d'))}
                 </div>
 
                 <!-- Tileset Preview Canvas -->
@@ -138,6 +139,9 @@ class TilesetPaletteViewer {
 
                 <!-- Region UI Container (shown when R tab is active) -->
                 <div id="region-ui-container" style="flex: 1; display: none; min-height: 0;"></div>
+
+                <!-- 2D structures (shown when S tab is active): a click on one places it on the map -->
+                <div id="structure2d-ui-container" class="rr-accent-scrollbar" style="flex: 1; display: none; min-height: 0; overflow-y: auto; flex-direction: column;"></div>
 
                 <!-- 3D object UI Container (shown when O tab is active) -->
                 <div id="object3d-ui-container" style="flex: 1; display: none; min-height: 0;"></div>
@@ -191,6 +195,13 @@ class TilesetPaletteViewer {
                 `<rect x="${x}" y="${y}" width="5.5" height="5.5" rx="1.2" fill="${fill}"/>`
             ).join('') + '</svg>';
         }
+        if (kind === 'structure2d') {
+            // A little house drawn flat, as a 2D structure stands on a 2D map: wall, roof, door.
+            return open
+                + '<path d="M2.5 7.5h11v7h-11z" fill="#c9a06b" stroke="#7a5a30" stroke-width=".8"/>'
+                + '<path d="M1.5 8 8 2l6.5 6z" fill="#5b7fe8" stroke="#2f4aa0" stroke-width=".8"/>'
+                + '<path d="M6.5 10.5h3v4h-3z" fill="#7a5a30"/></svg>';
+        }
         if (kind === 'pieces') {
             // Two blocks and a gable on them: things built on the ground.
             return open
@@ -226,6 +237,71 @@ class TilesetPaletteViewer {
             + '<path d="M8 1.5 14.5 5.25 8 9 1.5 5.25z" fill="#f2c14e"/>'
             + '<path d="M1.5 5.25 8 9v6.5L1.5 11.75z" fill="#d9822b"/>'
             + '<path d="M14.5 5.25 8 9v6.5l6.5-3.75z" fill="#b3541e"/></svg>';
+    }
+
+    /**
+     * The S tab: the project's 2D structures as cards (a picture of each, from its saved pictures, its name and size),
+     * searchable. A click on one places it on the open 2D map (Structure2DStamp: a click a copy, a right-click on one
+     * removes it, Escape stops); one never built and saved says so. Owner, 2026-11-22: there was no way to them from
+     * the map, the Builder's Blueprints list only the 3D ones.
+     */
+    renderStructures2D() {
+        const box = document.getElementById('structure2d-ui-container');
+        if (!box) return;
+        const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
+        const esc = typeof rrEscapeHtml === 'function' ? rrEscapeHtml : value => String(value);
+        const reactor = typeof window !== 'undefined' ? window.reactor : null, stamp = reactor?.structure2DStamp;
+        const records = (reactor?.databaseManager?.data?.structures || []).filter(entry => entry && entry.plan && entry.plan.dimension === '2d' && entry.file);
+        const query = (this._structureQuery || '').trim().toLowerCase();
+        const shown = records.filter(entry => !query || String(entry.name || entry.plan.name || '').toLowerCase().includes(query));
+        const card = entry => {
+            const plan = entry.plan, baked = plan.baked && (plan.baked.below || plan.baked.over);
+            const pics = baked ? [plan.baked.below, plan.baked.over].filter(Boolean).map(name => `<img src="${esc(stamp?.pictureUrl?.(name) || '')}" alt="" loading="lazy">`).join('') : '';
+            return `<button type="button" class="rr-s2d-card${stamp?.file === entry.file ? ' is-placing' : ''}${baked ? '' : ' is-unbuilt'}" data-file="${esc(entry.file)}" title="${esc(baked ? tt('Click the map to place it; right-click a placed one to remove it') : tt('Build and save it first'))}">
+                <span class="rr-s2d-card-pic" style="aspect-ratio: ${plan.size[0]} / ${plan.size[1]};">${pics || `<em>${esc(tt('Not built yet'))}</em>`}</span>
+                <span class="rr-s2d-card-name">${esc(entry.name || plan.name)}</span>
+                <small>${plan.size[0]} × ${plan.size[1]}</small>
+            </button>`;
+        };
+        // The placed structure selected on the map, if any: its name and spot, and what can be done with it.
+        const picked = !stamp?.file && stamp?.selectedRow?.();
+        const pickedPlan = picked ? stamp.planFor(picked) : null;
+        const selectedBar = picked ? `
+            <div class="rr-s2d-palette-selected">
+                <div><strong>${esc(pickedPlan?.name || picked.file)}</strong><small>${esc(tt('At'))} ${picked.at[0]}, ${picked.at[1]} · ${esc(tt('drag it to move it'))}</small></div>
+                <div class="rr-s2d-palette-selected-actions">
+                    <button type="button" class="rr-btn-chip" data-placed="edit">${esc(tt('Edit Structure'))}</button>
+                    <button type="button" class="rr-btn-chip" data-placed="duplicate">${esc(tt('Duplicate'))}</button>
+                    <button type="button" class="rr-btn-chip-danger" data-placed="remove">${esc(tt('Remove'))}</button>
+                </div>
+            </div>` : (records.length && !stamp?.file ? `<p class="rr-s2d-palette-hint">${esc(tt('Pick one to place it, or click a placed one on the map to select it.'))}</p>` : '');
+        box.innerHTML = `
+            <div class="rr-s2d-palette-head">
+                <input type="search" class="rr-s2d-palette-search" placeholder="${esc(tt('Search structures...'))}" value="${esc(this._structureQuery || '')}" aria-label="${esc(tt('Search structures...'))}">
+            </div>
+            ${selectedBar}
+            ${records.length ? `<div class="rr-s2d-palette-grid">${shown.map(card).join('') || `<p class="rr-s2d-palette-none">${esc(tt('No structure matches.'))}</p>`}</div>`
+                : `<div class="rr-s2d-palette-empty"><p>${esc(tt('No 2D structures yet.'))}</p><button type="button" class="rr-btn-secondary" data-open="structures">${esc(tt('Open Structures'))}</button></div>`}`;
+        const search = box.querySelector('.rr-s2d-palette-search');
+        search.addEventListener('input', () => {
+            this._structureQuery = search.value;
+            const at = search.selectionStart;
+            this.renderStructures2D();
+            const next = box.querySelector('.rr-s2d-palette-search');
+            next.focus(); try { next.setSelectionRange(at, at); } catch (error) { /* search inputs */ }
+        });
+        box.onclick = event => {
+            if (event.target.closest('[data-open="structures"]')) { reactor?.openDatabase?.('structures'); return; }
+            const placed = event.target.closest('[data-placed]')?.dataset.placed;
+            if (placed === 'edit') { stamp?.editSelected?.(); return; }
+            if (placed === 'duplicate') { stamp?.duplicateSelected?.(); return; }
+            if (placed === 'remove') { stamp?.removeSelected?.(); return; }
+            const button = event.target.closest('.rr-s2d-card');
+            if (!button) return;
+            if (stamp?.file === button.dataset.file) { stamp.stop(); stamp.startSelecting?.(); }
+            else reactor?.tilemapManager?.startStructure2DStamp?.(button.dataset.file);
+            this.renderStructures2D();
+        };
     }
 
     createLayerTab(layerName, icon = '', label = layerName) {
@@ -398,7 +474,11 @@ class TilesetPaletteViewer {
         // tool. The pieces tab is P, never B: B is the tileset's own sheet,
         // and one key for both lit both tabs and showed sheet B while a
         // building was being laid.
-        if (layerName !== 'M' && layerName !== 'T' && layerName !== 'P') this.lastPaintLayer = layerName;
+        if (layerName !== 'M' && layerName !== 'T' && layerName !== 'P' && layerName !== 'S') this.lastPaintLayer = layerName;
+        // S lists the 2D structures to place; leaving it puts down the one being placed.
+        const structuresContainer = document.getElementById('structure2d-ui-container');
+        if (structuresContainer) structuresContainer.style.display = layerName === 'S' ? 'flex' : 'none';
+        if (layerName !== 'S') window.reactor?.structure2DStamp?.stop?.();
         window.reactor?.claimMapTool?.(layerName === 'M' ? 'models' : layerName === 'T' ? 'terrain' : layerName === 'P' ? 'pieces' : 'paint');
 
         // Update tab styles
@@ -430,7 +510,17 @@ class TilesetPaletteViewer {
         if (layerName !== 'M') this.onModelPropsTabLeft?.();
         if (layerName !== 'T') this.onTerrainTabLeft?.();
         if (layerName !== 'P') this.onPiecesTabLeft?.();
-        if (layerName === 'R') {
+        if (layerName === 'S') {
+            if (tilesetContainer) tilesetContainer.style.display = 'none';
+            if (regionContainer) regionContainer.style.display = 'none';
+            if (object3dContainer) object3dContainer.style.display = 'none';
+            if (modelPropsContainer) modelPropsContainer.style.display = 'none';
+            if (selectionInfo) selectionInfo.style.display = 'none';
+            this.renderStructures2D();
+            // With no structure in hand, the placed ones are picked on the map.
+            const stamp = window.reactor?.structure2DStamp;
+            if (stamp && !stamp.file) stamp.startSelecting?.();
+        } else if (layerName === 'R') {
             // Show region UI, hide tileset preview
             if (tilesetContainer) tilesetContainer.style.display = 'none';
             if (regionContainer) regionContainer.style.display = 'flex';

@@ -218,6 +218,9 @@ class MapRenderScheduler {
 if (typeof window !== 'undefined') window.MapRenderScheduler = MapRenderScheduler;
 
 class TilemapManager {
+    /** The flat map's own scrollbars, in pixels across (css: .custom-scrollbar-*): 14 was a little thick (owner). */
+    static SCROLLBAR = 10;
+
     // Atomic write for project data: write a temp sibling then rename over
     // the destination, so a crash/kill/full-disk mid-write can never destroy
     // the previous good file. Falls back to a plain write when the fs
@@ -994,11 +997,12 @@ class TilemapManager {
         const open = new PIXI.Graphics();
         for (let y = 0; y < map.height && this.passageVisible; y++) {
             for (let x = 0; x < map.width; x++) {
-                // A cell a placed 2D structure says (rrPassage, read before the tiles in the game): open or blocked.
+                // A cell a placed 2D structure says (rrPassage, read before the tiles in the game): open, blocked, or
+                // blocked on some sides (16 + the sides' bits).
                 const marked = map.rrPassage ? Number(map.rrPassage[`${x},${y}`]) || 0 : 0;
                 if (marked === 1) { open.circle(x * tw + tw / 2, y * th + th / 2, tw / 2 - inset); continue; }
                 // A picture at the characters' depth stops movement where it is solid, as an impassable tile does.
-                const blocked = marked === 2 || (imageSolid && imageSolid(x, y)) ? 0x0f
+                const blocked = marked > 16 && marked < 31 ? marked - 16 : marked === 2 || (imageSolid && imageSolid(x, y)) ? 0x0f
                     : TilemapManager.tilePassage(map.data, map.width, map.height, flags, x, y, roomFloor).blocked;
                 if (!blocked) continue;
                 const px = x * tw, py = y * th;
@@ -1024,12 +1028,25 @@ class TilemapManager {
         this._drawModelPassage(layer, tw, th);
     }
 
-    /** A 2D structure's marks on its phantom map: X blocked (red), O open (green), ★ walk underneath (gold). */
+    /** A 2D structure's marks on its phantom map: X blocked (red), O open (green), ★ walk underneath (gold), a red
+     *  bar on each side a dN mark blocks. */
     static workshopMarkGraphics(passage, tw, th) {
         const g = new PIXI.Graphics(), inset = Math.max(3, Math.round(tw * 0.2)), width = Math.max(2, Math.round(tw * 0.08));
         const fills = { X: 0xff4040, O: 0x40d070, '*': 0xffd700 };
         for (const [cell, mark] of Object.entries(passage || {})) {
             const m = /^(\d+),(\d+)$/.exec(cell);
+            // Blocked on some sides (dN): a red bar along each side that cannot be crossed.
+            const sides = m && /^d(\d+)$/.exec(String(mark));
+            if (sides) {
+                const bits = Number(sides[1]), px = Number(m[1]) * tw, py = Number(m[2]) * th, e = Math.max(3, Math.round(tw * 0.1));
+                g.rect(px + 1, py + 1, tw - 2, th - 2).fill({ color: 0xff4040, alpha: 0.08 });
+                if (bits & 8) g.rect(px + 1, py + 1, tw - 2, e);
+                if (bits & 1) g.rect(px + 1, py + th - 1 - e, tw - 2, e);
+                if (bits & 2) g.rect(px + 1, py + 1, e, th - 2);
+                if (bits & 4) g.rect(px + tw - 1 - e, py + 1, e, th - 2);
+                g.fill({ color: 0xff4040, alpha: 0.9 });
+                continue;
+            }
             if (!m || !fills[mark]) continue;
             const px = Number(m[1]) * tw, py = Number(m[2]) * th, cx = px + tw / 2, cy = py + th / 2;
             g.rect(px + 1, py + 1, tw - 2, th - 2).fill({ color: fills[mark], alpha: 0.18 });
@@ -1309,7 +1326,8 @@ class TilemapManager {
     /**
      * A tool that takes the map's clicks by the tile (`this.cellPicker`: { onCell, onHover, onRight, onLeave, onEscape,
      * cursor }): a 2D structure's passability marks on its phantom map, a 2D structure being placed. While one is set,
-     * clicks on the flat map go to it and paint no tiles. Listened for on the map's container, before the map.
+     * clicks on the flat map go to it and paint no tiles, except those its `passes(event)` lets through.
+     * Listened for on the map's container, before the map.
      */
     installCellPicker() {
         const host = typeof document !== 'undefined' ? document.getElementById('canvas-container') : null;
@@ -1332,10 +1350,12 @@ class TilemapManager {
         host.addEventListener('pointerdown', event => {
             const picker = active(event);
             if (!picker || event.button === 1 || event.shiftKey) return;
+            // A picker may let some clicks through: a 2D structure's plot lets a video and its handles have theirs.
+            if (picker.passes?.(event)) return;
             event.stopPropagation(); event.preventDefault();
             const at = cell(event);
             if (!at) return;
-            if (event.button === 2) { picker.onRight?.(at[0], at[1]); return; }
+            if (event.button === 2) { picker.onRight?.(at[0], at[1], event); return; }
             if (event.button !== 0) return;
             down = true;
             picker.onCell?.(at[0], at[1], event);
@@ -1625,7 +1645,7 @@ class TilemapManager {
 
         const hThumb = document.createElement('div');
         hThumb.className = 'custom-scrollbar-thumb';
-        hThumb.style.height = '12px';
+        hThumb.style.height = (TilemapManager.SCROLLBAR - 2) + 'px';
         hScrollbar.appendChild(hThumb);
 
         const vScrollbar = document.createElement('div');
@@ -1634,7 +1654,7 @@ class TilemapManager {
 
         const vThumb = document.createElement('div');
         vThumb.className = 'custom-scrollbar-thumb';
-        vThumb.style.width = '12px';
+        vThumb.style.width = (TilemapManager.SCROLLBAR - 2) + 'px';
         vScrollbar.appendChild(vThumb);
 
         const corner = document.createElement('div');
@@ -1687,7 +1707,7 @@ class TilemapManager {
             const scrollableSize = direction === 'horizontal'
                 ? bounds.maxX - bounds.minX : bounds.maxY - bounds.minY;
             const thumbTrackSize = direction === 'horizontal' ?
-                (containerRect.width - 14) : (containerRect.height - 14);
+                (containerRect.width - TilemapManager.SCROLLBAR) : (containerRect.height - TilemapManager.SCROLLBAR);
             const thumbSize = Math.max(30, viewportSize / (viewportSize + scrollableSize) * thumbTrackSize);
             const ratio = scrollableSize / Math.max(1, thumbTrackSize - thumbSize);
             const containerDelta = -delta * ratio;
@@ -1783,7 +1803,7 @@ class TilemapManager {
         // Horizontal scrollbar
         const needsHScroll = horizontalRange > 0;
         if (needsHScroll) {
-            const trackWidth = rect.width - 14;
+            const trackWidth = rect.width - TilemapManager.SCROLLBAR;
             const thumbWidth = Math.max(30, (rect.width / (rect.width + horizontalRange)) * trackWidth);
             const scrollRange = horizontalRange;
             const thumbRange = trackWidth - thumbWidth;
@@ -1799,7 +1819,7 @@ class TilemapManager {
         // Vertical scrollbar
         const needsVScroll = verticalRange > 0;
         if (needsVScroll) {
-            const trackHeight = rect.height - 14;
+            const trackHeight = rect.height - TilemapManager.SCROLLBAR;
             const thumbHeight = Math.max(30, (rect.height / (rect.height + verticalRange)) * trackHeight);
             const scrollRange = verticalRange;
             const thumbRange = trackHeight - thumbHeight;
@@ -4071,12 +4091,18 @@ class TilemapManager {
                 }
             }
 
-            // Set canvas size to map size
+            // Set canvas size to map size. `maxSide` draws a map too large for one canvas smaller (a 1000 x 1000 map
+            // is 48000 pixels a side at 48 a tile, past what a canvas holds, and drew nothing): the scale it drew at
+            // is left on the canvas (`rrScale`) for whoever reads tiles off it.
             const tileSize = this.TILE_SIZE;
-            targetCanvas.width = width * tileSize;
-            targetCanvas.height = height * tileSize;
+            const fullW = width * tileSize, fullH = height * tileSize;
+            const scale = Math.min(1, Number(options.scale) || 1, options.maxSide ? Number(options.maxSide) / Math.max(fullW, fullH) : 1);
+            targetCanvas.width = Math.max(1, Math.round(fullW * scale));
+            targetCanvas.height = Math.max(1, Math.round(fullH * scale));
+            targetCanvas.rrScale = scale;
 
             const ctx = targetCanvas.getContext('2d');
+            if (scale < 1) { ctx.setTransform(scale, 0, 0, scale, 0, 0); ctx.imageSmoothingEnabled = true; }
 
             // Fill with black background
             ctx.fillStyle = '#000000';

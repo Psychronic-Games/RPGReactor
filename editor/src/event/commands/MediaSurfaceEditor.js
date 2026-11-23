@@ -501,7 +501,7 @@ class MediaSurfaceEditor {
         group.style.cssText = 'display:flex;flex-direction:column;gap:4px;min-width:0;color:var(--color-text-muted);font-size:11px;';
         group.appendChild(this._el('span', '', this._t(label)));
         const input = this._el(options.select ? 'select' : 'input', 'vs-input');
-        input.style.cssText = 'width:100%;min-width:0;box-sizing:border-box;padding:6px 7px;border:1px solid var(--color-border-input);border-radius:3px;background:var(--color-bg-input);color:var(--color-text);';
+        input.style.cssText = 'width:100%;min-width:0;box-sizing:border-box;padding:6px 7px;border-radius:3px;';
         if (options.select) {
             for (const [value, text] of options.select) {
                 const option = this._el('option', '', this._t(text));
@@ -603,17 +603,15 @@ class MediaSurfaceEditor {
      * dragging it in the view), and open again next time once opened (kept in this browser's storage).
      */
     _section(parent, title, fold = '') {
+        // The app's card: a lit header with the accent strip at its top edge, the controls inset below it
+        // (styles.css .vs-control-section; its colours were inline, grey on grey, owner 2026-11-22).
         const section = this._el(fold ? 'details' : 'section', 'vs-control-section');
-        section.style.cssText = 'padding:10px;border:1px solid var(--color-border);border-radius:5px;background:var(--color-bg-panel);';
-        const heading = this._el(fold ? 'summary' : 'div', '', this._t(title));
-        heading.style.cssText = 'margin-bottom:8px;color:var(--color-text-strong);font-size:12px;font-weight:700;letter-spacing:.03em;' + (fold ? 'cursor:pointer;' : '');
+        const heading = this._el(fold ? 'summary' : 'div', 'vs-section-head', this._t(title));
         section.appendChild(heading);
         if (fold) {
             const key = 'rr.mediaSurface.open.' + fold;
             try { section.open = typeof localStorage !== 'undefined' && localStorage.getItem(key) === '1'; } catch (_) { section.open = false; }
-            if (!section.open) heading.style.marginBottom = '0';
             this._listen(section, 'toggle', () => {
-                heading.style.marginBottom = section.open ? '8px' : '0';
                 try { localStorage.setItem(key, section.open ? '1' : '0'); } catch (_) { /* kept for this session only */ }
             });
         }
@@ -840,6 +838,9 @@ class MediaSurfaceEditor {
     _buildControls(parent) {
         const identity = this._section(parent, 'Surface');
         const identityGrid = this._grid(identity);
+        // Each field as wide as what it holds (styles.css .vs-identity): in equal grid columns the Target list was
+        // cut to "Fixed Map…" (owner: no truncating where it can be avoided).
+        identityGrid.classList.add('vs-identity');
         this._field(identityGrid, 'Surface ID', 'id', { min: 1, max: 999999, step: 1, integer: true });
         if (this.operation === 'StopVideoSurface') return;
 
@@ -861,13 +862,13 @@ class MediaSurfaceEditor {
             // previews, so the choice is two steps: pick the kind, then
             // browse that folder in the shared picker — playing movies from
             // movies/, picture previews from img/pictures.
-            const movieGroup = this._el('div', 'vs-field');
+            const movieGroup = this._el('div', 'vs-field vs-field-wide');
             movieGroup.style.cssText = 'display:flex;flex-direction:column;gap:4px;grid-column:1/-1;color:var(--color-text-muted);font-size:11px;';
             movieGroup.appendChild(this._el('span', '', this._t('Media file')));
             const mediaRow = this._el('div');
             mediaRow.style.cssText = 'display:flex;gap:6px;align-items:stretch;';
             const kind = this._el('select', 'vs-input vs-media-kind');
-            kind.style.cssText = 'flex:0 0 auto;padding:6px 7px;border:1px solid var(--color-border-input);border-radius:3px;background:var(--color-bg-input);color:var(--color-text);';
+            kind.style.cssText = 'flex:0 0 auto;padding:6px 7px;border-radius:3px;';
             for (const [value, text] of [['video', 'Video'], ['image', 'Image']]) {
                 const option = this._el('option', '', this._t(text));
                 option.value = value;
@@ -876,8 +877,7 @@ class MediaSurfaceEditor {
             kind.value = MediaSurfaceEditor.isImageFile(this.data.movie) ? 'image' : 'video';
             const current = this._el('div', 'vs-media-current');
             current.style.cssText = 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'
-                + 'padding:6px 7px;border:1px solid var(--color-border-input);border-radius:3px;'
-                + 'background:var(--color-bg-input);align-self:center;';
+                + 'padding:6px 7px;border-radius:3px;align-self:center;';
             const missing = () => this.data.movie
                 && !this.movies.some(file => file.relativePath === this.data.movie);
             const syncCurrent = () => {

@@ -1982,6 +1982,8 @@
             }
             if (holder.object) {
                 group.add(holder.object);
+                // Its materials too: the scene that lists one disposes of it as it goes (Reactor3D.listModelMaterial).
+                if (R.moveModelMaterials) R.moveModelMaterials(holder.object, to);
                 // Into the entered map's tiles at once: the first frame of that map is drawn before an update syncs
                 // the models, and the party stood a map's width from the camera for it (2026-11-07).
                 if (shift && (shift.x || shift.y || shift.z)) {

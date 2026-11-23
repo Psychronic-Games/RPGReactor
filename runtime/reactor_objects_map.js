@@ -697,24 +697,29 @@ Game_Map.prototype.autotileType = function(x, y, z) {
 
 /**
  * A cell's passability set on the map itself (`$dataMap.rrPassage`, keys "x,y"):
- * 1 open, 2 blocked, 0 when the map leaves the cell to its tiles. A placed 2D
- * structure writes it (docs/DESIGN-2D-STRUCTURES.md).
+ * 1 open, 2 blocked, 16 + the sides that cannot be crossed (RPG Maker's bits:
+ * 1 down, 2 left, 4 right, 8 up; 17 to 30), 0 when the map leaves the cell to
+ * its tiles. A placed 2D structure writes it (docs/DESIGN-2D-STRUCTURES.md).
  */
 Game_Map.prototype.rrPassageAt = function(x, y) {
     const cells = $dataMap && $dataMap.rrPassage;
     if (!cells) return 0;
     const value = Number(cells[x + "," + y]);
-    return value === 1 || value === 2 ? value : 0;
+    return value === 1 || value === 2 || (value > 16 && value < 31) ? value : 0;
 };
 
 // Walking asks here, before the tiles: a cell the map marks open can be entered and
-// left in every direction, one it marks blocked in none. It is read here and not in
+// left in every direction, one it marks blocked in none, one blocked on some sides
+// in the others. It is read here and not in
 // checkPassage, which the legacy passage rule, a room's bare floor and solid image
 // layers each wrap (some answering without the tiles), so the mark wins over all of
 // them whatever order they load in; boats, ships and landing ask checkPassage and
 // keep to the tiles.
 Game_Map.prototype.isPassable = function(x, y, d) {
     const marked = this.rrPassageAt(x, y);
+    // Blocked on some sides: leaving across one, or entering across it (the mover asks the next cell with the
+    // reverse direction), is refused, as a tile's own direction flags do.
+    if (marked > 16) return ((marked - 16) & (1 << (d / 2 - 1))) === 0;
     if (marked) return marked === 1;
     return this.checkPassage(x, y, (1 << (d / 2 - 1)) & 0x0f);
 };

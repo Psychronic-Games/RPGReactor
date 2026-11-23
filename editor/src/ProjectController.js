@@ -983,26 +983,13 @@ class ProjectController {
 
         // Create search container
         const searchContainer = document.createElement('div');
-        searchContainer.style.cssText = `
-            padding: 8px;
-            background-color: var(--color-bg-list-item);
-            border-bottom: 1px solid var(--color-border);
-        `;
+        searchContainer.className = 'rr-map-search';
 
         const searchInput = document.createElement('input');
         searchInput.id = 'map-search-input';
-        searchInput.type = 'text';
+        searchInput.type = 'search';
+        searchInput.className = 'rr-map-search-input';
         searchInput.placeholder = this._tt('Search maps...');
-        searchInput.style.cssText = `
-            width: 100%;
-            padding: 6px 8px;
-            background-color: var(--color-bg-input-alt);
-            color: var(--color-text);
-            border: 1px solid var(--color-border-input);
-            border-radius: 3px;
-            font-size: 12px;
-            box-sizing: border-box;
-        `;
 
         searchInput.addEventListener('input', (e) => {
             this.filterMaps(e.target.value);
@@ -1041,24 +1028,19 @@ class ProjectController {
             });
         }
 
+        // The app's tabs (.rr-plugin-tab, as the Plugin Manager's and the Character Builder's): the shown one is lit.
+        const show = (on, off) => {
+            on.classList.add('active', 'is-active'); on.setAttribute('aria-selected', 'true');
+            off.classList.remove('active', 'is-active'); off.setAttribute('aria-selected', 'false');
+        };
         mapTreeTab.addEventListener('click', () => {
-            mapTreeTab.classList.add('active');
-            mapTreeTab.style.backgroundColor = 'var(--color-bg-surface)';
-            mapTreeTab.style.color = 'var(--color-text)';
-            quickAccessTab.classList.remove('active');
-            quickAccessTab.style.backgroundColor = 'var(--color-bg-list-item)';
-            quickAccessTab.style.color = 'var(--color-text-muted)';
+            show(mapTreeTab, quickAccessTab);
             mapsList.style.display = 'block';
             quickAccessList.style.display = 'none';
         });
 
         quickAccessTab.addEventListener('click', () => {
-            quickAccessTab.classList.add('active');
-            quickAccessTab.style.backgroundColor = 'var(--color-bg-surface)';
-            quickAccessTab.style.color = 'var(--color-text)';
-            mapTreeTab.classList.remove('active');
-            mapTreeTab.style.backgroundColor = 'var(--color-bg-list-item)';
-            mapTreeTab.style.color = 'var(--color-text-muted)';
+            show(quickAccessTab, mapTreeTab);
             quickAccessList.style.display = 'block';
             mapsList.style.display = 'none';
             this.renderQuickAccessList();
@@ -1098,6 +1080,9 @@ class ProjectController {
             }
         });
     }
+
+    /** One row of a map tree (src/utils/MapTreeRow.js): the Maps panel's and every map picker's. */
+    static mapTreeRow(options) { return RRMapTreeRow(options); }
 
     renderMapsList() {
         this.clearMapDropFeedback();
@@ -1146,42 +1131,21 @@ class ProjectController {
             }
 
             // Build hierarchical tree starting from root (parentId = 0)
-            const buildTree = (parentId, depth = 0) => {
+            const buildTree = (parentId, depth = 0, trail = []) => {
                 const children = childrenByParent.get(parentId) || [];
 
                 children.forEach(map => {
                     if (found && !found.has(map.id)) return;
-                    const mapItem = document.createElement('div');
-                    mapItem.className = 'tree-item';
-                    mapItem.setAttribute('data-map-id', map.id);
-                    mapItem.setAttribute('draggable', 'true');
-                    mapItem.style.paddingLeft = `${8 + depth * 16}px`;
-
                     // Check if this map has children
                     const hasChildren = childrenByParent.has(map.id);
-
-                    // Add expand/collapse icon if has children
-                    if (hasChildren) {
-                        const icon = document.createElement('span');
-                        icon.className = 'tree-icon';
-                        icon.textContent = (map.expanded || found) ? '▼ ' : '► ';
-                        icon.style.cssText = 'cursor: pointer; user-select: none; margin-right: 4px;';
-                        icon.addEventListener('click', (e) => {
-                            e.stopPropagation();
-                            this.toggleMapExpanded(map.id);
-                        });
-                        mapItem.appendChild(icon);
-                    } else {
-                        // Add spacing for alignment
-                        const spacer = document.createElement('span');
-                        spacer.textContent = '   ';
-                        mapItem.appendChild(spacer);
-                    }
-
-                    // Add map name
-                    const nameSpan = document.createElement('span');
-                    nameSpan.textContent = map.name || this._tt('Unnamed Map');
-                    mapItem.appendChild(nameSpan);
+                    const name = map.name || this._tt('Unnamed Map');
+                    const mapItem = ProjectController.mapTreeRow({
+                        map, name, depth, trail,
+                        childCount: hasChildren ? childrenByParent.get(map.id).length : 0,
+                        open: !!(map.expanded || found),
+                        onToggle: () => this.toggleMapExpanded(map.id)
+                    });
+                    mapItem.setAttribute('draggable', 'true');
 
                     // Highlight if this is the currently loaded map
                     if (currentMapId && map.id === currentMapId) {
@@ -1207,7 +1171,7 @@ class ProjectController {
 
                     // Recursively build children if expanded
                     if (hasChildren && (map.expanded || found)) {
-                        buildTree(map.id, depth + 1);
+                        buildTree(map.id, depth + 1, trail.concat(name));
                     }
                 });
             };
@@ -1215,8 +1179,12 @@ class ProjectController {
             // Start building from root level (parentId = 0)
             buildTree(0);
 
-            // Scroll to the selected element to keep it visible
-            if (selectedElement) {
+            // The open map is brought into view when it is a new one (a map opened, the list first drawn). Any other
+            // redraw (a branch opened or closed, a search, a rename) keeps the list where it was: it jumped to the
+            // open map, often the top, at every fold.
+            const newlyOpened = selectedElement && this._mapListShownId !== currentMapId;
+            this._mapListShownId = currentMapId;
+            if (newlyOpened) {
                 // Use setTimeout to ensure DOM has updated
                 setTimeout(() => {
                     selectedElement.scrollIntoView({

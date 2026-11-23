@@ -17,10 +17,31 @@
 
     const DIMENSION = '2d';
     const MARKS = ['X', 'O', '*'];
+    /**
+     * A cell blocked on some sides only: 'd' and RPG Maker's direction bits, the sides that cannot be crossed
+     * (1 down, 2 left, 4 right, 8 up), 'd1' to 'd14'. None is 'O', all four 'X'. Placed, a cell's passability is
+     * 1 open, 2 blocked, or 16 + those bits (the runtime's Game_Map.rrPassageAt).
+     */
+    const EDGE = /^d([1-9]|1[0-4])$/;
+    const isMark = mark => MARKS.includes(mark) || EDGE.test(String(mark));
+    /** The sides a mark blocks (0 to 15); null for no mark. */
+    function markBits(mark) {
+        if (mark === 'X') return 15;
+        if (mark === 'O' || mark === '*') return 0;
+        const m = EDGE.exec(String(mark || ''));
+        return m ? Number(m[1]) : null;
+    }
+    /** The mark for these blocked sides. */
+    function edgeMark(bits) {
+        const value = Number(bits) & 15;
+        return value === 0 ? 'O' : value === 15 ? 'X' : 'd' + value;
+    }
+    /** A placed cell's value for a mark or a tile's flags (1 open, 2 blocked, 16 + sides). */
+    const cellValue = bits => bits === 0 ? 1 : bits === 15 ? 2 : 16 + bits;
+    const isCellValue = value => value === 1 || value === 2 || (value > 16 && value < 31);
     // Baked at 48 px a tile into two pictures: 64 tiles is 3072 px a side (about 38 MB a picture while it is drawn).
     const SIZE_MIN = 1, SIZE_MAX = 64;
     const PICTURE_FOLDER = 'structures';
-    const TILE = 48;
     const LAYER_KINDS = ['tiles', 'picture'];
 
     const int = (value, fallback, min, max) => {
@@ -67,7 +88,7 @@
         const passage = {};
         for (const [cell, mark] of Object.entries(plain(plan.passage) ? plan.passage : {})) {
             const at = cellOf(cell);
-            if (at && at[0] < W && at[1] < H && MARKS.includes(mark)) passage[key(at[0], at[1])] = mark;
+            if (at && at[0] < W && at[1] < H && isMark(mark)) passage[key(at[0], at[1])] = mark;
         }
         plan.passage = passage;
         plan.surfaces = (Array.isArray(plan.surfaces) ? plan.surfaces : []).filter(plain).map(row => Object.assign({}, row));
@@ -76,7 +97,7 @@
             const cells = {};
             for (const [cell, value] of Object.entries(plain(baked.cells) ? baked.cells : {})) {
                 const at = cellOf(cell);
-                if (at && (value === 1 || value === 2)) cells[key(at[0], at[1])] = value;
+                if (at && isCellValue(value)) cells[key(at[0], at[1])] = value;
             }
             const name = value => (typeof value === 'string' && /^[\w .()-]+(\/[\w .()-]+)*$/.test(value) && !value.includes('..') ? value : '');
             plan.baked = { below: name(baked.below), over: name(baked.over), cells };
@@ -135,7 +156,8 @@
             if (!tileId) continue;
             const flag = (flags && flags[tileId]) || 0;
             if (flag & 0x10) continue;
-            return (flag & 0x0f) === 0x0f ? 2 : 1;
+            // A tile blocked on some sides keeps them (it counted as open).
+            return cellValue(flag & 0x0f);
         }
         return 0;
     }
@@ -147,7 +169,8 @@
     }
 
     /**
-     * Every cell's passability as a placement copies it ({ "x,y": 1 | 2 }): its mark (X blocked; O and * open), else
+     * Every cell's passability as a placement copies it ({ "x,y": 1 | 2 | 16 + sides }): its mark (X blocked; O and *
+     * open; dN blocked on the sides N names), else
      * its tiles (the top tile layer with a tile that decides), else nothing (the map's own stays). `flagsOf(tilesetId)`
      * gives a tileset's flags. A hidden layer counts: hidden is for painting, not for the game.
      */
@@ -156,7 +179,7 @@
         const tileLayers = plan.layers.filter(layer => layer.kind === 'tiles').reverse();
         for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
             const mark = plan.passage[key(x, y)];
-            if (mark) { out[key(x, y)] = mark === 'X' ? 2 : 1; continue; }
+            if (mark) { out[key(x, y)] = cellValue(markBits(mark) || 0); continue; }
             for (const layer of tileLayers) {
                 const value = tileCell(layer, W, H, x, y, flagsOf ? flagsOf(layer.tilesetId) : null);
                 if (value) { out[key(x, y)] = value; break; }
@@ -240,8 +263,10 @@
             for (const surface of plan.surfaces || []) {
                 const copy = JSON.parse(JSON.stringify(surface));
                 copy.id = nextSurface++;
-                if (Number.isFinite(Number(copy.x))) copy.x = Number(copy.x) + X * TILE;
-                if (Number.isFinite(Number(copy.y))) copy.y = Number(copy.y) + Y * TILE;
+                // A map surface's x and y are tiles (MediaSurfacePreviewManager._anchor2d): moved by the placement's
+                // tile. They were moved by its pixels, 48 times too far, and a placed structure's video stood off the map.
+                if (Number.isFinite(Number(copy.x))) copy.x = Number(copy.x) + X;
+                if (Number.isFinite(Number(copy.y))) copy.y = Number(copy.y) + Y;
                 copy.structure2d = row.id;
                 surfaces.push(copy);
             }
@@ -255,7 +280,7 @@
         return JSON.stringify([mapData.rrImageLayers || null, mapData.rrPassage || null, (mapData.reactor3d && mapData.reactor3d.mediaSurfaces) || null]) !== before;
     }
 
-    const api = { DIMENSION, MARKS, SIZE_MIN, SIZE_MAX, PICTURE_FOLDER, is2D, emptyTiles, normalize, trim, newPlan, resize, tileCell, tileDrawn, cells, pictureNames, add, remove, at, apply, key, cellOf };
+    const api = { EDGE, markBits, edgeMark, cellValue, DIMENSION, MARKS, SIZE_MIN, SIZE_MAX, PICTURE_FOLDER, is2D, emptyTiles, normalize, trim, newPlan, resize, tileCell, tileDrawn, cells, pictureNames, add, remove, at, apply, key, cellOf };
     root.RRStructure2D = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

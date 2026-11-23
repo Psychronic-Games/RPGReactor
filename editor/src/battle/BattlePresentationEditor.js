@@ -405,8 +405,10 @@ class BattlePresentationEditor {
             details.append(this.element('p','rr-battle-help','Troop events and the battle HUD remain part of this battle. Room positions are separate from battleback positions.'));
         };draw();return panel;
     }
+    /** The open project: the Database's copy, else the editor's (the map picker's 3D view asks before the Database is opened). */
+    project() { return this.parent.currentProject || window.reactor?.projectController?.getCurrentProject?.() || null; }
     async readMap(id) {
-        if(!id)return null;const fs=require('fs'),path=require('path'),dir=path.join(this.parent.currentProject.path,'data');
+        if(!id)return null;const fs=require('fs'),path=require('path'),dir=path.join(this.project().path,'data');
         const map=RRJson.parse(fs.readFileSync(path.join(dir,'Map'+String(id).padStart(3,'0')+'.json')));map.id=id;
         const file=path.join(dir,'Map'+String(id).padStart(3,'0')+'.r3d.json');map.reactor3d=fs.existsSync(file)?RRJson.parse(fs.readFileSync(file)):{};return map;
     }
@@ -417,7 +419,7 @@ class BattlePresentationEditor {
             if(host?.mode==='web')await pc.mapEditor3D.injectScriptUrl(host.assetUrl(host.projectRoot+'/js/reactor_battle_room.js'),'reactor_battle_room.js');
             else {const file=require('path').join(window.reactor.projectManager.getRuntimePath(),'reactor_battle_room.js');await pc.mapEditor3D.injectScript(require('fs').readFileSync(file,'utf8'),file);}
         }
-        const project=this.parent.currentProject,editor=this.parent.reactor3dEditor,fs=require('fs'),path=require('path');
+        const project=this.project(),editor=this.parent.reactor3dEditor,fs=require('fs'),path=require('path');
         editor.projectController={getCurrentProject:()=>project,mapEditor3D:pc.mapEditor3D};
         return {
             tileSize:this.db.getSystem()?.tileSize||48,screenHeight:this.db.getSystem()?.advanced?.screenHeight||624,

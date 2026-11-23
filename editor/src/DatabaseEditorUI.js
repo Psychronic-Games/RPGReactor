@@ -3345,14 +3345,17 @@ class DatabaseEditorUI {
             previewEl.innerHTML = '';
         };
 
+        let restoreWindow = null;
         const close = () => {
             if (closed) return;
             closed = true;
             modal.style.display = 'none';
             clearPreview();
             importButton?.remove();
+            restoreWindow?.();
         };
         this._closeImagePicker = close;
+        restoreWindow = DatabaseEditorUI.growPickerWindow(modal);
         if (typeof options.onImport === 'function') {
             importButton = document.createElement('button');
             importButton.className = 'rr-btn-secondary';
@@ -3400,10 +3403,12 @@ class DatabaseEditorUI {
                 }
 
                 const imageFrame = document.createElement('div');
-                imageFrame.style.cssText = 'background: #1a1d1e; border: 2px solid var(--color-border); border-radius: 8px; padding: 16px; max-width: 100%; overflow: auto;';
+                imageFrame.style.cssText = 'background: #1a1d1e; border: 2px solid var(--color-border); border-radius: 8px; padding: 16px; max-width: 100%; overflow: auto; box-sizing: border-box;';
+                const videoFile = options.mediaType === 'video' && /\.(?:webm|mp4)$/i.test(String(file || ''));
+                if (videoFile) { imageFrame.style.width = '100%'; imageFrame.style.padding = '8px'; }
 
                 const imageWrap = document.createElement('div');
-                imageWrap.style.cssText = 'position: relative; display: inline-block; line-height: 0;';
+                imageWrap.style.cssText = videoFile ? 'position: relative; display: block; width: 100%; line-height: 0;' : 'position: relative; display: inline-block; line-height: 0;';
 
                 // A video file previews as a playing video, not a dead <img>.
                 // Sheet selection never applies to videos, so the overlay
@@ -3419,7 +3424,8 @@ class DatabaseEditorUI {
                     img.autoplay = true;
                     img.playsInline = true;
                     img.controls = true;
-                    img.style.cssText = 'max-width: 100%; max-height: 420px; display: block; background: #000;';
+                    // As large as the picker allows: a small window grows while the picker is open (below).
+                    img.style.cssText = 'width: 100%; max-width: 100%; max-height: min(62vh, 720px); display: block; background: #000; border-radius: 4px;';
                 } else {
                     img.style.cssText = 'image-rendering: pixelated; image-rendering: -moz-crisp-edges; image-rendering: crisp-edges; max-width: 100%; display: block;';
                 }
@@ -3502,7 +3508,7 @@ class DatabaseEditorUI {
                 }
 
                 const buttonRow = document.createElement('div');
-                buttonRow.style.cssText = 'display: flex; gap: 8px; align-items: center;';
+                buttonRow.style.cssText = 'display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; align-items: center; max-width: 100%;';
 
                 const selectBtn = document.createElement('button');
                 selectBtn.id = 'image-picker-select-btn';
@@ -3568,6 +3574,31 @@ class DatabaseEditorUI {
         closeBtn.onclick = close;
         // Escape closes the picker, wherever the focus was left, and not the dialog it was opened from.
         window.RRKeyboardNavigation?.modal(modal, { onEscape: close });
+    }
+
+    /**
+     * The picker opened in a small popped-out window (a Map Media Surface editor's) grows that window for as long as
+     * it is open, so its list, its preview (a playing video) and its buttons fit; the window's size and place come
+     * back when it closes. The main window, and a window large enough already, are left as they are.
+     */
+    static growPickerWindow(modal, want = [1100, 760]) {
+        const host = modal?.ownerDocument?.defaultView;
+        if (!host || host === window || typeof nw === 'undefined' || !nw.Window?.get) return null;
+        if (host.innerWidth >= want[0] && host.innerHeight >= want[1]) return null;
+        try {
+            const win = nw.Window.get(host), screen = host.screen || {};
+            const before = { x: win.x, y: win.y, width: win.width, height: win.height };
+            const left = screen.availLeft || 0, top = screen.availTop || 0;
+            const maxW = screen.availWidth || want[0], maxH = screen.availHeight || want[1];
+            const width = Math.min(maxW, Math.max(before.width, want[0] + (host.outerWidth - host.innerWidth)));
+            const height = Math.min(maxH, Math.max(before.height, want[1] + (host.outerHeight - host.innerHeight)));
+            const x = Math.max(left, Math.min(before.x, left + maxW - width)), y = Math.max(top, Math.min(before.y, top + maxH - height));
+            win.moveTo(x, y);
+            win.resizeTo(width, height);
+            return () => { try { win.resizeTo(before.width, before.height); win.moveTo(before.x, before.y); } catch (error) { /* closed meanwhile */ } };
+        } catch (error) {
+            return null;
+        }
     }
 
     static imageBrowser(projectController) {

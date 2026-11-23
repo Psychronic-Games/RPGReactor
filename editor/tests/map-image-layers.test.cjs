@@ -645,7 +645,7 @@ test('the passage overlay is told the tiles a Same as Characters picture blocks,
     assert.equal(haven.manager.solidTest(map), null);
     const flat = read('src/TilemapManager.js');
     assert.match(flat, /const imageSolid = [^\n]*mapImageLayersManager\?\.solidTest\(map\)/);
-    assert.match(flat, /const blocked = marked === 2 \|\| \(imageSolid && imageSolid\(x, y\)\) \? 0x0f\s*: TilemapManager\.tilePassage\(/);
+    assert.match(flat, /const blocked = (?:marked > 16 && marked < 31 \? marked - 16 : )?marked === 2 \|\| \(imageSolid && imageSolid\(x, y\)\) \? 0x0f\s*: TilemapManager\.tilePassage\(/);
 });
 
 test('a repeating layer drifts in the editor only while the tool is open, and only when a shown layer drifts', () => {

@@ -6134,7 +6134,7 @@ Reactor3D.Worn = {
             mat.__reactorModel = true;
             mat.fog = false;
             if (mat.color && !mat.userData.baseColor) mat.userData.baseColor = mat.color.clone();
-            if (scene && scene._materials && scene._materials.indexOf(mat) < 0) scene._materials.push(mat);
+            if (scene && scene._materials) Reactor3D.listModelMaterial(scene, mat);
             // In the first piece's place among the copy's children, so the model's own order is kept.
             worn.add(one);
             worn.children.splice(worn.children.indexOf(one), 1);
@@ -6207,7 +6207,7 @@ Reactor3D.Worn = {
                 mat.fog = false;
                 if (mat.color && !mat.userData.baseColor) mat.userData.baseColor = mat.color.clone();
                 if (typeof Reactor3D.litMaterial === "function") Reactor3D.litMaterial(mat);
-                if (scene && scene._materials && scene._materials.indexOf(mat) < 0) scene._materials.push(mat);
+                if (scene && scene._materials) Reactor3D.listModelMaterial(scene, mat);
             }
         });
         // A Builder prop's metal shines as it did there (no Surface of its own on a worn prop).
@@ -6312,7 +6312,7 @@ Reactor3D.Worn = {
             for(const mat of (Array.isArray(material)?material:[material])) {
                 mat.__reactorModel=true;mat.fog=false;
                 if(typeof Reactor3D.litMaterial==="function")Reactor3D.litMaterial(mat);
-                if(scene&&scene._materials&&scene._materials.indexOf(mat)<0)scene._materials.push(mat);
+                if(scene&&scene._materials)Reactor3D.listModelMaterial(scene,mat);
             }
         }
         Reactor3D.presetSkinnedBounds(worn);
@@ -8956,7 +8956,7 @@ Reactor3D.MapHeld = {
                 mat.__reactorModel = true; mat.fog = false;
                 if (mat.color && !mat.userData.baseColor) mat.userData.baseColor = mat.color.clone();
                 if (Reactor3D.litMaterial) Reactor3D.litMaterial(mat);
-                if (scene._materials && scene._materials.indexOf(mat) < 0) scene._materials.push(mat);
+                if (scene._materials) Reactor3D.listModelMaterial(scene, mat);
             }
         });
         scene._ambientLevel = undefined;
@@ -13770,10 +13770,36 @@ Reactor3D.MapScene.prototype.adoptModelMaterials = function(object) {
             // Whatever loader or clone it came through, a model
             // standing on a lit map takes the lights.
             Reactor3D.litMaterial(mat);
-            if (this._materials.indexOf(mat) < 0) this._materials.push(mat);
+            Reactor3D.listModelMaterial(this, mat);
         }
     });
     this._ambientLevel = undefined;
+};
+
+/**
+ * A model's material on a scene's list, and on that scene's only: the scene that lists a material disposes of it as
+ * it goes, so a model carried to another scene (the party over a border, up a ladder) takes its materials with it
+ * (`Reactor3D.Neighbors.carryParty`). Left on the list of the Reactor room a new game starts in, the party's were
+ * disposed with that room when the map past the High Lake's border was entered after the climb, and the party was not
+ * drawn until their programs were built again, a few frames, one member after another (owner, 2026-11-22).
+ */
+Reactor3D.listModelMaterial = function(scene, material) {
+    if (!scene || !material || !scene._materials) return;
+    const before = material.__rrListedIn;
+    if (before && before !== scene && before._materials) {
+        const at = before._materials.indexOf(material);
+        if (at >= 0) before._materials.splice(at, 1);
+    }
+    if (scene._materials.indexOf(material) < 0) scene._materials.push(material);
+    try { Object.defineProperty(material, "__rrListedIn", { value: scene, writable: true, configurable: true, enumerable: false }); } catch (error) { material.__rrListedIn = scene; }
+};
+
+/** Every material of a model, moved to `scene`'s list (Reactor3D.listModelMaterial). */
+Reactor3D.moveModelMaterials = function(object, scene) {
+    if (!object || !scene || !scene._materials) return;
+    object.traverse(child => {
+        for (const material of [].concat(child.material || [])) if (material) Reactor3D.listModelMaterial(scene, material);
+    });
 };
 
 /** A character model going for good: what its copy holds on the GPU goes with it (the renderer outlives map scenes). */

@@ -29,14 +29,17 @@ Each cell's passability is worked out at the save: **X** blocked, **O** and **\*
 
 ## The phantom map
 
-The plot is a 2D map of the structure's size, never saved as a map. A **Layers** panel beside it lists the structure's layers:
+The plot is a 2D map of the structure's size, never saved as a map. While it is open, the sidebar's map list becomes the structure's parts (its layers, top first, then its videos and images), the map's events go, and the map's own tools that the structure would not keep (Build, Image Layers, events, terrain, playtest) are dimmed and refused with a note (`main.workshopRefusal`).
 
 - The layer being painted is the plot's own tiles, with its tileset in the palette. The other layers show as pictures under or over it.
-- **+ Tile layer** uses the tileset chosen above it; **+ Picture layer** adds a picture from `img/pictures`, placed by its X and Y (pixels from the plot's corner) and opacity.
-- A layer can be moved up and down, hidden while painting, renamed and removed.
-- **Passability** turns the plot's clicks into marks: **X**, **O**, **\***, or none. The marks show over the plot as the Passage view does.
+- **+ Tiles** opens the tileset picker (`TilesetPicker.js`: every sheet of the tileset selected) and adds a tile layer with the one chosen; **+ Picture** opens the picture picker (`img/pictures`); **+ Video** opens the video picker and lays the one chosen on the plot. A click on a video takes it up with its handles (move, resize, warp), its settings in the panel; every change is kept as it is made, and a click away puts it down.
+- The panel beside the plot edits the chosen layer: its name, its tileset (chosen again from the tileset picker, the plot shown with the new one at once), or its picture (chosen again from the picker), X and Y (pixels from the plot's corner) and opacity. The list orders the layers: a row is dragged to a new place, or moved with its ▲ ▼; its ✕ removes it and its eye hides it while painting.
+- **Move Everything** shifts the whole structure a tile in any direction: every tile layer, every picture, the marks and the videos (asking first when part of it would leave the plot).
+- **Passability** turns the plot's clicks into marks: **X**, **O**, **\***, **Sides** (a click near a cell's edge blocks that side, again opens it; stored as dN, RPG Maker's side bits), or none. Placed, a cell is 1 open, 2 blocked or 16 + its blocked sides, and a step across a blocked side is refused either way. The marks show over the plot as the Passage view does.
 
 ## On a map
+
+A 2D structure is placed from the tile palette's **S** tab (or Database › Structures › Use on the map): a click on its card, then a click on the map for each copy; a right-click on a placed one removes it. With no card in hand, the S tab selects placed structures on the map: a drag moves one, Delete removes it, a right-click opens its menu (Duplicate, Edit Structure, Remove), a double-click opens it in the workshop.
 
 **Use on the map** (Database › Structures) places it: a preview follows the pointer, and a click puts it with its top-left corner on that tile. A placed structure is an object of the map's own, `$dataMap.rrStructures2D = [{ id, file, at: [x, y] }]`: a right-click on it while placing removes it as one, and one undo takes a placement or a removal back.
 

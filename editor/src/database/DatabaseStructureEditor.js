@@ -516,7 +516,7 @@ class DatabaseStructureEditor {
         this._dressing = null;
         detailEl.innerHTML = `
             <div class="rr-structures" style="display:flex;flex-direction:column;height:100%;min-height:0;font-size:12px;">
-                <div class="rr-structures-bar" style="display:flex;align-items:center;gap:14px;padding:6px 10px;border-bottom:1px solid var(--color-border);flex-wrap:wrap;"></div>
+                <div class="rr-structures-bar" style="display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--color-border);flex-wrap:wrap;"></div>
                 <div class="rr-structures-body">
                     <div class="rr-structures-side rr-accent-scrollbar"></div>
                     <div class="rr-structures-planpane">
@@ -612,17 +612,19 @@ class DatabaseStructureEditor {
         const tools = BuildHotbar.slotsHtml(DatabaseStructureEditor.PAINT_TOOLS.map(tool => ({ id: tool, label: tt(toolNames[tool]), icon: BuildHotbar.icon(toolIcons[tool]), className: 'rr-structures-tool' })), this._paint.tool);
         const dirNames = { north: 'North', east: 'East', south: 'South', west: 'West' };
         side.innerHTML = `
-            <div class="rr-structures-side-title">${rrEscapeHtml(tt('Floors'))}</div>
+            <div class="lit-section-header rr-structures-side-title">${rrEscapeHtml(tt('Floors'))}</div>
             <div class="rr-structures-floorlist">${floors.join('')}</div>
             <button type="button" class="rr-btn-secondary rr-structures-addfloor">${rrEscapeHtml(tt('+ Add floor'))}</button>
-            <label class="rr-structures-side-field"><span>${rrEscapeHtml(tt('Roof'))}</span><select class="database-field-value rr-structures-roof-style">${[['gable', 'Gable'], ['flat', 'Flat'], ['shed', 'Slanted']].map(([v, l]) => `<option value="${v}"${v === roofStyle ? ' selected' : ''}>${rrEscapeHtml(tt(l))}</option>`).join('')}</select></label>
+            <div class="lit-section-header rr-structures-side-title">${rrEscapeHtml(tt('Roof'))}</div>
+            <label class="rr-structures-side-field"><span>${rrEscapeHtml(tt('Style'))}</span><select class="database-field-value rr-structures-roof-style">${[['gable', 'Gable'], ['flat', 'Flat'], ['shed', 'Slanted']].map(([v, l]) => `<option value="${v}"${v === roofStyle ? ' selected' : ''}>${rrEscapeHtml(tt(l))}</option>`).join('')}</select></label>
             <label class="rr-structures-side-field"${roofStyle === 'shed' ? '' : ' hidden'}><span>${rrEscapeHtml(tt('Rises'))}</span><select class="database-field-value rr-structures-roof-high">${Object.keys(dirNames).map(d => `<option value="${d}"${d === ((plan.roof && plan.roof.high) || 'north') ? ' selected' : ''}>${rrEscapeHtml(tt(dirNames[d]))}</option>`).join('')}</select></label>
             <label class="rr-structures-side-field"${roofStyle === 'flat' ? ' hidden' : ''}><span>${rrEscapeHtml(tt('Roof pitch (rows)'))}</span><input type="number" class="database-field-value rr-structures-roof-pitch" min="${roofStyle === 'shed' ? 1 : 0}" max="20" step="1" value="${roofPitch}"></label>
             ${this._materialTile('roof', tt('Roof'))}
             <button type="button" class="rr-btn-secondary rr-structures-roof" title="${rrEscapeHtml(tt('Lay the roof again over the top floor.'))}">${rrEscapeHtml(tt('Rebuild roof'))}</button>
-            <div class="rr-structures-side-title">${rrEscapeHtml(tt('Tools'))}</div>
+            <div class="lit-section-header rr-structures-side-title">${rrEscapeHtml(tt('Tools'))}</div>
             <div class="rr-build-row rr-structures-toolgrid">${tools}</div>
             ${this._sel?.length ? `<div class="rr-structures-selbar"><span>${rrEscapeHtml(this._selLabel())}</span>${this._sel.some(p => p.kind === 'stair') ? `<button type="button" class="rr-btn-secondary rr-structures-selturn">${rrEscapeHtml(tt('Turn'))}</button>` : ''}<button type="button" class="rr-btn-secondary rr-structures-seldelete">${rrEscapeHtml(tt('Delete'))}</button></div>` : ''}
+            <div class="lit-section-header rr-structures-side-title">${rrEscapeHtml(tt('Materials'))}</div>
             <div class="rr-structures-side-field"><span>${rrEscapeHtml(tt('Walls'))}</span>${this._materialTile('wall', tt('Walls'))}</div>
             <div class="rr-structures-side-field"><span>${rrEscapeHtml(tt('Floors'))}</span>${this._materialTile('floor', tt('Floors'))}</div>
             <label class="rr-structures-side-field"${this._paint.tool === 'stairs' ? '' : ' hidden'}><span>${rrEscapeHtml(tt('Stairs climb'))}</span><select class="database-field-value rr-structures-dir">${Object.keys(dirNames).map(d => `<option value="${d}"${d === this._paint.dir ? ' selected' : ''}>${rrEscapeHtml(tt(dirNames[d]))}</option>`).join('')}</select></label>`;
@@ -1388,9 +1390,9 @@ class DatabaseStructureEditor {
             ${this._field(tt('Name'), `<input type="text" class="database-field-value rr-structures-name" value="${rrEscapeHtml(plan.name)}" style="width:150px;">`)}
             ${this._field(tt('Plot'), `${this._numberHtml('rr-structures-size', plan.size[0], `data-i="0" min="${DatabaseStructureEditor.SIZE_MIN}" max="${DatabaseStructureEditor.SIZE_MAX}" title="${rrEscapeHtml(tt('Width in tiles'))}"`)}<span>×</span>${this._numberHtml('rr-structures-size', plan.size[1], `data-i="1" min="${DatabaseStructureEditor.SIZE_MIN}" max="${DatabaseStructureEditor.SIZE_MAX}" title="${rrEscapeHtml(tt('Depth in tiles'))}"`)}`)}
             ${this._field(tt('Floors'), this._numberHtml('rr-structures-height', this.floorsApi() ? this._floorCount(plan) : plan.height, 'min="1" max="24"'))}
-            ${typeof RRStructure2D !== 'undefined' && DatabaseStructureEditor.isEmpty(plan) ? `<button type="button" class="rr-btn-secondary rr-structures-to2d" title="${rrEscapeHtml(tt('Make this empty structure a 2D one: tiles, pictures and media surfaces, for 2D maps'))}">${tt('Make it 2D')}</button>` : ''}
-            <button type="button" class="rr-button-primary rr-structures-build" style="margin-left:auto;">${tt('Build')}</button>
-            <button type="button" class="rr-btn-secondary rr-structures-use">${tt('Use on the map')}</button>`;
+            ${typeof RRStructure2D !== 'undefined' ? `<label class="rr-structures-3d" title="${rrEscapeHtml(tt('On: a 3D structure, built of pieces. Off: a 2D one, of tiles, pictures and media surfaces, for 2D maps.'))}"><input type="checkbox" class="rr-structures-3d-check" checked><span>3D</span></label>` : ''}
+            <button type="button" class="rr-button-primary rr-structures-build rr-btn-with-icon" style="margin-left:auto;"><svg class="rr-btn-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 20 13.4 10.6" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/><path d="M13 4.2 19.8 11 17 13.8 10.2 7Z" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg><span>${tt('Build')}</span></button>
+            <button type="button" class="rr-btn-secondary rr-structures-use rr-btn-with-icon"><svg class="rr-btn-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 21.5s-6.5-6.2-6.5-11.2a6.5 6.5 0 0 1 13 0c0 5-6.5 11.2-6.5 11.2Z" fill="currentColor"/><circle cx="12" cy="10.3" r="2.4" fill="var(--rr-btn-icon-hole, #000)"/></svg><span>${tt('Use on the map')}</span></button>`;
         bar.querySelector('.rr-structures-name').addEventListener('input', event => this.setName(event.target.value));
         for (const input of bar.querySelectorAll('.rr-structures-size')) {
             // The plot never shrinks past what is built on it: those pieces could not be reached again.
@@ -1412,7 +1414,9 @@ class DatabaseStructureEditor {
             if (workshop && this.current) { this.nameIfNew(); workshop.open(this.current.entry); }
         });
         bar.querySelector('.rr-structures-use').addEventListener('click', () => this.useOnMap());
-        bar.querySelector('.rr-structures-to2d')?.addEventListener('click', () => {
+        bar.querySelector('.rr-structures-3d-check')?.addEventListener('change', async event => {
+            // Off: a 2D structure. What is built in 3D does not carry over, so a built one asks first.
+            if (!DatabaseStructureEditor.isEmpty(plan) && !await RRDialog.confirm(this._t('Make this a 2D structure? What is built in 3D is cleared.'), { title: this._t('Structures'), ok: this._t('Make it 2D'), danger: true })) { event.target.checked = true; return; }
             // The tileset of the map open in the editor, else the first: the tile layer it starts with.
             const tilesetId = window.reactor?.tilemapManager?.currentMap?.tilesetId || this.databaseManager?.getTilesets?.()?.find(Boolean)?.id || 1;
             const entry = this.current.entry, size = plan.size;

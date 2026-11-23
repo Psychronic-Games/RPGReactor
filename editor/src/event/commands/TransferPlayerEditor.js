@@ -22,8 +22,9 @@ class TransferPlayerEditor {
      * step with the art on a 32-pixel project, and made a click land on the
      * wrong tile.
      */
+    /** A tile's size in the preview's pixels: smaller than the map's own for a map too large to draw whole (`_previewScale`). */
     tilePixels() {
-        return this.projectController?.tilemapManager?.TILE_SIZE || 48;
+        return (this.projectController?.tilemapManager?.TILE_SIZE || 48) * (this._previewScale || 1);
     }
 
     /**
@@ -369,15 +370,16 @@ class TransferPlayerEditor {
         `;
 
         const container = document.createElement('div');
-        container.className = 'rr-modal';
-        container.style.cssText = `width: min(1400px, calc(100vw - 24px)); max-height: 95vh;`;
+        container.className = 'rr-modal rr-map-picker';
+        // A height of its own: sized by what it held, the map's view shrank to a strip (and the 3D view with it).
+        container.style.cssText = `width: min(1400px, calc(100vw - 24px)); height: min(92vh, 980px); max-height: 95vh; display: flex; flex-direction: column;`;
 
         // Header
         const header = document.createElement('div');
         header.className = 'rr-modal-header';
         header.innerHTML = `
             <div class="rr-modal-title">${options.title || tt('Select Map & Position')}</div>
-            <button class="close-picker" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer;">×</button>
+            <button class="close-picker rr-modal-close" aria-label="${tt('Close')}">×</button>
         `;
 
         // Content area - split into map tree (left) and preview (right)
@@ -385,6 +387,7 @@ class TransferPlayerEditor {
         content.style.cssText = `
             display: flex;
             flex: 1;
+            min-height: 0;
             overflow: hidden;
         `;
 
@@ -401,59 +404,26 @@ class TransferPlayerEditor {
 
         // Zoom controls
         const zoomControls = document.createElement('div');
-        zoomControls.style.cssText = `
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px;
-            background-color: var(--color-bg-list-item);
-            border: 1px solid var(--color-border);
-            border-radius: 3px;
-        `;
+        zoomControls.className = 'rr-map-picker-bar';
 
         let zoomLevel = 1.0;
 
         const zoomOutBtn = document.createElement('button');
         zoomOutBtn.textContent = '−';
-        zoomOutBtn.style.cssText = `
-            padding: 4px 12px;
-            background-color: var(--color-bg-panel);
-            color: var(--color-text);
-            border: 1px solid var(--color-border-input);
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: bold;
-        `;
+        zoomOutBtn.className = 'rr-btn-chip rr-map-picker-zoom';
 
         const zoomLabel = document.createElement('span');
         zoomLabel.textContent = '100%';
-        zoomLabel.style.cssText = 'color: var(--color-text); font-size: 12px; min-width: 50px; text-align: center;';
+        zoomLabel.className = 'rr-map-picker-zoom-value';
 
         const zoomInBtn = document.createElement('button');
         zoomInBtn.textContent = '+';
-        zoomInBtn.style.cssText = `
-            padding: 4px 12px;
-            background-color: var(--color-bg-panel);
-            color: var(--color-text);
-            border: 1px solid var(--color-border-input);
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: bold;
-        `;
+        zoomInBtn.className = 'rr-btn-chip rr-map-picker-zoom';
 
         const zoomResetBtn = document.createElement('button');
-        zoomResetBtn.textContent = tt('Reset');
-        zoomResetBtn.style.cssText = `
-            padding: 4px 12px;
-            background-color: var(--color-bg-panel);
-            color: var(--color-text);
-            border: 1px solid var(--color-border-input);
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 12px;
-        `;
+        zoomResetBtn.textContent = tt('Fit');
+        zoomResetBtn.title = tt('The whole map in view');
+        zoomResetBtn.className = 'rr-btn-chip rr-map-picker-zoom';
 
         zoomControls.appendChild(zoomOutBtn);
         zoomControls.appendChild(zoomLabel);
@@ -483,6 +453,7 @@ class TransferPlayerEditor {
 
         // Map preview container with scroll
         const previewContainer = document.createElement('div');
+        previewContainer.className = 'rr-accent-scrollbar';
         previewContainer.style.cssText = `
             flex: 1;
             min-height: 0;
@@ -492,8 +463,6 @@ class TransferPlayerEditor {
             border: 1px solid var(--color-border);
             border-radius: 3px;
             position: relative;
-            scrollbar-width: thin;
-            scrollbar-color: var(--color-border-input) var(--color-bg-input);
         `;
 
         // Coordinates display: one line in the view's upper right corner, over the map. Its margins add up to its
@@ -552,23 +521,51 @@ class TransferPlayerEditor {
         // The zoom at which the whole map is in view (1 for a map that fits as it is), and the map last shown whole.
         let fitLevel = 1, fittedMap = 0;
         // Zoomed, the chosen tile stays in the middle of the view.
+        // Zoomed in until a tile is 96 pixels across, however small a large map was drawn.
+        const maxZoom = () => Math.max(3, 96 / this.tilePixels());
         zoomInBtn.addEventListener('click', () => {
-            zoomLevel = Math.min(zoomLevel < 0.25 ? 0.25 : zoomLevel + 0.25, 3.0);
+            zoomLevel = Math.min(zoomLevel < 0.25 ? 0.25 : zoomLevel * 1.25, maxZoom());
             updateZoom();
             scrollToSelection();
         });
 
         zoomOutBtn.addEventListener('click', () => {
-            zoomLevel = Math.max(zoomLevel - 0.25, Math.min(0.25, fitLevel));
+            zoomLevel = Math.max(zoomLevel / 1.25, Math.min(0.25, fitLevel));
             updateZoom();
             scrollToSelection();
         });
 
         zoomResetBtn.addEventListener('click', () => {
-            zoomLevel = 1.0;
+            zoomLevel = fitLevel;
             updateZoom();
             scrollToSelection();
         });
+
+        // The wheel zooms about the pointer, as on the map; a right- or middle-drag moves the view.
+        previewContainer.addEventListener('wheel', event => {
+            if (!mapCanvas.width) return;
+            event.preventDefault();
+            const art = mapCanvas.getBoundingClientRect();
+            const u = (event.clientX - art.left) / Math.max(1, art.width), v = (event.clientY - art.top) / Math.max(1, art.height);
+            zoomLevel = Math.max(Math.min(0.25, fitLevel), Math.min(maxZoom(), zoomLevel * (event.deltaY > 0 ? 1 / 1.15 : 1.15)));
+            updateZoom();
+            const after = mapCanvas.getBoundingClientRect();
+            previewContainer.scrollLeft += (after.left + u * after.width) - event.clientX;
+            previewContainer.scrollTop += (after.top + v * after.height) - event.clientY;
+        }, { passive: false });
+        let pan = null;
+        previewContainer.addEventListener('mousedown', event => {
+            if (event.button !== 1 && event.button !== 2) return;
+            event.preventDefault();
+            pan = { x: event.clientX, y: event.clientY, left: previewContainer.scrollLeft, top: previewContainer.scrollTop };
+            previewContainer.style.cursor = 'grabbing';
+        });
+        previewContainer.addEventListener('contextmenu', event => event.preventDefault());
+        const panMove = event => { if (!pan) return; previewContainer.scrollLeft = pan.left - (event.clientX - pan.x); previewContainer.scrollTop = pan.top - (event.clientY - pan.y); };
+        const panEnd = () => { if (pan) { pan = null; previewContainer.style.cursor = ''; } };
+        // On the picker's backdrop, which covers the window: a drag that leaves the view keeps moving it.
+        picker.addEventListener('mousemove', panMove);
+        picker.addEventListener('mouseup', panEnd);
 
         previewContainer.appendChild(canvasContainer);
         previewSection.appendChild(previewContainer);
@@ -622,87 +619,39 @@ class TransferPlayerEditor {
         };
 
         // Left side - Map tree (create after canvas so we can reference it)
+        // The map list in the Maps panel's look (styles.css .rr-map-picker-tree): its header with the accent strip,
+        // its search box, its rows and accent scrollbar.
         const mapTreeSection = document.createElement('div');
-        mapTreeSection.style.cssText = `
-            width: 300px;
-            display: flex;
-            flex-direction: column;
-            border-right: 1px solid var(--color-border);
-            background-color: var(--color-bg-list-item);
-        `;
+        mapTreeSection.className = 'rr-map-picker-tree';
 
         const mapTreeHeader = document.createElement('div');
+        mapTreeHeader.className = 'sidebar-header rr-map-picker-head';
         mapTreeHeader.textContent = tt('Maps');
-        mapTreeHeader.style.cssText = `
-            padding: 12px;
-            background-color: var(--color-bg-panel);
-            border-bottom: 1px solid var(--color-border);
-            color: var(--color-text-strong);
-            font-size: 13px;
-            font-weight: bold;
-        `;
         mapTreeSection.appendChild(mapTreeHeader);
 
         // Search box
         const searchContainer = document.createElement('div');
-        searchContainer.style.cssText = `
-            padding: 8px;
-            background-color: var(--color-bg-list-item);
-            border-bottom: 1px solid var(--color-border);
-        `;
+        searchContainer.className = 'rr-map-search';
 
         const searchInput = document.createElement('input');
-        searchInput.type = 'text';
+        searchInput.type = 'search';
+        searchInput.className = 'rr-map-search-input';
         searchInput.placeholder = tt('Search maps...');
-        searchInput.style.cssText = `
-            width: 100%;
-            padding: 6px 10px;
-            background-color: var(--color-bg-input);
-            color: var(--color-text);
-            border: 1px solid var(--color-border-input);
-            border-radius: 3px;
-            font-size: 12px;
-            box-sizing: border-box;
-        `;
 
         searchContainer.appendChild(searchInput);
         mapTreeSection.appendChild(searchContainer);
 
         // Map tree list
         const mapTreeList = document.createElement('div');
-        mapTreeList.className = 'map-tree-list';
-        mapTreeList.style.cssText = `
-            flex: 1;
-            overflow-y: auto;
-            padding: 0;
-        `;
+        mapTreeList.className = 'map-tree-list rr-accent-scrollbar';
 
         // Build map tree using same logic as main editor
         // Build tree will be called after loadMap is defined
         let buildTreeCalled = false;
 
         // Search functionality
-        searchInput.addEventListener('input', (e) => {
-            const searchTerm = e.target.value.toLowerCase();
-            this.buildMapTreeForPicker(
-                mapTreeList,
-                mapCanvas,
-                coordsDisplay,
-                searchInput,
-                loadMap,
-                selection,
-                expandedMapIds
-            );
-            const items = mapTreeList.querySelectorAll('.tree-item');
-
-            items.forEach(item => {
-                const text = item.textContent.toLowerCase();
-                if (searchTerm === '' || text.includes(searchTerm)) {
-                    item.style.display = '';
-                } else {
-                    item.style.display = 'none';
-                }
-            });
+        searchInput.addEventListener('input', () => {
+            this.buildMapTreeForPicker(mapTreeList, mapCanvas, coordsDisplay, searchInput, loadMap, selection, expandedMapIds);
         });
 
         mapTreeSection.appendChild(mapTreeList);
@@ -778,15 +727,32 @@ class TransferPlayerEditor {
             const renderedCanvas = document.createElement('canvas');
             renderedCanvas.width = mapCanvas.width;
             renderedCanvas.height = mapCanvas.height;
-            await this.renderMapPreview(renderedCanvas, coordsDisplay, mapId);
-            if (generation !== mapLoadGeneration) return false;
-            const stood = await this.drawTopDown3D(renderedCanvas, mapId);
-            if (generation !== mapLoadGeneration) return false;
+            let stood = false;
+            try {
+                await this.renderMapPreview(renderedCanvas, coordsDisplay, mapId);
+                if (generation !== mapLoadGeneration) return false;
+                stood = await this.drawTopDown3D(renderedCanvas, mapId);
+                if (generation !== mapLoadGeneration) return false;
+            } catch (error) {
+                // A map that cannot be drawn still leaves the picker working: its clicks, its zoom and OK came back
+                // only at the end of a load, and an error on the way left them off for good.
+                console.error('[MapPicker] preview', error);
+                if (generation === mapLoadGeneration) {
+                    if (selection.x == null || selection.y == null) { selection.x = 0; selection.y = 0; }
+                    okBtn.disabled = false; mapCanvas.style.pointerEvents = '';
+                }
+            }
             standing = !!stood;
 
             mapCanvas.width = renderedCanvas.width;
             mapCanvas.height = renderedCanvas.height;
             mapCanvas.getContext('2d').drawImage(renderedCanvas, 0, 0);
+            // A map just chosen from the list starts with its middle chosen.
+            if (selection.x == null || selection.y == null) {
+                selection.x = Math.max(0, Math.floor(mapCanvas.width / this.tilePixels() / 2));
+                selection.y = Math.max(0, Math.floor(mapCanvas.height / this.tilePixels() / 2));
+            }
+            coordsDisplay.textContent = `X: ${selection.x}, Y: ${selection.y}`;
 
             // Cache the base map (tiles + events + grid, but WITHOUT selection)
             // The current canvas has grid but no selection
@@ -801,9 +767,10 @@ class TransferPlayerEditor {
 
             // A map larger than the view is shown whole when it is first picked: the place is found by the lie of
             // the map, then zoomed into.
-            const fit = Math.min(previewContainer.clientWidth / mapCanvas.width, previewContainer.clientHeight / mapCanvas.height);
-            fitLevel = fit > 0 && fit < 1 ? Math.max(0.05, Math.floor(fit * 100) / 100) : 1;
-            if (fittedMap !== mapId) { fittedMap = mapId; if (fitLevel < 1) zoomLevel = fitLevel; }
+            // Each map opens fitted to the view, a small one enlarged too (it sat small in a large empty view).
+            const fit = Math.min((previewContainer.clientWidth - 4) / mapCanvas.width, (previewContainer.clientHeight - 4) / mapCanvas.height);
+            fitLevel = fit > 0 ? Math.max(0.02, Math.min(maxZoom(), Math.floor(fit * 100) / 100)) : 1;
+            if (fittedMap !== mapId) { fittedMap = mapId; zoomLevel = fitLevel; }
             updateZoom();
             scrollToSelection();
             applyView();
@@ -1211,100 +1178,53 @@ class TransferPlayerEditor {
             children.sort((a, b) => (a.order || 0) - (b.order || 0));
         });
 
-        // Build hierarchical tree starting from root (parentId = 0)
-        const buildTree = (parentId, depth = 0) => {
-            const children = childrenByParent.get(parentId) || [];
-
-            children.forEach(map => {
-                const mapItem = document.createElement('div');
-                mapItem.className = 'tree-item';
-                mapItem.setAttribute('data-map-id', map.id);
-                mapItem.style.cssText = `
-                    padding: 8px;
-                    padding-left: ${8 + depth * 16}px;
-                    cursor: pointer;
-                    user-select: none;
-                    color: var(--color-text);
-                    font-size: 13px;
-                `;
-
-                // Check if this map has children
+        // A search keeps the maps whose name or number matches and the maps above them, every branch open, as the
+        // Maps panel's search does (it hid rows of a list built closed, so a match under a closed parent was lost).
+        const query = String(searchInput?.value || '').trim().toLowerCase();
+        let found = null;
+        if (query) {
+            found = new Set();
+            const byId = new Map(currentProject.maps.filter(map => map && map.id).map(map => [map.id, map]));
+            for (const map of byId.values()) {
+                if (!String(map.name || '').toLowerCase().includes(query) && String(map.id) !== query && String(map.id).padStart(3, '0') !== query) continue;
+                for (let at = map; at && !found.has(at.id); at = byId.get(at.parentId)) found.add(at.id);
+            }
+        }
+        // The same rows as the Maps panel (src/utils/MapTreeRow.js): guide lines, one line a map, counts.
+        const mapTreeRow = typeof RRMapTreeRow === 'function' ? RRMapTreeRow : require('../../utils/MapTreeRow.js');
+        const buildTree = (parentId, depth = 0, trail = []) => {
+            for (const map of childrenByParent.get(parentId) || []) {
+                if (found && !found.has(map.id)) continue;
                 const hasChildren = childrenByParent.has(map.id);
-
-                // Add expand/collapse icon if has children
-                if (hasChildren) {
-                    const icon = document.createElement('span');
-                    icon.className = 'tree-icon';
-                    icon.textContent = expandedMapIds.has(map.id) ? '▼ ' : '► ';
-                    icon.style.cssText = 'cursor: pointer; user-select: none; margin-right: 4px;';
-                    icon.addEventListener('click', (e) => {
-                        e.stopPropagation();
+                const open = !!found || expandedMapIds.has(map.id);
+                const name = map.name || tt('Unnamed Map');
+                const mapItem = mapTreeRow({
+                    map, name, depth, trail,
+                    childCount: hasChildren ? childrenByParent.get(map.id).length : 0,
+                    open,
+                    onToggle: () => {
                         if (expandedMapIds.has(map.id)) expandedMapIds.delete(map.id);
                         else expandedMapIds.add(map.id);
-                        this.buildMapTreeForPicker(
-                            container,
-                            mapCanvas,
-                            coordsDisplay,
-                            searchInput,
-                            loadMap,
-                            selection,
-                            expandedMapIds
-                        );
-                    });
-                    mapItem.appendChild(icon);
-                } else {
-                    const spacer = document.createElement('span');
-                    spacer.textContent = '   ';
-                    mapItem.appendChild(spacer);
-                }
-
-                // Add map name
-                const nameSpan = document.createElement('span');
-                nameSpan.textContent = map.name || tt('Unnamed Map');
-                mapItem.appendChild(nameSpan);
-
-                // Highlight if this is the selected map
-                if (map.id === selection.mapId) {
-                    mapItem.style.backgroundColor = 'var(--color-selection-deep)';
-                }
-
-                // Hover effects
-                mapItem.addEventListener('mouseenter', () => {
-                    if (map.id !== selection.mapId) {
-                        mapItem.style.backgroundColor = 'var(--color-bg-list-item)';
+                        const scroll = container.scrollTop;
+                        this.buildMapTreeForPicker(container, mapCanvas, coordsDisplay, searchInput, loadMap, selection, expandedMapIds);
+                        container.scrollTop = scroll;
                     }
                 });
-
-                mapItem.addEventListener('mouseleave', () => {
-                    if (map.id !== selection.mapId) {
-                        mapItem.style.backgroundColor = '';
-                    }
-                });
-
-                // Add click handler to load map
+                if (map.id === selection.mapId) mapItem.classList.add('selected');
                 mapItem.addEventListener('click', async () => {
+                    if (selection.mapId === map.id) return;
                     selection.mapId = map.id;
-                    selection.x = 0;
-                    selection.y = 0;
-                    coordsDisplay.textContent = `X: ${selection.x}, Y: ${selection.y}`;
-
-                    // Update selection highlighting
-                    container.querySelectorAll('.tree-item').forEach(item => {
-                        item.style.backgroundColor = '';
-                    });
-                    mapItem.style.backgroundColor = 'var(--color-selection-deep)';
-
-                    // Load map preview (use loadMap to update cache)
+                    // Its middle chosen once it is drawn (loadMap): the corner put the 3D view's camera at the map's
+                    // edge, half of what it showed off the map, where a click chooses nothing.
+                    selection.x = null;
+                    selection.y = null;
+                    container.querySelectorAll('.tree-item.selected').forEach(item => item.classList.remove('selected'));
+                    mapItem.classList.add('selected');
                     await loadMap(map.id);
                 });
-
                 container.appendChild(mapItem);
-
-                // Recursively build children if expanded
-                if (hasChildren && (expandedMapIds.has(map.id) || searchInput.value)) {
-                    buildTree(map.id, depth + 1);
-                }
-            });
+                if (hasChildren && open) buildTree(map.id, depth + 1, trail.concat(name));
+            }
         };
 
         // Start building from root level (parentId = 0)
@@ -1337,8 +1257,9 @@ class TransferPlayerEditor {
             if (this.projectController && this.projectController.tilemapManager) {
                 const tilemapManager = this.projectController.tilemapManager;
 
-                // Render the full map to the canvas
-                const success = await tilemapManager.renderMapToCanvas(mapId, canvas);
+                // Render the full map to the canvas, at most 8192 pixels a side (a larger map is drawn smaller)
+                const success = await tilemapManager.renderMapToCanvas(mapId, canvas, { maxSide: 8192 });
+                this._previewScale = canvas.rrScale || 1;
 
                 if (!success) {
                     throw new Error('Failed to render map');

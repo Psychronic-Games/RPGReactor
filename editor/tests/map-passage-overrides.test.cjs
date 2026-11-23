@@ -35,7 +35,7 @@ test('a cell marked open is open in every direction, over a wall tile; one marke
     assert.equal(ctx.$gameMap.rrPassageAt(3, 2), 2);
     assert.equal(ctx.$gameMap.rrPassageAt(4, 2), 0, 'a cell left out follows its tiles');
     ctx.$dataMap.rrPassage = { '4,2': 3, '5,2': 'x', '6,2': '1' };
-    assert.deepEqual([ctx.$gameMap.rrPassageAt(4, 2), ctx.$gameMap.rrPassageAt(5, 2), ctx.$gameMap.rrPassageAt(6, 2)], [0, 0, 1], 'only 1 and 2 mean anything');
+    assert.deepEqual([ctx.$gameMap.rrPassageAt(4, 2), ctx.$gameMap.rrPassageAt(5, 2), ctx.$gameMap.rrPassageAt(6, 2)], [0, 0, 1], 'only 1, 2 and 17 to 30 mean anything');
 });
 
 test('the player, an event and a follower obey the marks: none walks into a blocked cell, none is held by a wall marked open', () => {
@@ -82,7 +82,7 @@ test('a mark wins over every wrapper of checkPassage, whatever order they load i
     assert.equal(ctx.$gameMap.isAirshipLandOk(6, 2), false);
     // The rule sits in isPassable itself, not in a wrapper of checkPassage.
     const source = fs.readFileSync(path.join(runtimeRoot, 'reactor_objects_map.js'), 'utf8');
-    assert.match(source, /Game_Map\.prototype\.isPassable = function\(x, y, d\) \{\s*const marked = this\.rrPassageAt\(x, y\);\s*if \(marked\) return marked === 1;/);
+    assert.match(source, /Game_Map\.prototype\.isPassable = function\(x, y, d\) \{\s*const marked = this\.rrPassageAt\(x, y\);[\s\S]{0,300}if \(marked > 16\) return \(\(marked - 16\) & \(1 << \(d \/ 2 - 1\)\)\) === 0;\s*if \(marked\) return marked === 1;/);
 });
 
 test('the marks are read from the map being played: a transfer to another map leaves them behind', () => {
@@ -127,4 +127,21 @@ test('the 3D view\'s Passage reads a marked cell before the tiles and the image 
     const after = passageTiles.call(view, map);
     assert.deepEqual([0, 1, 2, 5].map(x => after.read(x, 0)), [0, 0x0f, 0, 0]);
     assert.notEqual(after.signature, before.signature, 'a change of marks is a change of what the view shows');
+});
+
+test('a cell blocked on some sides (16 + RPG Maker\'s side bits) is crossed on the others, either way', () => {
+    const ctx = world();
+    const player = ctx.$gamePlayer;
+    // 3,2 blocked on its top (8) and its left (2): 16 + 10.
+    ctx.$dataMap.rrPassage = { '3,2': 26 };
+    assert.equal(ctx.$gameMap.rrPassageAt(3, 2), 26);
+    assert.deepEqual(passable(ctx, 3, 2), [true, false, true, false], 'down and right open, left and up shut');
+    assert.equal(player.canPass(3, 1, 2), false, 'into it from above, across its top');
+    assert.equal(player.canPass(2, 2, 6), false, 'into it from the left, across its left side');
+    assert.equal(player.canPass(4, 2, 4), true, 'into it from the right');
+    assert.equal(player.canPass(3, 3, 8), true, 'into it from below');
+    assert.equal(player.canPass(3, 2, 8), false, 'out of it across its top');
+    assert.equal(player.canPass(3, 2, 2), true, 'out of it downward');
+    ctx.$dataMap.rrPassage = { '3,2': 16, '4,2': 31 };
+    assert.deepEqual([ctx.$gameMap.rrPassageAt(3, 2), ctx.$gameMap.rrPassageAt(4, 2)], [0, 0], 'no side, or all and more: not a value');
 });

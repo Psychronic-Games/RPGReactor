@@ -164,6 +164,7 @@ class UIManager {
     handleHtmlMenuAction(action) {
         // An entry an editor plugin added under Plugins (EditorPlugins.js).
         if (typeof action === 'string' && action.startsWith('editor-plugin:')) { window.RREditorPlugins?.runMenuAction?.(action); return; }
+        if (window.reactor?.refuseInWorkshop?.(action)) return;
         switch(action) {
             case 'new-project':
                 this.callbacks.newProject();
@@ -1415,6 +1416,7 @@ class UIManager {
     }
 
     handleToolbarAction(action) {
+        if (window.reactor?.refuseInWorkshop?.(action)) return;
         switch(action) {
             case 'new-project':
                 this.callbacks.newProject();

@@ -68,7 +68,7 @@ test('a placed structure is the map\'s object; what the game reads follows the s
         ['structures/Inn-1-below', 'ground', 'place', '3,4', row.id],
         ['structures/Inn-1-over', 'over', 'place', '3,4', row.id]]);
     assert.deepEqual(map.rrPassage, { '3,4': 2, '4,5': 1 });
-    assert.deepEqual(map.reactor3d.mediaSurfaces.map(s => [s.id, s.x, s.y, s.structure2d]), [[4, 0, 0, undefined], [5, 6 + 144, 6 + 192, row.id]]);
+    assert.deepEqual(map.reactor3d.mediaSurfaces.map(s => [s.id, s.x, s.y, s.structure2d]), [[4, 0, 0, undefined], [5, 6 + 3, 6 + 4, row.id]], 'a map surface\'s x and y are tiles: moved by the placement\'s tile');
     assert.equal(S.apply(map, planOf), false, 'applying again changes nothing');
     // The structure changes in the Database: its passability and its pictures. The map follows.
     plans['Inn.json'].baked = { below: 'structures/Inn-2-below', over: '', cells: { '1,0': 2 } };
@@ -84,4 +84,22 @@ test('a placed structure is the map\'s object; what the game reads follows the s
     assert.equal(map.rrPassage, undefined);
     assert.deepEqual(map.reactor3d.mediaSurfaces, [{ id: 4, x: 0, y: 0 }]);
     assert.equal(map.rrStructures2D, undefined);
+});
+
+test('a cell blocked on some sides: its mark (dN), or a tile blocked on some sides, is placed as 16 + those sides', () => {
+    const S2 = S;
+    assert.equal(S2.edgeMark(0), 'O');
+    assert.equal(S2.edgeMark(15), 'X');
+    assert.equal(S2.edgeMark(8 | 2), 'd10');
+    assert.deepEqual(['X', 'O', '*', 'd10', 'd0', 'd15', 'zz', undefined].map(S2.markBits), [15, 0, 0, 10, null, null, null, null]);
+    const plan = S2.normalize({ name: 'Gate', size: [3, 1], layers: [{ kind: 'tiles', tilesetId: 1, tiles: [] }],
+        passage: { '0,0': 'd8', '1,0': 'd15', '2,0': 'd3' }, baked: { cells: { '0,0': 24, '1,0': 31, '2,0': 2 } } });
+    assert.deepEqual(plan.passage, { '0,0': 'd8', '2,0': 'd3' }, 'd1 to d14 kept; d15 is X, not a dN');
+    assert.deepEqual(plan.baked.cells, { '0,0': 24, '2,0': 2 }, 'placed values 1, 2 and 17 to 30');
+    // A tile blocked only on its top keeps that, where it counted as open.
+    const W = 3, tiles = plan.layers[0].tiles;
+    tiles[1] = 40;
+    plan.passage = { '0,0': 'd8' };
+    assert.deepEqual(S2.cells(plan, () => ({ 40: 0x08 })), { '0,0': 24, '1,0': 24 });
+    assert.equal(W, 3);
 });

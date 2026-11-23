@@ -723,6 +723,7 @@ class RPGReactor {
 
     // Playtest orchestration
     async playtest() {
+        if (this.refuseInWorkshop('playtest')) return;
         const project = this.projectController.getCurrentProject();
         if (!project) {
             this.uiManager.showMapNote?.(window.I18n ? window.I18n.t('status.noProjectLoaded') : 'No project loaded');
@@ -823,11 +824,39 @@ class RPGReactor {
         if (dock && !dock.hidden && !dock.children.length) { dock.hidden = true; window.dispatchEvent(new Event('resize')); }
     }
 
+    /**
+     * While a structure is built on its plot, the map's own tools stay off it: what they make is not part of the
+     * structure and would be lost, or would open on the plot as if it were a map (owner, 2026-11-22: "we don't want
+     * the elements of the app bleeding into each other"). A 3D structure keeps Build, Lighting and Media Surfaces
+     * (it saves pieces, lights and surfaces); a 2D one keeps tile painting, and adds videos from its own list.
+     * Returns why the action is refused, or '' when it may go ahead.
+     */
+    workshopRefusal(action) {
+        const shop = this.tilemapManager?.currentMap?.rrWorkshop;
+        if (!shop) return '';
+        const anyKind = ['toggle-event-mode', 'playtest', 'image-layers', 'terrain-tool', 'foliage-tool', 'models-tool'];
+        const notIn2D = ['build-tool', 'build-group', 'lighting-tool', 'media-surfaces'];
+        if (!anyKind.includes(action) && !(shop.dimension === '2d' && notIn2D.includes(action))) return '';
+        if (shop.dimension === '2d' && action === 'media-surfaces') return 'A 2D structure takes videos and images from its own list: + Video.';
+        return 'Not while a structure is being built: this tool works on maps. Close the workshop to use it.';
+    }
+
+    /** The note for a refused action; true when it was refused. */
+    refuseInWorkshop(action) {
+        const why = this.workshopRefusal(action);
+        if (!why) return false;
+        this.uiManager?.showMapNote?.(window.I18n ? window.I18n.tText(why) : why, 4000);
+        return true;
+    }
+
     claimMapTool(owner) {
         if (this._changingMapTool) return;
         this._changingMapTool = true;
         this.mapTool = owner;
         try {
+            // A 2D structure being placed (the palette's S tab) is put down by any tool taking the map: it holds the
+            // map's clicks through its own picker, and Events, Build or a pen left it placing (owner, 2026-11-22).
+            this.structure2DStamp?.stop?.();
             if (owner !== 'media') {
                 this.mediaSurfaceManager?.close();
                 this.projectController?.mediaSurfacePreviewManager?.authoring?.editor?.close(true);
@@ -957,6 +986,7 @@ class RPGReactor {
     }
 
     toggleEventMode() {
+        if (this.refuseInWorkshop('toggle-event-mode')) return;
         if (!this.eventManager) {
             this.uiManager.showMapNote?.(window.I18n ? window.I18n.t('status.loadMapFirst') : 'Load a map first');return;
         }

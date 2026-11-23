@@ -197,7 +197,8 @@ class MediaSurfacePreviewManager {
     /** Only the selected tool or an open authoring session owns surface input. */
     syncToolInteraction() {
         const enabled = this.ownsMapInput();
-        for (const owner of this.pixiOwners.values()) if (owner.mesh) owner.mesh.eventMode = (owner.record?.authoring || enabled && !this.authoring) ? 'static' : 'none';
+        const free = !this.authoring || !!this.workshop2D();
+        for (const owner of this.pixiOwners.values()) if (owner.mesh) owner.mesh.eventMode = (owner.record?.authoring || enabled && free) ? 'static' : 'none';
         for (const owner of this.domOwners.values()) if (owner.surface) owner.surface.style.pointerEvents = (owner.record?.authoring || enabled && !this.authoring) ? 'auto' : 'none';
     }
 
@@ -714,11 +715,48 @@ class MediaSurfacePreviewManager {
 
     /** A saved surface on the current map can be edited straight from the preview. */
     ownsMapInput() {
-        return !!this.projectController?.mediaSurfaceManager?.panel && !this.projectController?.eventManager?.eventMode;
+        if (this.projectController?.eventManager?.eventMode) return false;
+        // A 2D structure's plot: its videos are its own parts, a click on one edits it (Structure2DWorkshop), as the
+        // Media Surfaces panel does on a map. Without this the first click went to the tiles under it.
+        if (this.workshop2D()) return true;
+        return !!this.projectController?.mediaSurfaceManager?.panel;
+    }
+
+    /**
+     * The surface a click at (clientX, clientY) on the flat map lands on, or on a handle of the one being edited:
+     * { id, handle }, else null. A 2D structure's plot lets such clicks through to the surfaces and takes the others.
+     */
+    hitSurface(clientX, clientY) {
+        const inside = (p, quad) => {
+            let hit = false;
+            for (let i = 0, j = quad.length - 1; i < quad.length; j = i++) {
+                const a = quad[i], b = quad[j];
+                if ((a.y > p.y) !== (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / ((b.y - a.y) || 1e-9) + a.x) hit = !hit;
+            }
+            return hit;
+        };
+        for (const owner of this.pixiOwners.values()) {
+            if (!owner?.container?.visible || !owner.state || owner.state.target === 'screen') continue;
+            const point = this._clientToOwner(owner, clientX, clientY);
+            if (!point) continue;
+            const anchor = this._anchor2d(owner.state, owner.record?.ownerEventId);
+            if (!anchor?.valid) continue;
+            const id = owner.record?.authoring ? Number(owner.state.id) : Number(owner.record?.source?.surfaceId ?? owner.state.id);
+            if (owner.record?.authoring && owner.handles?.some(h => Math.hypot(point.x - anchor.x - h.x, point.y - anchor.y - h.y) <= 13)) return { id, handle: true };
+            const quad = this._transformedCorners(owner.state).map(c => ({ x: anchor.x + c.x, y: anchor.y + c.y }));
+            if (inside(point, quad)) return { id, handle: false };
+        }
+        return null;
+    }
+
+    workshop2D() {
+        const workshop = typeof window !== 'undefined' ? window.reactor?.structure2DWorkshop : null;
+        return workshop?.session && this.map?.rrWorkshop?.dimension === '2d' ? workshop : null;
     }
 
     canEdit(record) {
-        return this.ownsMapInput() && !!record?.source && !record.authoring && !this.authoring && !this.destroyed
+        // On a 2D structure's plot another video can be taken up while one is in hand (the workshop puts the first down).
+        return this.ownsMapInput() && !!record?.source && !record.authoring && (!this.authoring || !!this.workshop2D()) && !this.destroyed
             && Number(record.source.mapId) === Number(this.map?.id);
     }
 
@@ -729,6 +767,7 @@ class MediaSurfacePreviewManager {
      */
     editRecord(record) {
         if (!this.canEdit(record)) return false;
+        if (record.source.surfaceId != null && this.workshop2D()) return this.workshop2D().selectSurface(record.source.surfaceId) || false;
         if (record.source.surfaceId != null) return this.projectController?.mediaSurfaceManager?.edit(record.source.surfaceId) || false;
         const Editor = MediaSurfacePreviewManager._editorClass();
         if (!Editor) return false;
@@ -759,7 +798,8 @@ class MediaSurfacePreviewManager {
         mesh.eventMode = 'static';
         mesh.cursor = owner.record.authoring ? 'move' : 'pointer';
         const right = event => {
-            if (this.projectController?.eventManager?.eventMode) return;
+            // A 2D structure's plot gives its videos its own menu (Structure2DWorkshop.bindPlotInput).
+            if (this.projectController?.eventManager?.eventMode || this.workshop2D()) return;
             event.stopPropagation?.();
             if (owner.record.source) this.navigateTo(owner.record.source);
         };
