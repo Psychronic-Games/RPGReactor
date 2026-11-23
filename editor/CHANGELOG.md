@@ -2,7 +2,7 @@
 
 The full technical list, one file per release or labeled development checkpoint, newest first. The short version of each release is in the [root changelog](../CHANGELOG.md).
 
-- [0.99.7](changelog/0.99.7.md) (in development)
+- [0.99.7](changelog/0.99.7.md) - 2026-11-23
 - [0.99.6](changelog/0.99.6.md) - 2026-11-16
 - [0.99.5](changelog/0.99.5.md) - 2026-11-12
 - [0.99.4](changelog/0.99.4.md) - 2026-11-02
