@@ -10,29 +10,29 @@ The latest stable source release is [0.99.7](https://github.com/Psychronic-Games
 
 <table>
 <tr>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.6/01-server-admin.jpg" alt="The online server's admin page"><br><sub>The admin page of an online server, drawn like the editor: who is playing, accounts, stored characters and the server's mode.</sub></td>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.6/02-admin-languages.jpg" alt="The admin page in Japanese with its language menu"><br><sub>The admin page speaks the editor's 18 languages, chosen from its header.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.7/01-demo-effects-fire.jpg" alt="A fire spell in the sample project"><br><sub>Every battle effect in the sample project is made with RPG Reactor's own Effect generator, its sounds with the Sound Effect generator.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.7/02-2d-structure-workshop.jpg" alt="Building a 2D structure"><br><sub>A 2D structure built on its own plot from tilesets, pictures and videos.</sub></td>
 </tr>
 <tr>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.6/03-play-from-a-server.jpg" alt="Deploy Game with Play from a server"><br><sub>A Web build can be one small page that shows the game from your own server, for store pages with upload limits.</sub></td>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.6/04-tactical-2d-map.jpg" alt="A Tactical battle on a 2D map"><br><sub>3D characters on a 2D map hold weapons at their own size, in a Tactical battle.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.7/04-place-2d-structures.jpg" alt="A 2D structure placed from the tile palette"><br><sub>The S tab of the tile palette: click a structure, click the map, then move or copy it right there.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.7/06-passability-sides.jpg" alt="Blocking single sides of a cell"><br><sub>Sides blocks just one edge of a cell, like a fence or a ledge, from both directions.</sub></td>
 </tr>
 <tr>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.6/05-admin-arabic.jpg" alt="The admin page's settings in Arabic"><br><sub>Arabic is laid out right to left.</sub></td>
-<td width="50%" align="center"><img src="docs/media/releases/0.99.6/06-admin-characters.jpg" alt="Stored characters on the admin page"><br><sub>Every character players have made, its size and who uses it.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.7/07-map-picker-3d.jpg" alt="Choosing a place on a 3D map"><br><sub>Transfer Player, starting positions and other places are chosen on the map itself, in 3D or from above.</sub></td>
+<td width="50%" align="center"><img src="docs/media/releases/0.99.7/09-editor-plugins.jpg" alt="Editor plugins in the Plugin Manager"><br><sub>Editor Plugins change RPG Reactor's editor for a project, beside the game's own plugins.</sub></td>
 </tr>
 </table>
 
-## What's new in 0.99.6
+## What's new in 0.99.7
 
-- **An admin page for your online server:** players, accounts, stored characters, a live chat, bans and settings, in the editor's look and 18 languages; write to everyone or to one account.
-- **Play from a server:** a Web build of one page that shows the game from your own server, for store pages such as itch.io with upload limits.
-- **Faster deploys:** Build → Online Server sends only the files that changed.
-- **Graphics backends:** Auto, Direct3D 11, Direct3D 11 on 12, OpenGL or Vulkan for each project; video screens on Vulkan, and maps that load without a long first stall on more drivers.
-- **Maps above and below, and faces that talk:** maps joined by openings and ladders; face sets that speak in the message window.
-- **Music loop points:** Opus and Ogg Vorbis loop at their tagged points in the game and in the editor's previews (contributed by Xehanort88).
+- **2D structures:** build them from any mix of tilesets, pictures and videos, mark passability cell by cell or by single side, and place, move and copy them on your 2D maps from the tile palette's S tab.
+- **Steam Workshop in the Forge:** share your project and your Character Builder, Prop Builder, Animation, Effect and Sound designs, and add what you subscribe to.
+- **Steam achievements:** seventeen for the editor, and your own game's achievements through a Steam card in Database › System 2 and a new event command.
+- **Editor plugins:** a second tab in the Plugin Manager for plugins that change RPG Reactor's editor for one project.
+- **The sample project is all RPG Reactor's own:** its 128 battle effects are made with the Effect generator, their sounds with the Sound Effect generator.
+- **Smoother on weak graphics:** 3D maps wait until their shaders are built instead of crawling, characters draw faster, and V-Sync is on by default.
 
-See the [0.99.6 notes](docs/posts/release-notes-0.99.6.md), [online guide](docs/DESIGN-ONLINE.md) and [open items](docs/OPEN-ITEMS.md).
+See the [0.99.7 notes](docs/posts/release-notes-0.99.7.md), the [plugin guide](docs/PLUGIN-DEVELOPMENT.md) and [open items](docs/OPEN-ITEMS.md).
 
 ## Repository Layout
 
@@ -51,8 +51,8 @@ RPGReactor/
 ## Documentation
 
 - [Editor README](editor/README.md): detailed feature list, source launch steps, project structure, shortcuts, and technical notes.
-- [Latest release notes](docs/posts/release-notes-0.99.6.md): features and screenshots for 0.99.6.
-- [Previous release notes](docs/posts/release-notes-0.99.4.md): features and fixes in 0.99.4.
+- [Latest release notes](docs/posts/release-notes-0.99.7.md): features and screenshots for 0.99.7.
+- [Previous release notes](docs/posts/release-notes-0.99.6.md): features and fixes in 0.99.6.
 - [Changelog](CHANGELOG.md): upcoming development and previous releases.
 - [Current status](docs/STATUS.md): the verified state of the tree, runtime defaults, test results, and open work.
 - [Online worlds](docs/DESIGN-ONLINE.md): using Online Server today, measured capacity and the plan.
