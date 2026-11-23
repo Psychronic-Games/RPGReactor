@@ -11,9 +11,8 @@ const test = require('node:test');
 const Items = require('../src/steam/WorkshopItems.js');
 
 function tempDir(t) {
-    // (The cache folder may not exist yet: a fresh CI machine has none.)
-    fs.mkdirSync(path.join(os.homedir(), '.cache'), { recursive: true });
-    const dir = fs.mkdtempSync(path.join(os.homedir(), '.cache', 'rr-workshop-kinds-'));
+    // The system's temp folder, as every test's: a folder under the home folder is not on a CI machine.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-workshop-kinds-'));
     t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
     return dir;
 }
