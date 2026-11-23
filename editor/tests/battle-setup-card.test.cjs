@@ -883,10 +883,12 @@ test('a model\'s picture that has to be drawn waits for the card\'s first moment
             const shots = await Promise.all([2, 4, 6].map(facing => B.modelShot({ path: home }, spec, null, facing)));
             assert.deepEqual(shots.map(shot => shot.url), [url, url, url]);
             assert.ok(drawnAt[0] - opened >= 295, `the first is drawn ${drawnAt[0] - opened} ms after the card opened`);
-            assert.deepEqual([most, idle, fs.readdirSync(cache).length], [1, 3, 3], 'one at a time, each in a quiet moment, each kept');
+            assert.deepEqual([most, fs.readdirSync(cache).length], [1, 3], 'one at a time, each kept');
+            // Each in a quiet moment: a busy shared machine may give a moment too short and the next is asked for.
+            assert.ok(sharedRunner ? idle >= 3 : idle === 3, `each in a quiet moment (${idle} asked)`);
             // One kept from before is not drawn and waits for nothing.
-            const before = Date.now(), again = await B.modelShot({ path: home }, spec, null, 2);
-            assert.deepEqual([again.kept, drawnAt.length, idle], [true, 3, 3]);
+            const idleBefore = idle, before = Date.now(), again = await B.modelShot({ path: home }, spec, null, 2);
+            assert.deepEqual([again.kept, drawnAt.length, idle], [true, 3, idleBefore]);
             assert.ok(Date.now() - before < (sharedRunner ? 400 : 100), 'read back, not drawn');
         });
     } finally { delete B._state.ownShots; fs.rmSync(home, { recursive: true, force: true }); }
