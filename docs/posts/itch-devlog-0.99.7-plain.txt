@@ -1,0 +1,37 @@
+RPG Reactor 0.99.7: 2D Structures, Editor Plugins and the Steam Workshop
+
+RPG Reactor 0.99.7 is now on GitHub! Since our last update, we've added:
+
+[picture: 02-2d-structure-workshop.jpg]
+
+Build 2D structures. Put together a house, a ship or a ruin from any mix of tilesets, pictures and videos on a plot of its own, then use it on any 2D map. Videos are placed and resized right on the plot, and the whole structure moves a tile at a time when it needs more room.
+
+[picture: 04-place-2d-structures.jpg]
+
+Place them from the tile palette. The new S tab shows your structures with a picture of each: click one, then click the map. Click a placed one to move it, copy it or open it for editing. Change a structure once and every map it stands on follows.
+
+[picture: 06-passability-sides.jpg]
+
+Passability your way. Mark each cell blocked, open or walk-underneath, or block just one side of it, like a fence or a ledge. The game honours it from both directions.
+
+[picture: 03-tileset-picker.jpg]
+
+Pickers that show what you are choosing. Tilesets, pictures and videos are chosen from pickers with previews, not from lists of names.
+
+[picture: 07-map-picker-3d.jpg]
+
+Pick a place on the map itself. Transfer Player, starting positions and more open the map to click on, in 3D or from above, with the Maps panel's search and wheel zoom, however large the map.
+
+[picture: 09-editor-plugins.jpg]
+
+Editor plugins. Plugins can now change the editor itself for your project: a menu entry, a panel beside the map, a step when you save. Game plugins can be written for RPG Reactor alone, too.
+
+[picture: 01-demo-effects-fire.jpg]
+
+Our own effects, and Steam. Every battle effect and sound in the sample project is now made with RPG Reactor's own generators. Share your project, characters, props, animations, effects and sounds on the Steam Workshop, earn 17 achievements in the editor, and give your own game Steam achievements.
+
+[picture: 08-media-surface-editor.jpg]
+
+Smoother and tidier. 3D maps wait behind the loading spinner until they are ready on weak graphics, then play smoothly. V-Sync is on by default, the editor moves to NW.js 0.120, and more of the editor wears its theme.
+
+Get the source release and read the full notes: https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.7
