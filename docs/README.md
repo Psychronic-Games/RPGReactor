@@ -4,6 +4,7 @@ Guides for authoring with the engine, the current verified state, and maintainer
 
 ## Start here
 
+- [Getting started](GETTING-STARTED.md): a first map, a talking character and a playtest, in short steps.
 - [0.99.4 itch.io devlog](https://psychronic.itch.io/rpg-reactor/devlog/1746509/rpg-reactor-0994-released): published announcement; [Markdown copy](posts/itch-devlog-0.99.4.md) and [plain text](posts/itch-devlog-0.99.4-plain.txt).
 - 0.99.6 itch.io devlog, drafted and not posted: [Markdown](posts/itch-devlog-0.99.6.md) and [plain text](posts/itch-devlog-0.99.6-plain.txt).
 - [0.99.6 release notes](posts/release-notes-0.99.6.md): an admin page for online servers, deploys of only what changed, a Web build played from your own server, graphics backends, audio loop points.
