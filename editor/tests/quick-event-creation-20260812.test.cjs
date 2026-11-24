@@ -6,8 +6,10 @@ const vm = require('node:vm');
 
 const editorRoot = path.resolve(__dirname, '..');
 const source = fs.readFileSync(path.join(editorRoot, 'src', 'EventManager.js'), 'utf8');
+// Item, weapon and armor chests build their Can Receive branch through ConditionalBranchEditor.
 const EventManager = vm.runInNewContext(`${source}\nEventManager;`, {
-    console: { log() {}, warn() {}, error() {} }
+    console: { log() {}, warn() {}, error() {} },
+    ConditionalBranchEditor: require('../src/event/commands/ConditionalBranchEditor.js')
 });
 
 function managerWithMap() {
@@ -67,7 +69,9 @@ test('Treasure quick event supports every reward command and an opened page', ()
         });
         const reward = event.pages[0].list.find(command => command.code === code);
         assert.deepEqual(plain(reward.parameters), parameters, rewardKind);
-        assert.deepEqual(plain(event.pages[0].list.at(-2)), { code: 123, indent: 0, parameters: ['A', 0] });
+        // Gold claims at the top level; the others claim inside their Can Receive branch.
+        const claim = event.pages[0].list.find(command => command.code === 123);
+        assert.deepEqual(plain(claim), { code: 123, indent: rewardKind === 'gold' ? 0 : 1, parameters: ['A', 0] });
         assert.equal(event.pages[1].conditions.selfSwitchValid, true);
         assert.equal(event.pages[1].conditions.selfSwitchCh, 'A');
         assert.equal(event.pages[1].image.direction, 8);
@@ -83,7 +87,7 @@ test('Door and Treasure routes release Direction Fix before turning, or nothing 
         for (const config of [{ se }, {}]) {
             const page = manager.buildQuickEvent(kind, 1, 1, config).pages[0];
             assert.equal(page.directionFix, true, kind);
-            const route = page.list[0].parameters[1];
+            const route = page.list.find(command => command.code === 205).parameters[1];
             const expected = [
                 { code: 36 },
                 ...(config.se ? [{ code: 44, parameters: [se] }] : []),

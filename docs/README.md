@@ -29,6 +29,7 @@ Guides for authoring with the engine, the current verified state, and maintainer
 - [Human face handoff](HUMAN-FACE-HANDOFF.md): the unfinished default human faces, how they are built and what remains.
 - [Audio formats and loop points](AUDIO-LOOP-POINTS.md): which audio files the game finds, where each format keeps its loop, making a looping Opus track, and what changed for older games and tools.
 - [Model face points and speech](3D-FACE-AND-SPEECH.md): eye placement, mouth and lip authoring, spoken dialogue, per-prop animation speed.
+- [Inventory capacity](INVENTORY-CAPACITY.md): the Can Receive condition, Treasure chests that wait for room, and protecting existing chests and conversation rewards.
 - [Media surfaces](MEDIA-SURFACES.md): image and video placement on maps, models and the screen; transforms and proportions.
 - [Custom user interfaces](DESIGN-USER-INTERFACES.md): the User Interfaces database section, its node set, actor bindings, opt-in stock-scene replacement and explicit boundaries.
 - [2D structures](DESIGN-2D-STRUCTURES.md): a building made once on a phantom 2D map (any mix of tilesets, pictures, media surfaces, passability marked X, O or ★) and placed on 2D maps as an object that follows it.
