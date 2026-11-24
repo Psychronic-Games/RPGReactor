@@ -828,7 +828,7 @@
     };
     P.isSequenceSpritePlaying=function(sprite,ss){
         if(!sprite||sprite.destroyed||sprite._rrAssetError)return false;
-        if(sprite._bitmap1?.isError?.()||sprite._bitmap2?.isError?.()||sprite._effect?.isError){sprite._rrAssetError=true;sprite._playing=false;sprite._duration=0;return false;}
+        if(sprite._bitmap1?.isError?.()||sprite._bitmap2?.isError?.()){sprite._rrAssetError=true;sprite._playing=false;sprite._duration=0;return false;}
         if(ss?._animationSprites&&!ss._animationSprites.includes(sprite))return false;
         if(sprite._targets?.length&&sprite._targets.every(t=>t?.destroyed))return false;
         return !!sprite.isPlaying?.();
@@ -853,7 +853,7 @@
                         if(sprite._effect&&layer?.load&&layer.cache?.get?.(effName)===sprite._effect)layer.load(effName,fail);
                         else if(sprite._effect&&root.EffectManager?.load&&root.EffectManager.makeUrl&&root.EffectManager._cache?.[root.EffectManager.makeUrl(effName)]===sprite._effect)root.EffectManager.load(effName,fail);
                     }
-                    if(sprite._bitmap1?.isError?.()||sprite._bitmap2?.isError?.()||sprite._effect?.isError){sprite._rrAssetError=true;sprite._playing=false;sprite._duration=0;}
+                    if(sprite._bitmap1?.isError?.()||sprite._bitmap2?.isError?.()){sprite._rrAssetError=true;sprite._playing=false;sprite._duration=0;}
                     const offset=()=>{
                         const points=(sprite.targetObjects||[]).map(b=>this.findTargetSprite(b)?._reactorRoomPosition).filter(Boolean);
                         if(ticket.room&&points.length){let x=0,y=0;for(const p of points){const a=ticket.room.project(p),b=ticket.room.project({x:p.x+(t.x||0),y:p.y+(t.y||0),z:(p.z||0)+(t.z||0)});x+=b.x-a.x;y+=b.y-a.y;}return {x:x/points.length,y:y/points.length};}

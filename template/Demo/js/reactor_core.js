@@ -3620,7 +3620,7 @@ Graphics.blitSceneBehindEffects = function() {
 };
 
 /**
- * What every Effekseer context the runtime creates is initialized with.
+ * What the Effekseer contexts that play effects are initialized with.
  *
  * Effekseer keeps a fixed pool of particle instances per context (its own
  * default is 4000). When the pool is full a new particle is simply not made:
@@ -3630,9 +3630,31 @@ Graphics.blitSceneBehindEffects = function() {
  * animations). A pool reserves about 5 KB of Effekseer's heap per instance
  * at init (4000: ~20 MB, 8000: ~40 MB, 16000: ~80 MB per context).
  * `squareMaxCount` is the sprite vertex buffer; it scales with the pool.
+ *
+ * The in-scene context (Sprite_Animation.SceneLayer) and the 3D map's
+ * effects context (Reactor3D.GpuEffects) take these, and both are made at
+ * their first use. The overlay context is made at boot, because plugins use
+ * `Graphics.effekseer` directly; it takes these only when it is the one
+ * drawing screen animations (see `_overlayEffekseerSettings`). While the
+ * in-scene layer is active the overlay only loads effects, so it keeps
+ * Effekseer's default pool and does not reserve the memory.
  * A plugin can change these before the first context is created.
  */
 Graphics.effekseerContextSettings = { instanceMaxCount: 16000, squareMaxCount: 40000 };
+
+/**
+ * The overlay context's init settings: Effekseer's default pool (undefined)
+ * while screen animations play in the scene, the large pool when the overlay
+ * draws them itself (in-scene off, a WebGL1 or WebGPU renderer, no
+ * RenderContainer). Anything it cannot tell means the large pool.
+ */
+Graphics._overlayEffekseerSettings = function() {
+    try {
+        const layer = typeof Sprite_Animation !== "undefined" ? Sprite_Animation.SceneLayer : null;
+        if (layer && typeof layer.active === "function" && layer.active()) return undefined;
+    } catch (e) {}
+    return this.effekseerContextSettings;
+};
 
 Graphics._createEffekseerContext = function() {
     if (!window.effekseer) return;
@@ -3665,7 +3687,7 @@ Graphics._createEffekseerContext = function() {
         this._effekseerGL = efxGL;
         this._effekseer = effekseer.createContext();
         if (this._effekseer) {
-            this._effekseer.init(efxGL, this.effekseerContextSettings);
+            this._effekseer.init(efxGL, this._overlayEffekseerSettings());
             // ...but only until the first draw has re-asserted it. Reading
             // the state back is a synchronous round trip to the GPU process
             // per draw (15 ms a frame measured beside a 3D map), and this
@@ -3724,7 +3746,7 @@ Graphics._restoreEffekseerContext = function() {
     try {
         const context = effekseer.createContext();
         if (!context) return;
-        context.init(gl, this.effekseerContextSettings);
+        context.init(gl, this._overlayEffekseerSettings());
         this._effekseer = context;
         if (typeof EffectManager !== "undefined") EffectManager._cache = {};
         this.rearmEffekseerState();

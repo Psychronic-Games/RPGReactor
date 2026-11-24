@@ -44,15 +44,13 @@
         return Array.isArray(k) && k.length > 0 && k.every((key, i) => Array.isArray(key) && key.length === 2 &&
             Number.isFinite(key[0]) && Number.isFinite(key[1]) && key[1] >= 0 && (i === 0 || key[0] > k[i - 1][0]));
     }
-    // The bloom intensity at an effect frame: the keys when the sidecar has them, bloom.intensity otherwise
-    // (and in runtimes before 20261031.2, which play bloom.intensity whatever the keys say).
+    // The bloom intensity at an effect frame: the keys when the sidecar has them, bloom.intensity otherwise.
     function bloomIntensity(bloom, frame) {
         const k = bloom.intensityKeys;
         return k ? keyedValue(k, frame) : bloom.intensity;
     }
-    // gradeB + gradeKeys (runtime 20261108.1): a second grade over part of the effect, the sidecar's `grade` at weight 0
-    // and `gradeB` at weight 1, [[frame, weight 0..1], ...] on the same clock as bloom.intensityKeys. Runtimes before
-    // 20261108.1 ignore both fields and play `grade`.
+    // gradeB + gradeKeys: a second grade over part of the effect, the sidecar's `grade` at weight 0 and `gradeB` at
+    // weight 1, [[frame, weight 0..1], ...] on the same clock as bloom.intensityKeys. Without gradeKeys `grade` plays.
     function gradeMix(sc, frame) {
         return sc && sc.gradeKeys ? Math.min(1, Math.max(0, keyedValue(sc.gradeKeys, frame))) : 0;
     }
@@ -325,8 +323,7 @@
                 // times larger than in the game covers that pixel with radiusScale of ours: level log2(radiusScale).
                 // Every Gaussian reads that level or a coarser one, so all of the bloom is thresholded. A preview
                 // draws a game pixel as pixelScale of its own, which moves the level with it. A Unity prefilter
-                // (s.prefilter, or the sidecar's own when a caller does not pass one: an editor built before
-                // runtime 20261029.1 previews with this file) takes the threshold's place.
+                // (s.prefilter, or the sidecar's own when a caller does not pass one) takes the threshold's place.
                 const pf = prefilterOf(s.prefilter !== undefined ? s.prefilter : sc.bloom && sc.bloom.prefilter);
                 const setupLevel = Number.isFinite(s.threshold) || pf ?
                     Math.min(H.levels.length - 1, Math.max(0, Math.round(Math.log2(s.bloomScale * (s.pixelScale > 0 ? s.pixelScale : 1))))) : -1;
@@ -539,7 +536,7 @@
         if (!entry.ready) return false;
         if (entry.sidecar || entry.error) { companionFailure(sprite, "companion has HDR metadata"); return true; }
         if (sprite._companionEffect.isLoaded) return true;
-        if (sprite._companionEffect.isError || performance.now() >= sprite._companionDeadline) {
+        if (performance.now() >= sprite._companionDeadline) {
             companionFailure(sprite, "load failed or timed out"); return true;
         }
         return false;
@@ -632,7 +629,7 @@
         // One pass per grade, bloom intensity and grade weight: keyed intensities differ between animations at different frames.
         const groups = new Map();
         for (const sprite of draws) {
-            const sc = sidecarFor(sprite), frame = sprite._effectFrame, key = sc.grade + " " + (sc.gradeB || "") + " " + bloomIntensity(sc.bloom, frame) + " " + gradeMix(sc, frame);
+            const sc = sidecarFor(sprite), frame = sprite._effectFrame, key = sc.grade + "\u0000" + (sc.gradeB || "") + "\u0000" + bloomIntensity(sc.bloom, frame) + "\u0000" + gradeMix(sc, frame);
             if (!groups.has(key)) groups.set(key, { sc, frame, sprites: [] });
             groups.get(key).sprites.push(sprite);
         }

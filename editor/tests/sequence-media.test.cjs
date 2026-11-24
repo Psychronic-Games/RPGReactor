@@ -52,7 +52,7 @@ function makeWaitHarness(anims=[]){
  function Spriteset_Base(){}
  Spriteset_Base.prototype.createAnimation=function(request){
   const anim=scope.$dataAnimations[request.animationId];if(!anim)return;
-  const eff=anim.effectName?{isError:false}:null;
+  const eff=anim.effectName?{}:null;
   if(eff)scope.Sprite_Animation.SceneLayer.cache.set(anim.effectName,eff);
   const s={targetObjects:request.targets.slice(),_targets:request.targets.map(b=>this.findTargetSprite(b)).filter(Boolean),_animation:anim,_effect:eff,_bitmap1:anim._bitmap1||null,_bitmap2:anim._bitmap2||null,_remaining:anim._frames||10,destroyed:false,isPlaying(){return !this.destroyed&&this._remaining>0;},update(){if(this._remaining>0)this._remaining--;}};
   this._animationSprites.push(s);return s;
@@ -124,4 +124,33 @@ test('waitFor animation terminates cleanly on cancel, missing data, Effekseer/MV
  const pl2=new l2.scope.ReactorBattleData.Player(seqLethalUnfiltered,l2.scope.ReactorBattlePresentation.adapter(l2.manager,l2.user,[l2.target]));
  let done2=null;for(let f=0;f<50;f++){pl2.update(1);l2.pump();if(pl2.done){done2=f;break;}l2.tickSprites();}
  assert.equal(done2,30);
+});
+test('a flat battler lifted by a sequence and moved by MZ meanwhile ends at the move\'s target, not the target plus the lift',()=>{
+ const sprites=read('reactor_sprites.js').replace(/\r\n/g,'\n'),fn=name=>{const at=sprites.indexOf('\nSprite_Battler.prototype.'+name+' = function');return at<0?null:sprites.slice(at+1,sprites.indexOf('\n};',at)+3);};
+ const mz=['updateMove','updatePosition','startMove','onMoveEnd','isMoving'].map(name=>{const src=fn(name);assert.ok(src,'found Sprite_Battler.prototype.'+name);return src;}).join('\n');
+ function Sprite(){this.x=800;this.y=480;this.opacity=255;this.rotation=0;this.visible=true;this.scale={x:1,y:1,set(x,y=x){this.x=x;this.y=y;}};this._homeX=800;this._homeY=480;this._offsetX=0;this._offsetY=0;this._targetOffsetX=NaN;this._targetOffsetY=NaN;this._movementDuration=0;this._damages=[];}
+ Sprite.prototype.setColorTone=()=>{};Sprite.prototype.getColorTone=()=>[0,0,0,0];Sprite.prototype.setBlendColor=()=>{};Sprite.prototype.getBlendColor=()=>[0,0,0,0];
+ Sprite.prototype.isEffecting=()=>false;Sprite.prototype.refreshMotion=()=>{};Sprite.prototype.startMotion=()=>{};Sprite.prototype.isAnimationPlaying=()=>false;
+ const user={isActor:()=>true,actorId:()=>1,isEnemy:()=>false,isDead:()=>false},target={isActor:()=>false,enemyId:()=>11,isEnemy:()=>true,isDead:()=>false};
+ const userSprite=new Sprite(),targetSprite=new Sprite();targetSprite._homeX=480;targetSprite.x=480;
+ const ss={_animationSprites:[],_effectsContainer:{},_battleField:{},findTargetSprite:b=>b===user?userSprite:b===target?targetSprite:null};
+ const scope={ReactorBattleData:B,Sprite,Sprite_Base:Sprite,Sprite_Battler:Sprite,Spriteset_Base:function(){},Spriteset_Battle:function(){},Window_BattleLog:function(){},Scene_Battle:function(){},PluginManager:{_scripts:[],registerCommand(){}},DataManager:{isDatabaseLoaded:()=>true,isSkill:()=>true},BattleManager:{_spriteset:ss,_subject:user,_targets:[target],_logWindow:{_methods:[],displayActionResults(){}},invokeAction(){}},SceneManager:{_scene:{_spriteset:ss}},$dataAnimations:[null],$gameTemp:{_animationQueue:[],requestAnimation(){}},Date};
+ vm.runInNewContext(mz,scope);vm.runInNewContext(read('reactor_battle_presentation.js'),scope);
+ const seq={version:1,steps:[B.step('float',{role:'user',height:2,duration:10,easing:'linear'}),B.step('wait',{duration:30}),B.step('impact')]};
+ const p=new B.Player(seq,scope.ReactorBattlePresentation.adapter(scope.BattleManager,user,[target]));
+ // Each frame as MZ runs it: the sequence poses, then the battler sprite updates (updateMove, then updatePosition).
+ const frame=()=>{if(!p.done)p.update(1);userSprite.updateMove();userSprite.updatePosition();};
+ for(let f=0;f<30;f++)frame();
+ assert.equal(userSprite._rrLift,2);assert.equal(userSprite.y,480-96,'lifted two tiles');
+ // MZ steps the battler toward a target while it is lifted (Sprite_Actor.stepForward-style). Each pose sets
+ // _offsetY outright and the cleanup puts back the saved one, so what lands is the part of the move after the sequence.
+ userSprite.startMove(-48,24,24);
+ let lowest=-Infinity;
+ for(let f=0;f<80&&(!p.done||userSprite.isMoving());f++){frame();lowest=Math.max(lowest,userSprite._offsetY);}
+ assert.equal(p.done,true);assert.equal(userSprite.isMoving(),false);
+ for(let f=0;f<3;f++)frame();
+ assert.equal(userSprite._rrLift,0);assert.equal(userSprite._rrAppliedLift,0);assert.equal(userSprite._rrLiftedOffsetY,undefined);
+ assert.equal(userSprite._offsetX,-48);assert.equal(userSprite._offsetY,24,'the move\'s target, not the target plus the lift');
+ assert.equal(userSprite.y,480+24);assert.equal(userSprite.x,800-48);
+ assert.ok(lowest<=24+1e-9,'never below the move\'s target: '+lowest);
 });
