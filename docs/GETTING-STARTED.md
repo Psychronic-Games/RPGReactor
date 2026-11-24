@@ -4,9 +4,7 @@ This short walkthrough takes you from a fresh editor to a scene you can play: a
 small painted map, a character who says a line when you talk to them, and a
 playtest. You do not need to write any code.
 
-The screenshot spots below are marked in the source with `Screenshot:` comments,
-so a maintainer can drop in captures from the editor. If the editor is not
-installed yet, get a pre-built copy from <https://psychronic.itch.io/rpg-reactor>,
+If the editor is not installed yet, get a pre-built copy from <https://psychronic.itch.io/rpg-reactor>,
 or follow [Run From Source](../README.md#run-from-source) in the repository README.
 
 ## 1. Create a project
@@ -19,8 +17,6 @@ or follow [Run From Source](../README.md#run-from-source) in the repository READ
 3. Choose where to save it and give it a name, then create it. The editor opens
    the new project on its first map.
 
-<!-- Screenshot: the New Project dialog with the Reactor One / blank project choice. -->
-
 Save as you go with **File > Save** (`Ctrl+S`).
 
 ## 2. Paint a small map
@@ -29,23 +25,22 @@ Save as you go with **File > Save** (`Ctrl+S`).
 2. In the tile palette, pick a tileset (ground tiles are usually in the A/B
    sheets) and click one tile. If the palette is empty, open the map's
    **Properties** and choose a tileset first.
-3. Select the **Pencil** tool and click or drag on the map to paint.
-   **Rectangle** and **Circle** fill shapes, **Fill** pours a tile over a whole
-   area, and the **Eraser** takes tiles away. Four tile layers are available: put
+3. Select the **Single Tile Tool** (the pencil) in the toolbar and click or drag
+   on the map to paint. The **Rectangular Area** and **Circular Area** tools fill
+   shapes, **Fill** pours a tile over a whole area, and **Erase Tiles** takes
+   tiles away. Four tile layers are available: put
    ground on the lowest and things that should draw above the player on a higher
    one.
 4. Paint a small open area with room to walk around. That is all the art this
    tutorial needs.
 
-<!-- Screenshot: a small 2D map after painting a few tiles, with the tile palette visible. -->
-
 `Ctrl+Z` and `Ctrl+Y` undo and redo a stroke.
 
 ## 3. Add a character who talks
 
-1. Switch the map to **Event** mode, then double-click an empty tile where you
+1. Click **Event Manager** in the toolbar to switch to event mode, then double-click an empty tile where you
    want the character to stand. The event editor opens with a new event.
-2. Name it something like `Guide`. Under **Graphics**, choose a character sprite
+2. Name it something like `Guide`. Under **Character Graphic**, choose a character sprite
    from the project's character sets so you can see who is speaking.
 3. In the command list, add a **Show Text** command (one of the message
    commands). Type the line the character should say, for example
@@ -54,8 +49,6 @@ Save as you go with **File > Save** (`Ctrl+S`).
    `Ctrl+S` to save.
 
 Double-click the event again to edit it; `Delete` removes a selected event.
-
-<!-- Screenshot: the event editor with a Show Text command and the typed line. -->
 
 ## 4. Set the starting position and playtest
 
@@ -67,16 +60,8 @@ Double-click the event again to edit it; `Delete` removes a selected event.
    typed should appear. Close the message and stop the playtest when you are
    done.
 
-<!-- Screenshot: the playtest window showing the character's message box. -->
-
 Start a new playtest after changing project data; one that is already running
 does not pick up edits made while it is open.
-
-## If a step does not match
-
-If something here is confusing or does not match what you see in the editor,
-say so in the pull request or open an issue. A confusing first run is useful
-feedback, and this page can be corrected.
 
 ## Next
 
