@@ -1613,7 +1613,10 @@
             if (scale >= 1 || !player || typeof player.update !== "function") return updateEffekseer.call(this);
             const own = Object.prototype.hasOwnProperty.call(player, "update"), update = player.update;
             player.update = function(frames) { return update.call(this, (frames || 1) * scale); };
-            try { return updateEffekseer.call(this); } finally { if (own) player.update = update; else delete player.update; }
+            try { return updateEffekseer.call(this); } finally {
+                this._effekseerStep = (this._effekseerStep || 0) * scale;
+                if (own) player.update = update; else delete player.update;
+            }
         };
     }
 

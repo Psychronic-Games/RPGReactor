@@ -13,13 +13,27 @@ function RR_isValidHdrSidecar(s) {
     return !!(s && s.version === 1 && s.gradeInput === 'hdr' && typeof s.grade === 'string'
         && /\bhdr\b/.test(s.grade) && /\btmOut\b/.test(s.grade)
         && typeof s.fallback === 'string' && s.fallback
+        && (s.companion === undefined || (typeof s.companion === 'string' && s.companion.trim()
+            && !/\.efkefc$/i.test(s.companion) && s.companion !== s.fallback))
+        && (s.companionOccludes === undefined || typeof s.companionOccludes === 'boolean')
+        && (s.gradeB === undefined || (typeof s.gradeB === 'string' && /\bhdr\b/.test(s.gradeB) && /\btmOut\b/.test(s.gradeB)
+            && Array.isArray(s.gradeKeys) && s.gradeKeys.length > 0
+            && s.gradeKeys.every((k, i, all) => Array.isArray(k) && k.length === 2 && finite(k[0]) && finite(k[1])
+                && k[1] >= 0 && k[1] <= 1 && (i === 0 || k[0] > all[i - 1][0]))))
+        && (s.gradeKeys === undefined || s.gradeB !== undefined)
         && s.bloom && Array.isArray(s.bloom.sizes) && Array.isArray(s.bloom.tints)
         && s.bloom.sizes.length === 6 && s.bloom.tints.length === 6
         && s.bloom.sizes.every(x => finite(x) && x > 0)
         && s.bloom.tints.every(x => finite(x) && x >= 0)
         && finite(s.bloom.intensity) && s.bloom.intensity >= 0
         && finite(s.bloom.radiusScale) && s.bloom.radiusScale > 0
-        && (s.bloom.threshold === undefined || finite(s.bloom.threshold)));
+        && (s.bloom.threshold === undefined || finite(s.bloom.threshold))
+        && (s.bloom.intensityKeys === undefined || (Array.isArray(s.bloom.intensityKeys) && s.bloom.intensityKeys.length > 0
+            && s.bloom.intensityKeys.every((k, i, all) => Array.isArray(k) && k.length === 2 && finite(k[0]) && finite(k[1])
+                && k[1] >= 0 && (i === 0 || k[0] > all[i - 1][0]))))
+        && (s.bloom.prefilter === undefined || (!!s.bloom.prefilter && typeof s.bloom.prefilter === 'object'
+            && finite(s.bloom.prefilter.threshold) && finite(s.bloom.prefilter.knee) && s.bloom.prefilter.knee >= 0
+            && (s.bloom.prefilter.clamp === undefined || (finite(s.bloom.prefilter.clamp) && s.bloom.prefilter.clamp > 0)))));
 }
 
 /**
@@ -50,6 +64,11 @@ function RR_resolveHdrPreviewTwin(effectPath) {
         throw refuse(`Cannot read ${sidecarPath}: ${error.message}`);
     }
     if (!RR_isValidHdrSidecar(sidecar)) throw refuse(`Invalid HDR sidecar ${sidecarPath}`);
+    if (sidecar.companion) {
+        const resolve = other => other.includes('/') ? other : effectPath.replace(/\\/g, '/').split('/effects/').pop().replace(/[^/]+$/, '') + other;
+        const self = effectPath.replace(/\\/g, '/').split('/effects/').pop().replace(/\.efkefc$/i, '');
+        if (resolve(sidecar.companion) === self || resolve(sidecar.companion) === resolve(sidecar.fallback)) throw refuse(`Invalid HDR companion ${sidecarPath}`);
+    }
     // As in the runtime: a name without '/' sits beside the HDR effect, one
     // with '/' is relative to the effects folder.
     let root = dir;
@@ -4436,8 +4455,9 @@ class DatabaseAnimationEditor {
                             handle.location ? handle.location : 'not available');
                     }
                     if (hdr) {
+                        const frame = currentFrame * (animation.speed || 100) / 100;
                         RRHdrPreview.draw(gl, hdr, { width: canvas.width, height: canvas.height,
-                            bloomWidth: RRHdrPreview.bloomWidth(canvas.height) }, () => {
+                            bloomWidth: RRHdrPreview.bloomWidth(canvas.height), frame }, () => {
                             effekseerContext.beginDraw();
                             effekseerContext.drawHandle(handle);
                             effekseerContext.endDraw();
@@ -5343,6 +5363,7 @@ class DatabaseAnimationEditor {
                 // Render loop
                 let lastTime = Date.now();
                 let accumulator = 0;
+                let previewTicks = 0;
                 const fixedTimeStep = 1000 / 60;
 
                 const render = () => {
@@ -5357,6 +5378,7 @@ class DatabaseAnimationEditor {
                     while (accumulator >= fixedTimeStep) {
                         previewEffekseerContext.update();
                         accumulator -= fixedTimeStep;
+                        previewTicks++;
                     }
 
                     if (accumulator > fixedTimeStep * 5) {
@@ -5388,7 +5410,7 @@ class DatabaseAnimationEditor {
                     const hdr = previewEffect && previewEffect.rrHdr;
                     if (previewHandle && previewHandle.exists && hdr) {
                         RRHdrPreview.draw(previewGL, hdr, { width: previewCanvas.width, height: previewCanvas.height,
-                            bloomWidth: RRHdrPreview.bloomWidth(previewCanvas.height) }, () => {
+                            bloomWidth: RRHdrPreview.bloomWidth(previewCanvas.height), frame: previewTicks * (animation.speed || 100) / 100 }, () => {
                             previewEffekseerContext.beginDraw();
                             previewEffekseerContext.drawHandle(previewHandle);
                             previewEffekseerContext.endDraw();

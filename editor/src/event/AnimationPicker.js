@@ -721,8 +721,9 @@ class AnimationPicker {
 
             const hdr = effect && effect.rrHdr;
             if (hdr && handle && handle.exists) {
+                const frame = currentFrame * (animation.speed || 100) / 100;
                 RRHdrPreview.draw(gl, hdr, { width: canvas.width, height: canvas.height,
-                    bloomWidth: RRHdrPreview.bloomWidth(canvas.height) }, () => {
+                    bloomWidth: RRHdrPreview.bloomWidth(canvas.height), frame }, () => {
                     effekseerContext.beginDraw();
                     effekseerContext.drawHandle(handle);
                     effekseerContext.endDraw();

@@ -315,7 +315,7 @@ class AnimationPickerModal {
                     const settle = () => { if (typeof RREffekseerStateGuard !== 'undefined') RREffekseerStateGuard.settle(fx.ctx); };
                     if (hdr && fx.handle && fx.handle.exists) {
                         RRHdrPreview.draw(gl, hdr, { width: fxCanvas.width, height: fxCanvas.height,
-                            bloomWidth: RRHdrPreview.bloomWidth(fxCanvas.height) }, () => {
+                            bloomWidth: RRHdrPreview.bloomWidth(fxCanvas.height), frame: aliveTicks * (anim.speed || 100) / 100 }, () => {
                             fx.ctx.beginDraw();
                             fx.ctx.drawHandle(fx.handle);
                             fx.ctx.endDraw();

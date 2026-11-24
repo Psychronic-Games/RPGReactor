@@ -70,7 +70,7 @@ function editor() {
     const context = {
         console: { info() {}, warn() {}, error() {} },
         require: name => ({ fs, path })[name],
-        process, Buffer, ArrayBuffer, Uint8Array, Float32Array, performance, setTimeout: () => 0, clearTimeout() {},
+        queueMicrotask, process, Buffer, ArrayBuffer, Uint8Array, Float32Array, performance, setTimeout: () => 0, clearTimeout() {},
         location: { pathname: path.join(editorRoot, 'index.html') }
     };
     context.window = context;
@@ -183,6 +183,25 @@ test('a frame draws into the light buffer, then composites over the canvas where
         w.RRHdrPreview.draw(gl, choice, { width: 1600, height: 900 }, () => {});
         assert.equal(calls.find(c => c[0] === 'uniform1f' && c[1]?.name === 'uAlphaFromColor')[2], 0, 'an opaque backdrop keeps the game\'s alpha');
         assert.deepEqual(calls.findLast(c => c[0] === 'viewport').slice(1), [0, 0, 1600, 900]);
+    } finally { p.done(); }
+});
+
+test('a keyed bloom intensity follows the frame the preview says', () => {
+    const p = project();
+    try {
+        const w = editor();
+        const { gl, calls } = fakeGl();
+        const choice = w.RRHdrPreview.choose(gl, p.file('Fire-hdr'), 1600, 900);
+        choice.sidecar = { ...choice.sidecar, bloom: { ...choice.sidecar.bloom, intensityKeys: [[0, 2], [60, 0.5]] } };
+        const weights = frame => {
+            calls.length = 0;
+            w.RRHdrPreview.draw(gl, choice, { width: 1600, height: 900, frame }, () => {});
+            return Array.from(calls.findLast(c => c[0] === 'uniform1fv')[2]);
+        };
+        const tints = choice.sidecar.bloom.tints, close = (a, b) => a.every((x, i) => Math.abs(x - b[i]) < 1e-9);
+        assert.ok(close(weights(30), tints.map(t => t * 1.25)), 'halfway between the keys');
+        assert.ok(close(weights(undefined), tints.map(t => t * 2)), 'no frame: frame 0');
+        assert.ok(close(weights(120), tints.map(t => t * 0.5)), 'held after the last key');
     } finally { p.done(); }
 });
 
@@ -300,4 +319,18 @@ test('every animation preview loads through RRHdrPreview, which index.html loads
         assert.equal(direct, 0, `${file} loads effects through RRHdrPreview.load`);
         assert.match(source, /RRHdrPreview\.release\(/, `${file} frees its HDR targets with its context`);
     }
+});
+
+test('shared preview pairing loads both, seeds and transforms both, and draws body before light',async()=>{
+ const p=project();try{
+  fs.writeFileSync(p.file('Body'),'BODY');fs.writeFileSync(p.file('Fire-hdr').replace('.efkefc','.hdr.json'),JSON.stringify({...sidecar,companion:'Body'}));
+  const w=editor(),{gl}=fakeGl(),calls=[];let n=0;
+  w.RR_loadEffekseerEffectFromFile=(ctx,file,scale,done)=>{const effect={isLoaded:true,file};queueMicrotask(()=>done?.());return effect;};
+  const ctx={play(effect){const id=n++;return {exists:true,id,setRandomSeed(seed){calls.push(['seed',id,seed]);},setScale(...v){calls.push(['scale',id,...v]);},stop(){this.exists=false;calls.push(['stop',id]);}};},drawHandle(h){calls.push(['draw',h.id]);},releaseEffect(){}};
+  let loaded=0;const effect=w.RRHdrPreview.load(ctx,gl,p.file('Fire-hdr'),1,()=>loaded++,null,view);await new Promise(r=>setImmediate(r));assert.equal(loaded,1);
+  const handle=ctx.play(effect);assert.equal(calls[0][2],calls[1][2]);handle.setScale(2,2,2);assert.equal(calls.filter(x=>x[0]==='scale').length,2);
+  w.RRHdrPreview.draw(gl,effect.rrHdr,view,()=>ctx.drawHandle(handle));assert.deepEqual(calls.filter(x=>x[0]==='draw').map(x=>x[1]),[1,1,0]);
+  handle.stop();assert.equal(calls.filter(x=>x[0]==='stop').length,2);
+  const off=w.RRHdrPreview.load(ctx,gl,p.file('Fire-hdr'),1,null,null,view,{off:true});assert.equal(off.rrHdr,undefined);assert.equal(off.rrHdrTwin.twinName,'Fire-ldr');
+ }finally{p.done();}
 });

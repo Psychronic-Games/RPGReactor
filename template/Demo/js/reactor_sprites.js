@@ -2687,9 +2687,12 @@ Sprite_Animation.prototype.initMembers = function() {
     this._previous = null;
     this._effect = null;
     this._handle = null;
+    this._companionHandle = null;
+    this._companionEffect = null;
     this._playing = false;
     this._started = false;
     this._frameIndex = 0;
+    this._effectFrame = 0;
     this._maxTimingFrames = 0;
     this._flashColor = [0, 0, 0, 0];
     this._flashDuration = 0;
@@ -2706,6 +2709,8 @@ Sprite_Animation.prototype.destroy = function(options) {
     }
     this._effect = null;
     this._handle = null;
+    this._companionHandle = null;
+    this._companionEffect = null;
     this._playing = false;
     this._started = false;
 };
@@ -2739,17 +2744,27 @@ Sprite_Animation.prototype.setup = function(
 
 Sprite_Animation.prototype.update = function() {
     Sprite.prototype.update.call(this);
+    // The effect's own clock in frames: what this update's Effekseer step moved its handle by (battle slow
+    // motion included), at the animation's speed. HDR sidecars key their bloom intensity to it.
+    if (this._started) this._effectFrame += (globalThis.SceneManager?._effekseerStep ?? 1) * this._animation.speed / 100;
     if (this._delay > 0) {
         this._delay--;
     } else if (this._playing) {
         if (!this._started && this.canStart()) {
             if (this._effect) {
-                if (this._effect.isLoaded) {
+                if (this._effect.isLoaded && (!this._companionEffect || this._companionEffect.isLoaded)) {
                     const context = this._effectContext?.context || Graphics.effekseer;
                     context._makeContextCurrent?.();
                     this._handle = context.play(this._effect);
+                    if (this._hdrActive && this._companionEffect) {
+                        this._companionHandle = context.play(this._companionEffect);
+                        const seed = Math.floor(Math.random() * 0x7fffffff);
+                        this._handle.setRandomSeed(seed);
+                        this._companionHandle.setRandomSeed(seed);
+                    }
                     Graphics.effekseer._makeContextCurrent?.();
                     this._started = true;
+                    this._effectFrame = 0;
                 } else {
                     EffectManager.checkErrors();
                 }
@@ -2825,10 +2840,12 @@ Sprite_Animation.prototype.updateEffectGeometry = function() {
     // rendered 50% wider than tall (measured 471×314). On-axis in its own
     // viewport, it stays round at every screen position — this is MZ's own
     // approach (4096² viewport at the target), adapted to the overlay recipe.
-    this._handle.setLocation(0, 0, 0);
-    this._handle.setRotation(rx, ry, rz);
-    this._handle.setScale(scale, scale, scale);
-    this._handle.setSpeed(this._animation.speed / 100);
+    this.forEachEffectHandle(handle => {
+        handle.setLocation(0, 0, 0);
+        handle.setRotation(rx, ry, rz);
+        handle.setScale(scale, scale, scale);
+        handle.setSpeed(this._animation.speed / 100);
+    });
 };
 
 // Target position in overlay-canvas pixels (shared by setViewport).
@@ -2880,7 +2897,8 @@ Sprite_Animation.prototype.checkEnd = function() {
         this._frameIndex > this._maxTimingFrames &&
         this._flashDuration === 0 &&
         !(this._reactorHideDuration > 0) &&
-        !(this._handle && this._handle.exists)
+        !(this._handle && this._handle.exists) &&
+        !(this._companionHandle && this._companionHandle.exists)
     ) {
         this._playing = false;
     }
@@ -2912,9 +2930,11 @@ Sprite_Animation.prototype.isPlaying = function() {
 };
 
 Sprite_Animation.prototype.setRotation = function(x, y, z) {
-    if (this._handle) {
-        this._handle.setRotation(x, y, z);
-    }
+    this.forEachEffectHandle(handle => handle.setRotation(x, y, z));
+};
+
+Sprite_Animation.prototype.forEachEffectHandle = function(fn) {
+    for (const handle of [this._handle, this._companionHandle]) if (handle) fn(handle);
 };
 
 // v8: queue of Sprite_Animation instances that need an Effekseer draw on the
@@ -2963,9 +2983,9 @@ Sprite_Animation.renderActive = function(renderer) {
     const composited = !!(Graphics.blitSceneBehindEffects && Graphics.blitSceneBehindEffects());
     const hdr = [];
     for (const inst of list) {
-        if (inst._hdrActive) { hdr.push(inst); continue; }
+        if (inst._hdrActive) hdr.push(inst);
         try {
-            inst._doEffekseerDraw(renderer, composited);
+            inst._doEffekseerDraw(renderer, composited, inst._hdrActive ? inst._companionHandle : inst._handle);
         } catch (e) {
             // The draw runs every frame, so a throw here is reported once.
             // Swallowing it outright hid every effect in a game while the
@@ -3008,6 +3028,7 @@ Sprite_Animation.SceneLayer = {
     entry: null,
     cache: new Map(),
     deadlines: new Map(),
+    loadErrors: new Map(),
     live: new Set(),
     frame: [],
     drawn: new Set(),
@@ -3094,17 +3115,24 @@ Sprite_Animation.SceneLayer = {
         this.drawn.delete(sprite);
     },
     /** An effect in the scene's context, loaded once. */
-    load(name) {
+    load(name, onError) {
+        if (typeof onError === "function" && !this.cache.get(name)?.isLoaded) {
+            if (!this.loadErrors.has(name)) this.loadErrors.set(name, new Set());
+            this.loadErrors.get(name).add(onError);
+        }
         if (this.cache.has(name)) return this.cache.get(name);
         const context = this.ensureContext();
         const url = EffectManager.makeUrl(name);
         context._makeContextCurrent?.();
         try {
             // Its textures upload when their images arrive, outside any draw: PIXI is reset before the next render.
-            const effect = context.loadEffect(url, 1, () => { this.dirty = true; Graphics.effekseer?._makeContextCurrent?.(); }, () => {
+            const effect = context.loadEffect(url, 1, () => { this.loadErrors.delete(name); this.dirty = true; Graphics.effekseer?._makeContextCurrent?.(); }, () => {
                 this.cache.delete(name);
                 this.dirty = true;
-                EffectManager.onError(url);
+                const handlers = this.loadErrors.get(name);
+                this.loadErrors.delete(name);
+                if (handlers) { for (const failed of handlers) failed("effect load failed", url); }
+                else EffectManager.onError(url);
             });
             if (effect && typeof effect._update === "function") {
                 const update = effect._update, layer = this;
@@ -3194,6 +3222,8 @@ Sprite_Animation.SceneLayer = {
      */
     lost() {
         for (const sprite of this.live) {
+            try { sprite._companionHandle?.stop(); } catch (e) { /* lost context */ }
+            sprite._companionHandle = null; sprite._companionEffect = null;
             try { sprite._handle?.stop(); } catch (e) { /* nothing left to stop */ }
             sprite._handle = null;
             sprite._playing = false;
@@ -3209,7 +3239,9 @@ Sprite_Animation.SceneLayer = {
         this.entry = null;
         this.cache.clear();
         this.deadlines.clear();
+        this.loadErrors.clear();
         this.depth = null;
+        this.backdropCopy = null;
         globalThis.ReactorHdrOverlay?.scene?.lost();
     },
     restored() {
@@ -3326,17 +3358,74 @@ Sprite_Animation.SceneLayer = {
         }
     },
     /**
+     * Effekseer copies the bound framebuffer into its RGBA backdrop texture (copyTexSubImage2D). From the canvas WebGL
+     * refuses that copy (INVALID_OPERATION) when the context has no alpha channel, as PIXI creates it (alpha: false),
+     * so the backdrop stayed black and every distortion layer drew black at its opacity instead of bending the scene
+     * (BD2 Meltdown's sphere in battle, 2026-11-04: the right scene point, darkened by the layer's alpha). The canvas
+     * is blitted into an RGBA scratch target the size of the effect's square viewport (WebGL2's blit converts the
+     * format) and copied from there. The square reaches past the screen (it is twice the screen's height), so the
+     * scratch's off-screen margins repeat the screen's edge rows and columns, as UE clamps its distortion to the screen;
+     * read as zeros they showed as black bands where the layer pushed samples outwards. Filter targets are RGBA
+     * textures and copy as they are.
+     */
+    captureBackground(gl, context, rect, framebuffer) {
+        if (!context.captureBackground) return;
+        const attrs = gl.getContextAttributes && gl.getContextAttributes();
+        if (framebuffer || typeof gl.blitFramebuffer !== "function" || !attrs || attrs.alpha) {
+            context.captureBackground(rect.x, rect.y, rect.side, rect.side);
+            return;
+        }
+        const W = gl.drawingBufferWidth, H = gl.drawingBufferHeight, S = rect.side;
+        const x0 = Math.max(rect.x, 0), y0 = Math.max(rect.y, 0), x1 = Math.min(rect.x + S, W), y1 = Math.min(rect.y + S, H);
+        if (x1 <= x0 || y1 <= y0) {
+            context.captureBackground(rect.x, rect.y, S, S);
+            return;
+        }
+        let copy = this.backdropCopy;
+        if (!copy || copy.side !== S) {
+            if (copy) { gl.deleteFramebuffer(copy.fb); gl.deleteRenderbuffer(copy.rb); }
+            copy = this.backdropCopy = { fb: gl.createFramebuffer(), rb: gl.createRenderbuffer(), side: S };
+            gl.bindRenderbuffer(gl.RENDERBUFFER, copy.rb);
+            gl.renderbufferStorage(gl.RENDERBUFFER, gl.RGBA8, S, S);
+            gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+            gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, copy.fb);
+            gl.framebufferRenderbuffer(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.RENDERBUFFER, copy.rb);
+        }
+        gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
+        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, copy.fb);
+        const ox = rect.x, oy = rect.y;
+        // [source x0, y0, x1, y1] on the screen -> [destination] in the square, stretched with NEAREST
+        const blit = (sx0, sy0, sx1, sy1, dx0, dy0, dx1, dy1) => {
+            if (dx1 > dx0 && dy1 > dy0) gl.blitFramebuffer(sx0, sy0, sx1, sy1, dx0, dy0, dx1, dy1, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+        };
+        const ix0 = x0 - ox, iy0 = y0 - oy, ix1 = x1 - ox, iy1 = y1 - oy;
+        blit(x0, y0, x1, y1, ix0, iy0, ix1, iy1);                                  // the screen itself
+        blit(x0, y0, x0 + 1, y1, 0, iy0, ix0, iy1);                                // left margin: the left column
+        blit(x1 - 1, y0, x1, y1, ix1, iy0, S, iy1);                                // right margin
+        blit(x0, y0, x1, y0 + 1, ix0, 0, ix1, iy0);                                // bottom margin: the bottom row
+        blit(x0, y1 - 1, x1, y1, ix0, iy1, ix1, S);                                // top margin
+        blit(x0, y0, x0 + 1, y0 + 1, 0, 0, ix0, iy0);                              // corners
+        blit(x1 - 1, y0, x1, y0 + 1, ix1, 0, S, iy0);
+        blit(x0, y1 - 1, x0 + 1, y1, 0, iy1, ix0, S);
+        blit(x1 - 1, y1 - 1, x1, y1, ix1, iy1, S, S);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.bindFramebuffer(gl.READ_FRAMEBUFFER, copy.fb);
+        context.captureBackground(0, 0, S, S);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    },
+    /**
      * Draw `sprites`' handles through `view`, into a buffer `scale` times
      * the target's pixels whose origin is the target viewport's (the HDR
-     * light), or into the target itself (scale 1, `inTarget`); `capture`:
-     * the target is a texture, whose pixels distortion can copy.
+     * light), or into the target itself (scale 1, `inTarget`).
      */
-    drawHandles(gl, renderer, view, sprites, scale, inTarget, capture) {
+    drawHandles(gl, renderer, view, sprites, scale, inTarget, handleOf = sprite => sprite._handle) {
         const context = this.context;
         const height = Graphics.height * view.ppu * scale;
         const side = Sprite_Animation.effekseerViewportSide(Graphics.height) * view.ppu * scale;
         gl.frontFace(view.flipped ? gl.CW : gl.CCW);
         for (const sprite of sprites) {
+            const handle = handleOf(sprite);
+            if (!handle?.exists) continue;
             const pos = sprite.effekseerScreenPosition(renderer);
             const at = view.project(pos.x, pos.y);
             const cx = inTarget ? at.x : (at.x - view.vp.x) * scale, cy = inTarget ? at.y : (at.y - view.vp.y) * scale;
@@ -3344,30 +3433,29 @@ Sprite_Animation.SceneLayer = {
             const projection = Sprite_Animation.effekseerProjection(height, rect.side, sprite._mirror).slice();
             // A target stored upside down: the effect is drawn upside down into it (its winding with it).
             if (view.flipped) for (const i of [1, 5, 9, 13]) projection[i] = -projection[i];
-            // The scene beneath the effect, for its distortion layers: what this target holds now. Only from a
-            // texture: the canvas has no alpha (Graphics: backgroundAlpha 1), and GL refuses to copy its RGB pixels
-            // into Effekseer's RGBA background.
-            if (capture && context.captureBackground) context.captureBackground(rect.x, rect.y, rect.side, rect.side);
+            // The scene beneath the effect, for its distortion layers: what this target holds now.
+            if (inTarget) this.captureBackground(gl, context, rect, this.targetFramebuffer);
             context.setProjectionMatrix(projection);
             context.setCameraMatrix(this.camera);
             gl.viewport(rect.x, rect.y, rect.side, rect.side);
             context.beginDraw();
-            context.drawHandle(sprite._handle);
+            context.drawHandle(handle);
             context.endDraw();
             this.stats.draws++;
         }
     },
     /** One animation's draw, from its RenderContainer during PIXI's render. */
     draw(renderer, sprite) {
-        if (!this.context || sprite._reactorInScene || !sprite._handle || !sprite._handle.exists || !sprite._targets.length) return;
+        if (!this.context || sprite._reactorInScene || !(sprite._handle?.exists || sprite._companionHandle?.exists) || !sprite._targets.length) return;
         if (sprite._hdrActive) return this.drawHdr(renderer, sprite);
         const gl = renderer.gl, saved = this.save(gl, renderer), start = performance.now();
         try {
             const view = this.view(renderer);
+            this.targetFramebuffer = saved.framebuffer;
             gl.bindVertexArray(null);
             this.withDepth(gl, renderer, saved);
             this.context._makeContextCurrent?.();
-            this.drawHandles(gl, renderer, view, [sprite], 1, true, !!saved.framebuffer);
+            this.drawHandles(gl, renderer, view, [sprite], 1, true);
         } catch (e) {
             this.warnOnce(e);
         } finally {
@@ -3385,7 +3473,9 @@ Sprite_Animation.SceneLayer = {
         const hdr = globalThis.ReactorHdrOverlay.scene;
         const sc = hdr.sidecar(sprite);
         const group = this.frame.filter(other => other !== sprite && other._hdrActive && other.parent === sprite.parent
-            && other._handle && other._handle.exists && hdr.sidecar(other) && hdr.sidecar(other).grade === sc.grade);
+            && other._handle && other._handle.exists && hdr.sidecar(other) && hdr.sidecar(other).grade === sc.grade
+            && hdr.sidecar(other).gradeB === sc.gradeB && hdr.intensity(other) === hdr.intensity(sprite)
+            && hdr.gradeMix?.(other) === hdr.gradeMix?.(sprite));
         group.unshift(sprite);
         for (const member of group) this.drawn.add(member);
         const gl = renderer.gl, saved = this.save(gl, renderer), start = performance.now();
@@ -3395,10 +3485,21 @@ Sprite_Animation.SceneLayer = {
             const R = hdr.renderer(gl);
             gl.bindVertexArray(null);
             if (!R.ensure(Math.max(1, Math.round(view.vp.w * scale)), Math.max(1, Math.round(view.vp.h * scale)))) throw Error("no HDR targets on PIXI's context");
+            gl.bindFramebuffer(gl.FRAMEBUFFER, saved.framebuffer);
+            this.targetFramebuffer = saved.framebuffer;
+            this.withDepth(gl, renderer, saved);
+            this.context._makeContextCurrent?.();
+            this.drawHandles(gl, renderer, view, group, 1, true, member => member._companionHandle);
             R.begin();
+            try {
+                gl.colorMask(false, false, false, false);
+                gl.depthMask(true);
+                this.drawHandles(gl, renderer, view, group, scale, false,
+                    member => hdr.sidecar(member).companionOccludes !== false ? member._companionHandle : null);
+            } finally { gl.colorMask(true, true, true, true); }
             this.context._makeContextCurrent?.();
             this.drawHandles(gl, renderer, view, group, scale, false);
-            R.post(Object.assign(hdr.settings(sc), {
+            R.post(Object.assign(hdr.settings(sc, sprite._effectFrame), {
                 framebuffer: saved.framebuffer,
                 // The bloom's radii are fractions of the game screen's width, in the light's pixels.
                 bloomWidth: Graphics.width * view.ppu * scale,
@@ -3427,10 +3528,10 @@ Sprite_Animation.prototype._render = function(renderer) {
     // Drawn by its own RenderContainer during PIXI's render; noted for this
     // frame so HDR animations of one grade can share a light pass.
     if (this._effekseerInScene) {
-        if (this._targets.length > 0 && this._handle && this._handle.exists) Sprite_Animation.SceneLayer.frame.push(this);
+        if (this._targets.length > 0 && (this._handle?.exists || this._companionHandle?.exists)) Sprite_Animation.SceneLayer.frame.push(this);
         return;
     }
-    if (this._targets.length > 0 && this._handle && this._handle.exists) {
+    if (this._targets.length > 0 && (this._handle?.exists || this._companionHandle?.exists)) {
         if (PIXI.TextureSource) {
             // v8: defer to post-render flush; just queue self. Actual Effekseer
             // draw runs in Graphics._onTick after _app.render() returns so it
@@ -3460,7 +3561,7 @@ Sprite_Animation.prototype._render = function(renderer) {
 // page-load. Confirms the overlay canvas exists in the DOM, that we have its
 // WebGL1 context, and that Effekseer actually writes pixels to it. Reset via
 
-Sprite_Animation.prototype._doEffekseerDraw = function(renderer, composited) {
+Sprite_Animation.prototype._doEffekseerDraw = function(renderer, composited, handle = this._handle) {
     if (this._reactorInScene) return;
     // Draws to the Effekseer overlay canvas's WebGL1 context (Graphics._effekseerGL).
     // The overlay canvas sits absolutely positioned over the game canvas with
@@ -3468,7 +3569,7 @@ Sprite_Animation.prototype._doEffekseerDraw = function(renderer, composited) {
     // of the v8-rendered scene. This bypasses v8/WebGL2 entirely for Effekseer.
     // Called from Sprite_Animation.renderActive after the overlay has been
     // cleared once for this frame.
-    if (!(this._targets.length > 0 && this._handle && this._handle.exists)) {
+    if (!(this._targets.length > 0 && handle && handle.exists)) {
         return;
     }
     const efxGL = Graphics._effekseerGL;
@@ -3487,7 +3588,7 @@ Sprite_Animation.prototype._doEffekseerDraw = function(renderer, composited) {
     this.setCameraMatrix(renderer);
     this.setViewport(renderer);
     Graphics.effekseer.beginDraw();
-    Graphics.effekseer.drawHandle(this._handle);
+    Graphics.effekseer.drawHandle(handle);
     Graphics.effekseer.endDraw();
     Graphics.settleEffekseerState();
     this.resetViewport(renderer);

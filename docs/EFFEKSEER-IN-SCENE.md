@@ -89,6 +89,14 @@ share one light pass at the first one's place. When the context cannot draw HDR
 (no float targets, a grade that does not compile, a pass that fails), the
 sidecar's twin plays in the scene instead. See [HDR-EFFECT-OVERLAY.md](HDR-EFFECT-OVERLAY.md).
 
+Runtime 20261031.1 supports a sidecar's optional ordinary `companion`, started
+with the HDR effect on the same context and random seed. Group companions draw
+into the scene target before its light pass, then optionally write depth only
+into the cleared HDR target (`companionOccludes`, default true). Opaque body
+nodes must write depth; undrawn placeholders must preserve spawning without
+writing depth. The twin path loads no companion. A failed companion load or
+HDR pass stops the pair and selects the complete graded twin.
+
 ## Context loss
 
 When PIXI's context is lost, the layer's animations end (a battle does not wait

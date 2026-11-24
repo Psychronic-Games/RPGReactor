@@ -137,6 +137,39 @@ test('screen animations are taken where PIXI is WebGL2 and in-scene is on; ancho
     assert.equal(environment({ webGLVersion: 1 }).layer.adopt({}), false, 'a WebGL1 renderer keeps the overlay');
 });
 
+test('on the alpha-less canvas the scene is blitted into an RGBA square with clamped edges before the distortion copy', () => {
+    // PIXI creates the canvas with alpha: false; WebGL refuses copyTexSubImage2D from it into Effekseer's RGBA backdrop,
+    // so distortion layers drew black (BD2 Meltdown, 2026-11-04). A filter's texture is RGBA and copies directly.
+    const e = environment({ framebuffer: null, flipped: false });
+    e.gl.getContextAttributes = () => ({ alpha: false });
+    e.gl.drawingBufferWidth = 800; e.gl.drawingBufferHeight = 600;
+    const s = e.sprite();
+    e.layer.adopt(s);
+    e.calls.length = 0;
+    s.children[0].render(e.renderer);
+    const name = c => c[0];
+    assert.deepEqual(e.drawn, ['Fire']);
+    assert.deepEqual(e.captures, [[0, 0, 1200, 1200]], 'copied from the scratch square, whose origin is the viewport origin');
+    assert.deepEqual(e.calls.find(c => name(c) === 'renderbufferStorage' && c[3] === 1200).slice(3), [1200, 1200], 'an RGBA square of the viewport size');
+    const blits = e.calls.filter(c => name(c) === 'blitFramebuffer');
+    assert.deepEqual(blits[0].slice(1, 9), [0, 0, 800, 600, 200, 300, 1000, 900], 'the screen at its place in the square');
+    assert.equal(blits.length, 9, 'the screen, four edge strips and four corners: off-screen texels repeat the edge, as UE clamps');
+    assert.deepEqual(blits[1].slice(1, 9), [0, 0, 1, 600, 0, 300, 200, 900], 'the left margin repeats the left column');
+    const reads = e.calls.filter(c => name(c) === 'bindFramebuffer' && c[1] === e.gl.READ_FRAMEBUFFER).map(c => c[2]);
+    assert.ok(reads.length >= 2 && reads[0] === null && reads[reads.length - 1] && reads[reads.length - 1].made, 'blitted from the canvas, copied from the square');
+    assert.deepEqual(e.reads, [], 'still no GL state read back');
+    // a second draw reuses the square
+    e.calls.length = 0;
+    s.children[0].render(e.renderer);
+    assert.equal(e.calls.filter(c => name(c) === 'createFramebuffer').length, 0);
+    // with an alpha channel, or into a filter's texture, the copy is direct
+    const f = environment();
+    f.gl.getContextAttributes = () => ({ alpha: false });
+    const t = f.sprite(); f.layer.adopt(t); t.children[0].render(f.renderer);
+    assert.deepEqual(f.captures, [[-200, -300, 1200, 1200]]);
+    assert.equal(f.calls.filter(c => name(c) === 'blitFramebuffer').length, 0);
+});
+
 test('an animation draws into the target PIXI is rendering to, then leaves PIXI as it found it', () => {
     const e = environment();
     const s = e.sprite();
@@ -189,8 +222,6 @@ test('on the canvas no depth buffer is lent and the effect is drawn the right wa
     assert.equal(e.calls.filter(c => c[0] === 'clear').length, 1, 'the canvas\'s own depth buffer, cleared once a frame');
     assert.deepEqual(e.projections[0].filter((_, i) => [1, 5, 9, 13].includes(i)), [2, 6, 10, 14]);
     assert.deepEqual(e.calls.filter(c => c[0] === 'frontFace').map(c => c[1]), [e.gl.CCW, e.gl.CCW]);
-    // The canvas has no alpha: its RGB pixels cannot be copied into Effekseer's RGBA background (GL refuses).
-    assert.deepEqual(e.captures, [], 'nothing captured from the canvas');
     assert.deepEqual(e.drawn, ['Fire'], 'the effect is still drawn');
 });
 
@@ -198,7 +229,7 @@ test('HDR animations of one grade in one container share a light pass, composite
     const e = environment();
     const passes = [], fallbacks = [];
     const R = { ensure: (w, h) => { passes.push(['ensure', w, h]); return true; }, begin: () => passes.push(['begin']), post: (s, sc, out) => passes.push(['post', s, out]) };
-    e.c.ReactorHdrOverlay = { scene: { sidecar: s => ({ grade: s.grade }), renderer: () => R, settings: () => ({ bloom: 1 }), fallBack: s => fallbacks.push(s) } };
+    e.c.ReactorHdrOverlay = { scene: { sidecar: s => ({ grade: s.grade }), renderer: () => R, settings: () => ({ bloom: 1 }), intensity: () => 1, fallBack: s => fallbacks.push(s) } };
     const a = e.sprite('A'), b = e.sprite('B'), other = e.sprite('C');
     for (const s of [a, b, other]) { e.layer.adopt(s); s._hdrActive = true; s.grade = 'g'; }
     other.grade = 'h';
@@ -348,4 +379,17 @@ test('EffectManager preloads into the scene layer while screen animations play t
     c.Sprite_Animation.SceneLayer.active = () => false;
     assert.equal(c.EffectManager.preload('Wind'), true);
     assert.deepEqual(overlayLoads, ['Wind'], 'off: the overlay\'s context loads it');
+});
+
+test('HDR companions draw into the saved target before light and participate in the depth prepass',()=>{
+ const e=environment(),order=[];
+ const R={ensure(){e.gl.bindFramebuffer(e.gl.FRAMEBUFFER,null);return true;},begin(){order.push('begin');},post(){order.push('post');}};
+ e.c.ReactorHdrOverlay={scene:{sidecar:()=>({grade:'g',companionOccludes:true}),renderer:()=>R,settings:()=>({}),intensity:()=>1,lost(){}}};
+ const s=e.sprite('light');e.layer.adopt(s);s._hdrActive=true;s._companionHandle={exists:true,name:'body'};e.layer.frame.push(s);
+ const draw=e.context.drawHandle;e.context.drawHandle=h=>{order.push(h.name);draw(h);};
+ e.layer.drawHdr(e.renderer,s);assert.deepEqual(order,['body','begin','body','light','post']);
+ const nullAt=e.calls.findIndex(c=>c[0]==='bindFramebuffer'&&c[2]===null);
+ assert.ok(e.calls.slice(nullAt+1).some(c=>c[0]==='bindFramebuffer'&&c[2]?.fb==='filter'));
+ assert.ok(e.calls.some(c=>c[0]==='colorMask'&&c.slice(1).every(v=>v===false)));
+ e.layer.lost();assert.equal(s._companionHandle,null);assert.equal(s._companionEffect,null);
 });

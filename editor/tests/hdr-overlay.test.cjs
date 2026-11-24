@@ -67,9 +67,10 @@ test('invalid metadata fails closed',async()=>{
     const e=environment({...side,bloom:{...side.bloom,radiusScale:-1}}),s=e.sprite();await e.ready(s);
     assert.equal(e.api.canStart(s),false);assert.equal(s._playing,false);
 });
-test('3D scene effects do not enter the overlay',()=>{
-    const e=environment(),s={_effectContext:{}};e.api.setup(s,{effectName:'Scene'});
-    assert.equal(s._hdrEntry,undefined);assert.equal(e.fetches.length,0);
+test('3D scene effects do not enter the overlay',async()=>{
+    const e=environment(null),s={_effectContext:{},_animation:{effectName:'Scene'},_playing:true};
+    e.api.setup(s,s._animation);await e.ready(s);
+    assert.equal(e.api.canStart(s),true);assert.equal(s._hdrActive,false);assert.equal(e.calls.length,0,'no HDR targets for it');
 });
 test('two same-grade HDR animations share one accumulation and grade pass',async()=>{
     const e=environment(),a=e.sprite(),b=e.sprite();await e.ready(a);
@@ -104,6 +105,31 @@ test('without a threshold every downsample is a plain average',async()=>{
     const e=environment(),s=e.sprite();await e.ready(s);e.api.canStart(s);e.api.render({},[s]);
     assert.equal(e.calls.filter(c=>c[0]==='uniform1f'&&c[2]===0.15).length,0);
     assert.equal(e.calls.filter(c=>c[0]==='drawArrays').length,20);
+});
+test('a Unity bloom prefilter takes the setup pass with its clamp, threshold and knee',async()=>{
+    const e=environment({...side,bloom:{...side.bloom,radiusScale:1,prefilter:{threshold:0.674,knee:0.464,clamp:0.8}}}),s=e.sprite();await e.ready(s);
+    e.api.canStart(s);e.api.render({},[s]);
+    for(const v of [0.674,0.464,0.8])assert.equal(e.calls.filter(c=>c[0]==='uniform1f'&&c[2]===v).length,1,'one '+v);
+    assert.equal(e.calls.filter(c=>c[0]==='uniform1f'&&c[2]===1).length,1,'the Unity switch set once');
+    assert.equal(e.calls.filter(c=>c[0]==='drawArrays').length,21,'1 full-resolution setup, 7 downsamples, 12 blurs, 1 grade');
+});
+test('a caller that passes no prefilter (an older editor preview) still gets the sidecar\'s',async()=>{
+    const e=environment(),pre={threshold:0.674,knee:0.464,clamp:0.8};
+    const R=e.c.ReactorHdrRenderer.create(e.gl);assert.ok(R.ensure(128,72));R.begin();
+    R.post({bloom:0.65,bloomScale:1},{...side,bloom:{...side.bloom,radiusScale:1,prefilter:pre}});
+    for(const v of [0.674,0.464,0.8])assert.equal(e.calls.filter(c=>c[0]==='uniform1f'&&c[2]===v).length,1,'one '+v);
+});
+test('a prefilter without a clamp uses Unity\'s default 65472',async()=>{
+    const e=environment({...side,bloom:{...side.bloom,prefilter:{threshold:0.9,knee:0.45}}}),s=e.sprite();await e.ready(s);
+    e.api.canStart(s);e.api.render({},[s]);
+    assert.equal(e.calls.filter(c=>c[0]==='uniform1f'&&c[2]===65472).length,1);
+    assert.equal(e.calls.filter(c=>c[0]==='drawArrays').length,20,'7 downsamples (1 setup), 12 blurs, 1 grade');
+});
+test('an invalid bloom prefilter fails closed',async()=>{
+    for(const prefilter of [{threshold:'0.9',knee:0.45},{threshold:0.9,knee:-1},{threshold:0.9,knee:0.45,clamp:0},null]){
+        const e=environment({...side,bloom:{...side.bloom,prefilter}}),s=e.sprite();await e.ready(s);
+        assert.equal(e.api.canStart(s),false,JSON.stringify(prefilter));assert.equal(s._playing,false);
+    }
 });
 test('a non-numeric bloom threshold fails closed',async()=>{
     const e=environment({...side,bloom:{...side.bloom,threshold:'0.15'}}),s=e.sprite();await e.ready(s);
@@ -192,4 +218,156 @@ test('the composite lands in the framebuffer the caller names',()=>{
     assert.deepEqual(before.filter(c=>c[0]==='viewport').at(-1).slice(1),[3,4,16,16]);
     e.calls.length=0;R.post({bloom:0,bloomScale:1},side);
     assert.equal(e.calls.filter(c=>c[0]==='bindFramebuffer').at(-1)[2],null,'unnamed: the default framebuffer, as before');
+});
+
+test('companion validation refuses invalid fields and resolved aliases',()=>{
+ const e=environment();
+ for(const companion of ['', ' ',null,3,'Body.efkefc','Twin'])assert.throws(()=>e.c.ReactorHdrRenderer.valid({...side,companion}));
+ for(const companionOccludes of [1,'true',null])assert.throws(()=>e.c.ReactorHdrRenderer.valid({...side,companionOccludes}));
+ for(const companion of ['Effect-hdr','Nested/Effect-hdr','Nested/Twin'])assert.throws(()=>e.c.ReactorHdrRenderer.valid({...side,companion},'Nested/Effect-hdr'));
+});
+test('companion waits for metadata and loading and is stopped on fallback',async()=>{
+ const e=environment({...side,companion:'Body'}),s=e.sprite();await e.ready(s);
+ const entry={ready:false,sidecar:null};e.api.cache.set('Nested/Body',entry);
+ const effect={isLoaded:false};e.c.EffectManager.load=n=>{e.loads.push(n);return effect;};
+ assert.equal(e.api.canStart(s),false);entry.ready=true;assert.equal(e.api.canStart(s),false);
+ effect.isLoaded=true;assert.equal(e.api.canStart(s),true);
+ const h={stop(){this.stopped=true;}};s._companionHandle=h;e.api.scene.fallBack(s);
+ assert.equal(h.stopped,true);assert.equal(s._companionEffect,null);assert.equal(s._hdrActive,false);
+});
+test('missing and HDR companions fall back; the twin loads no companion',async()=>{
+ for(const failure of ['missing','hdr']){
+  const e=environment({...side,companion:'Body'}),s=e.sprite();await e.ready(s);
+  e.c.Utils={localAssetExists:url=>failure==='missing'&&url.endsWith('Body.efkefc')?false:null};
+  e.api.cache.set('Nested/Body',{ready:true,sidecar:failure==='hdr'?side:null});
+  e.api.canStart(s);assert.equal(s._hdrActive,false);assert.equal(s._effect,'Nested/Twin');assert.equal(e.warnings.length,1);
+ }
+ const e=environment({...side,companion:'Body'},false),s=e.sprite();await e.ready(s);e.api.canStart(s);
+ assert.deepEqual(e.loads,['Nested/Twin']);
+});
+test('companion prepass precedes HDR light and restores colour writes',async()=>{
+ const e=environment({...side,companion:'Body'}),s=e.sprite();await e.ready(s);
+ e.api.cache.set('Nested/Body',{ready:true,sidecar:null});e.api.canStart(s);
+ const h=s._companionHandle={name:'body',exists:true,stop(){this.stopped=true;}};
+ e.api.render({},[s]);assert.deepEqual(e.drawn,['body',s._handle.name]);
+ assert.ok(e.calls.some(c=>c[0]==='depthMask'&&c[1]===true));
+ const masks=e.calls.filter(c=>c[0]==='colorMask'); const off=masks.findIndex(c=>c[1]===false); assert.ok(off>=0); assert.deepEqual(masks[off+1],['colorMask',true,true,true,true]);
+ e.api.release(s);assert.equal(h.stopped,true);assert.equal(s._companionHandle,null);
+});
+
+test('one fresh cast seed reaches both handles before transforms; either handle holds the animation open',()=>{
+ const text=fs.readFileSync(path.join(runtime,'reactor_sprites.js'),'utf8');
+ const extract=name=>{const a=text.indexOf('Sprite_Animation.prototype.'+name+' =');return text.slice(a,text.indexOf('\n};',a)+4);};
+ const calls=[];let i=0;
+ const handles=[0,1].map(n=>({exists:true,setRandomSeed(seed){calls.push(['seed',n,seed]);},setLocation(...v){calls.push(['location',n,...v]);},setRotation(...v){calls.push(['rotation',n,...v]);},setScale(...v){calls.push(['scale',n,...v]);},setSpeed(...v){calls.push(['speed',n,...v]);}}));
+ const c={Sprite_Animation:function(){},Sprite:{prototype:{update(){}}},Graphics:{effekseer:{play(){calls.push(['play',i]);return handles[i++];}}},Math};
+ for(const name of ['update','updateEffectGeometry','forEachEffectHandle','setRotation','checkEnd'])vm.runInNewContext(extract(name),c);
+ const s=new c.Sprite_Animation();Object.assign(s,{_playing:true,_effect:{isLoaded:true},_companionEffect:{isLoaded:true},_hdrActive:true,_animation:{scale:125,speed:80,rotation:{x:10,y:20,z:30}},canStart:()=>true,reactor3DScale:()=>1,updateMain(){},updateFlash(){}});
+ s.update();assert.deepEqual(calls.slice(0,4).map(x=>x[0]),['play','play','seed','seed']);assert.equal(calls[2][2],calls[3][2]);
+ for(const method of ['location','rotation','scale','speed']){const pair=calls.filter(x=>x[0]===method);assert.equal(pair.length,2);assert.deepEqual(pair[0].slice(2),pair[1].slice(2));}
+ s._frameIndex=20;s._maxTimingFrames=0;s._flashDuration=0;handles[0].exists=false;s.checkEnd();assert.equal(s._playing,true);handles[1].exists=false;s.checkEnd();assert.equal(s._playing,false);
+});
+
+test('all adapter termination paths stop and drop the companion',async()=>{
+ for(const action of ['release','lost','sceneLost','fallback','failedRender']){
+  const e=environment({...side,companion:'Body'}),s=e.sprite();await e.ready(s);e.api.cache.set('Nested/Body',{ready:true,sidecar:null});e.api.canStart(s);
+  const h=s._companionHandle={exists:true,name:'body',stop(){this.stopped=true;}};
+  if(action==='release')e.api.release(s);
+  if(action==='lost')e.api.contextLost();
+  if(action==='sceneLost'){s._effekseerInScene=true;e.api.scene.lost();}
+  if(action==='fallback')e.api.scene.fallBack(s);
+  if(action==='failedRender'){e.c.Graphics.effekseer.drawHandle=()=>{throw Error('draw failure');};e.api.render({},[s]);}
+  assert.equal(h.stopped,true,action);assert.equal(s._companionHandle,null,action);assert.equal(s._companionEffect,null,action);
+ }
+});
+
+test('a companion load callback selects the twin without raising a global load error',async()=>{
+ const e=environment({...side,companion:'Body'}),s=e.sprite();await e.ready(s);e.api.cache.set('Nested/Body',{ready:true,sidecar:null});
+ let failure; e.c.EffectManager.load=(name,onError)=>{if(onError){failure=onError;return {isLoaded:false};}return name;};
+ assert.equal(e.api.canStart(s),false);failure('resource failed','effects/Nested/Body.efkefc');
+ assert.equal(e.api.canStart(s),true);assert.equal(s._hdrActive,false);assert.equal(s._effect,'Nested/Twin');
+});
+test('EffectManager soft failures are local; ordinary failures retain their queue',()=>{
+ const text=fs.readFileSync(path.join(runtime,'reactor_managers.js'),'utf8');
+ const take=name=>{const a=text.indexOf('EffectManager.'+name+' =');return text.slice(a,text.indexOf('\n};',a)+4);};
+ let callback,reported=0;
+ const c={EffectManager:{_cache:{},_softLoadErrors:new Map(),onLoad(){},onError(){reported++;},makeUrl:n=>'effects/'+n+'.efkefc'},Graphics:{effekseer:{loadEffect(url,scale,loaded,failed){callback=failed;return {isLoaded:false};}}}};
+ for(const name of ['load','startLoading'])vm.runInNewContext(take(name),c);
+ let soft=0;c.EffectManager.load('Body',()=>soft++);callback('bad','body');assert.equal(soft,1);assert.equal(reported,0);assert.equal(Object.keys(c.EffectManager._cache).length,0);
+ c.EffectManager.load('Ordinary');callback('bad','ordinary');assert.equal(reported,1);
+});
+
+test('bloom.intensityKeys play as straight lines between keys, held before the first and after the last',()=>{
+ const e=environment(),f=e.c.ReactorHdrRenderer.bloomIntensity,b={intensity:1,intensityKeys:[[0,1.374],[66.4,2],[147.3,0.122]]};
+ assert.equal(f(b,-5),1.374);assert.equal(f(b,0),1.374);assert.equal(f(b,66.4),2);assert.equal(f(b,400),0.122);
+ assert.ok(Math.abs(f(b,33.2)-1.687)<1e-9);assert.ok(Math.abs(f(b,106.85)-1.061)<1e-9);
+ assert.equal(f({intensity:0.675},50),0.675,'no keys: intensity');assert.equal(f(b,undefined),1.374,'no frame: frame 0');
+});
+test('a keyed intensity draws with the value at the sprite\'s effect frame',async()=>{
+ const e=environment({...side,bloom:{...side.bloom,intensityKeys:[[0,2],[60,0.5]]}}),s=e.sprite();await e.ready(s);
+ e.api.canStart(s);s._effectFrame=30;e.api.render({},[s]);
+ const w=e.calls.filter(c=>c[0]==='uniform1fv').at(-1)[2];
+ assert.deepEqual(Array.from(w).map(x=>+x.toFixed(9)),side.bloom.tints.map(t=>+(t*1.25).toFixed(9)));
+});
+test('same-grade animations at different keyed intensities bloom in separate passes; equal ones share one',async()=>{
+ const keys=[[0,2],[60,0.5]],e=environment({...side,bloom:{...side.bloom,intensityKeys:keys}}),a=e.sprite(),b=e.sprite();await e.ready(a);
+ e.api.canStart(a);e.api.canStart(b);a._effectFrame=10;b._effectFrame=10;e.api.render({},[a,b]);assert.equal(e.api.stats.groups,1);
+ b._effectFrame=40;e.api.render({},[a,b]);assert.equal(e.api.stats.groups,3);
+ assert.equal(e.api.scene.intensity(a),e.c.ReactorHdrRenderer.bloomIntensity({intensityKeys:keys},10));
+});
+const twoGrades={...side,gradeB:'vec3 tmOut = hdr * 0.5;',gradeKeys:[[10,0],[30,1]]};
+test('gradeKeys weigh the second grade on the effect clock, clamped and held at the ends',()=>{
+ const f=environment().c.ReactorHdrRenderer.gradeMix;
+ assert.equal(f(twoGrades,0),0);assert.equal(f(twoGrades,20),0.5);assert.equal(f(twoGrades,90),1);assert.equal(f(side,20),0);
+});
+test('gradeB compiles both grades in their own functions and leaves a one-grade program as it was',()=>{
+ const e=environment(),R=e.c.ReactorHdrRenderer.create(e.c.Graphics._effekseerGL);
+ R.gradeProgram(twoGrades.grade,twoGrades.gradeB);R.gradeProgram(side.grade);
+ const fs=e.calls.filter(c=>c[0]==='shaderSource'&&/uHdr/.test(c[2])).map(c=>c[2]);
+ assert.match(fs[0],/vec3 rr_gradeA\(vec3 hdr\)\{\nvec3 tmOut = hdr \/ \(hdr \+ vec3\(1\.0\)\);\nreturn tmOut;/);
+ assert.match(fs[0],/vec3 rr_gradeB\(vec3 hdr\)\{\nvec3 tmOut = hdr \* 0\.5;\nreturn tmOut;/);
+ assert.match(fs[0],/mix\(rr_gradeA\(hdr\), rr_gradeB\(hdr\), uGradeMix\)/);
+ assert.doesNotMatch(fs[1],/uGradeMix|rr_grade/);
+});
+test('invalid gradeB or gradeKeys fail closed',async()=>{
+ for(const bad of [{gradeB:'vec3 x;',gradeKeys:[[0,1]]},{gradeB:twoGrades.gradeB},{gradeB:twoGrades.gradeB,gradeKeys:[]},{gradeB:twoGrades.gradeB,gradeKeys:[[0,2]]},{gradeKeys:[[0,1]]}]){
+  const e=environment({...side,...bad}),s=e.sprite();await e.ready(s);
+  assert.equal(e.api.canStart(s),false,JSON.stringify(bad));
+ }
+});
+test('invalid bloom.intensityKeys fail closed',async()=>{
+ for(const intensityKeys of [[],[[0,1],[0,2]],[[5,1],[2,2]],[[0,-1]],[[0,'1']],[[0,1,2]],{0:1},null]){
+  const e=environment({...side,bloom:{...side.bloom,intensityKeys}}),s=e.sprite();await e.ready(s);
+  assert.equal(e.api.canStart(s),false,JSON.stringify(intensityKeys));assert.equal(s._playing,false);
+ }
+});
+test('the effect clock steps with each Effekseer update, at the animation\'s speed, and slow motion scales it',()=>{
+ const sprites=fs.readFileSync(path.join(runtime,'reactor_sprites.js'),'utf8');
+ assert.ok(sprites.includes('if (this._started) this._effectFrame += (globalThis.SceneManager?._effekseerStep ?? 1) * this._animation.speed / 100;'));
+ assert.ok(fs.readFileSync(path.join(runtime,'reactor_fight_camera.js'),'utf8').includes('this._effekseerStep = (this._effekseerStep || 0) * scale;'));
+ const managers=fs.readFileSync(path.join(runtime,'reactor_managers.js'),'utf8');
+ const a=managers.indexOf('SceneManager.updateEffekseer = function'),body=managers.slice(a,managers.indexOf('\n};',a)+4);
+ const c={Graphics:{effekseer:{update(){}}},SceneManager:{isGameActive:()=>true}};
+ vm.runInNewContext(body,c);c.SceneManager.updateEffekseer();assert.equal(c.SceneManager._effekseerStep,1);
+ c.SceneManager.isGameActive=()=>false;c.SceneManager.updateEffekseer();assert.equal(c.SceneManager._effekseerStep,0,'a paused game does not step effects');
+});
+test('an effect the 3D scene draws reads its sidecar and plays its twin, from the context it plays in',async()=>{
+    const entry={context:{}},gpu=[];
+    const anchored=e=>{const s=e.sprite();delete s._hdrEntry;s._effectContext=entry;e.api.setup(s,s._animation);return s;};
+    const stub=e=>{e.c.Reactor3D={GpuEffects:{load:(x,n)=>{gpu.push([x===entry,n]);return 'gpu:'+n;}}};};
+    // A GPU effect on a model.
+    const e=environment();stub(e);const s=anchored(e);await e.ready(s);
+    assert.equal(e.api.canStart(s),true);assert.equal(s._hdrActive,false);assert.equal(s._effect,'gpu:Nested/Twin');
+    assert.deepEqual(gpu,[[true,'Nested/Twin']]);assert.deepEqual(e.loads,[],'not the overlay\'s context');assert.equal(e.calls.length,0,'no HDR targets for it');
+    // Drawn by the 3D scene through the overlay's context: float targets would otherwise select HDR for a handle nothing grades.
+    const o=environment(),t=o.sprite();t._reactorInScene=true;await o.ready(t);
+    assert.equal(o.api.canStart(t),true);assert.equal(t._hdrActive,false);assert.equal(t._effect,'Nested/Twin');assert.deepEqual(o.loads,['Nested/Twin']);
+});
+test('a -hdr effect on a model without a sidecar is refused and says so; an ordinary one is untouched',async()=>{
+    const entry={context:{}},e=environment(null);
+    e.c.Reactor3D={GpuEffects:{load:()=>{throw Error('no load');}}};
+    const s=e.sprite();delete s._hdrEntry;s._effectContext=entry;e.api.setup(s,s._animation);await e.ready(s);
+    assert.equal(e.api.canStart(s),false);assert.equal(s._playing,false);assert.equal(s._hdrRefused,true);
+    const p=e.sprite('Plain');delete p._hdrEntry;p._effectContext=entry;p._effect='gpu:Plain';e.api.setup(p,p._animation);await e.ready(p);
+    assert.equal(e.api.canStart(p),true);assert.equal(p._effect,'gpu:Plain');assert.equal(p._hdrRefused,undefined);
 });

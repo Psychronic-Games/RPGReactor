@@ -652,3 +652,20 @@ test('a placed prop plays several animations in order, loops the list, and fires
     assert.ok(Math.abs(grown.radius - 15) < 1e-9, 'five times the size, five times the reach (' + grown.radius + ')');
     assert.ok(Math.abs(grown.width - 0.5) < 1e-9, 'and the width');
 });
+
+test('an anchored effect the game refuses stops after one try instead of respawning every frame', () => {
+    const spawned = [];
+    const fake = Object.create(Reactor3D);
+    fake.spawnAnchoredAnimation = effect => spawned.push(effect.name);
+    const entry = (name, sprite) => ({ effect: { name, loop: true }, sprite: Object.assign({ parent: null }, sprite), standIn: { parent: null }, loop: true });
+    const holder = { object: {}, anchored: [entry('bad', { _hdrRefused: true }), entry('good', {})] };
+    fake.updateAnchoredAnimations(holder);
+    assert.deepEqual(spawned, ['good'], 'an ordinary loop still restarts');
+    assert.equal(holder.refusedEffects.has('bad'), true);
+    // The next spawn stops at the refusal, before any sprite is made (Sprite does not exist here).
+    global.SceneManager = { _scene: { _spriteset: { _effectsContainer: {}, createAnimationSprite() { throw Error('spawned'); } } } };
+    global.$dataAnimations = [null, { effectName: 'Bad-hdr' }];
+    try {
+        assert.equal(Reactor3D.spawnAnchoredAnimation({ name: 'bad', animation: 1 }, {}, { object: {}, refusedEffects: new Set(['bad']) }), undefined);
+    } finally { delete global.SceneManager; delete global.$dataAnimations; }
+});
