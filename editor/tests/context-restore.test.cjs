@@ -137,9 +137,11 @@ test('the Effekseer overlay accepts its loss and starts a new context when it is
     const created = [];
     const gl = { lost: false, isContextLost() { return this.lost; } };
     const context = {
-        Graphics: { _effekseerGL: gl, _effekseer: 'old', rearmEffekseerState() { this.rearmed = true; } },
+        Graphics: { _effekseerGL: gl, _effekseer: 'old', rearmEffekseerState() { this.rearmed = true; },
+            // The overlay's pool is chosen as at boot (Graphics._overlayEffekseerSettings).
+            _overlayEffekseerSettings() { return this.pool; }, pool: { instanceMaxCount: 16000 } },
         window: { effekseer: true },
-        effekseer: { createContext: () => { const c = { init(g) { this.gl = g; } }; created.push(c); return c; } },
+        effekseer: { createContext: () => { const c = { init(g, settings) { this.gl = g; this.settings = settings; } }; created.push(c); return c; } },
         EffectManager: { _cache: { 'effects/Old.efkefc': 1 } },
         console
     };
@@ -148,6 +150,7 @@ test('the Effekseer overlay accepts its loss and starts a new context when it is
     assert.equal(created.length, 1);
     assert.equal(context.Graphics._effekseer, created[0]);
     assert.equal(created[0].gl, gl);
+    assert.equal(created[0].settings, context.Graphics.pool, 'a restored overlay takes the pool the boot rule gives it');
     assert.deepEqual(Object.keys(context.EffectManager._cache), [], 'effects load again into the new context');
     assert.equal(context.Graphics.rearmed, true);
     // Nothing starts on a context that is still lost.
