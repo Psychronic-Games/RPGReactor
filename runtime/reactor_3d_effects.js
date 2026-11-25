@@ -785,11 +785,16 @@ Reactor3D.stopVideoEffect = function(effect, character, holder) {
  * to the anchor's screen position every frame. Without a scene to project
  * through (a flat map) the animation plays on the character as before.
  */
+Reactor3D.anchoredEffectKey = function(effect) {
+    return effect.name || "#" + effect.animation;
+};
+
 Reactor3D.spawnAnchoredAnimation = function(effect, character, holder) {
     const spriteset = typeof SceneManager !== "undefined" && SceneManager._scene
         ? SceneManager._scene._spriteset : null;
     const animation = typeof $dataAnimations !== "undefined" ? $dataAnimations[effect.animation] : null;
     if (!spriteset || !animation || !character) return;
+    if (holder && holder.refusedEffects && holder.refusedEffects.has(this.anchoredEffectKey(effect))) return;
     const object = holder && holder.object;
     if (!object || !spriteset._effectsContainer || !spriteset.createAnimationSprite) {
         if (typeof $gameTemp !== "undefined" && $gameTemp.requestAnimation) $gameTemp.requestAnimation([character], effect.animation);
@@ -929,7 +934,7 @@ Reactor3D.GpuEffects = {
         try {
             renderer.resetState();
             context = effekseer.createContext();
-            context.init(gl);
+            context.init(gl, typeof Graphics !== 'undefined' ? Graphics.effekseerContextSettings : undefined);
             // This pass owns GL until it invalidates Three/PIXI's caches below.
             context.setRestorationOfStatesFlag(false);
             return { renderer, gl, context, samples, cache: new Map(), targets: new Set(), disposed: false, loading: 0 };
@@ -2084,7 +2089,10 @@ Reactor3D.updateAnchoredAnimations = function(holder) {
         if (!entry.sprite.parent) {
             if (entry.standIn.parent) entry.standIn.parent.removeChild(entry.standIn);
             if (entry.fx3d) this.EffekseerScene.stop(entry.fx3d);
-            if (entry.loop && !entry.restarted && holder.object) restart.push(entry);
+            // An effect the game refuses (a -hdr file without a valid sidecar) is not tried again:
+            // a loop or a live trigger would respawn it, and warn, every frame.
+            if (entry.sprite._hdrRefused) (holder.refusedEffects || (holder.refusedEffects = new Set())).add(this.anchoredEffectKey(entry.effect));
+            else if (entry.loop && !entry.restarted && holder.object) restart.push(entry);
             continue;
         }
         this.placeStandIn(holder, entry.effect, entry.standIn);

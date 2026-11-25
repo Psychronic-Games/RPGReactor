@@ -1711,6 +1711,7 @@ class EventCommandList {
                     description = `${tt('Button')} ${tt(buttonNames[params[1]] || params[1] || 'OK')} ${tt('is')} ${tt(buttonModes[mode] || 'Pressed')}`;
                 } else if (condType === 12) { // Script
                     const generated = EventCommandList.generatedCommand(command, 'inputCondition');
+                    let capacity = null;
                     // The row that ends a made loop (a number of times, while a variable, a range) reads as what the loop does.
                     const LoopClass = EventCommandList.loopEditorClass();
                     const i18n = typeof window !== 'undefined' ? window.I18n : null;
@@ -1734,6 +1735,14 @@ class EventCommandList {
                                 ? this._fmtVarBracket(data.value) : String(data.value);
                             description = `${tt('Pointer Position')} ${data.axis.toUpperCase()} ${data.comparison} ${rhs}`;
                         }
+                    } else if ((capacity = EventCommandList.generatedCommand(command, 'itemCapacityCondition'))) {
+                        const data = capacity.data;
+                        const getter = { item: 'getItem', weapon: 'getWeapon', armor: 'getArmor' }[data.type];
+                        const label = data.type === 'weapon' ? tt('Can Receive Weapon')
+                            : data.type === 'armor' ? tt('Can Receive Armor') : tt('Can Receive Item');
+                        const typeName = data.type === 'weapon' ? tt('Weapon')
+                            : data.type === 'armor' ? tt('Armor') : tt('Item');
+                        description = `${label}: ${this._fmtDatabaseEntry(getter, data.id, typeName)} × ${data.amount}`;
                     } else {
                         const s = String(params[1] ?? '');
                         description = `${tt('Script:')} ${s.substring(0, 150)}${s.length > 150 ? '...' : ''}`;
@@ -3712,6 +3721,11 @@ class EventCommandList {
                 ? ConditionalBranchEditor : require('./commands/ConditionalBranchEditor.js');
             return parsed.body === new Editor(null, null)._advancedInputExpression(parsed.data);
         }
+        if (kind === 'itemCapacityCondition') {
+            const Editor = typeof ConditionalBranchEditor !== 'undefined'
+                ? ConditionalBranchEditor : require('./commands/ConditionalBranchEditor.js');
+            return parsed.body === Editor.itemCapacityExpression(parsed.data);
+        }
         return true;
     }
 
@@ -3749,6 +3763,11 @@ class EventCommandList {
                 ['x', 'y'].includes(data.axis) && ['==', '!=', '>=', '<=', '>', '<'].includes(data.comparison) &&
                 ['constant', 'variable'].includes(data.valueType) && finite(data.value) &&
                 (data.valueType !== 'variable' || positiveInteger(data.value));
+        }
+
+        if (kind === 'itemCapacityCondition') {
+            return hasKeys(['type', 'id', 'amount']) && ['item', 'weapon', 'armor'].includes(data.type) &&
+                positiveInteger(data.id) && positiveInteger(data.amount);
         }
 
         if (kind === 'control-variables-expression') {

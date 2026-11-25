@@ -733,3 +733,35 @@ test('a melee approach stops at the edge of a wide body (a tank), not inside it;
  assert.ok(Math.abs(P.reachAlong(box,{x:0,y:8},{x:8,y:8})-3)<1e-6,'along its length, half its length');
  assert.ok(Math.abs(P.reachAlong(box,{x:8,y:0},{x:8,y:8})-1.4)<1e-6,'across it, half its width');
 });
+
+test('flat 2D float, fall, jump and leap keep vertical lift across Sprite_Battler.updatePosition, chain seamlessly and restore cleanly',()=>{
+ const vm=require('node:vm');
+ const updatePosSrc=runtimeSource('reactor_sprites.js').match(/Sprite_Battler\.prototype\.updatePosition\s*=\s*function\(\)\s*\{[\s\S]*?\n\};/)?.[0];
+ assert.ok(updatePosSrc,'found Sprite_Battler.prototype.updatePosition');
+ function Sprite(){this.x=808;this.y=487;this.opacity=255;this.rotation=0;this.visible=true;this.scale={x:1,y:1,set(x,y=x){this.x=x;this.y=y;}};this._homeX=808;this._homeY=487;this._offsetX=0;this._offsetY=0;this._animationSprites=[];this._damages=[];}
+ Sprite.prototype.setColorTone=()=>{};Sprite.prototype.getColorTone=()=>[0,0,0,0];Sprite.prototype.setBlendColor=()=>{};Sprite.prototype.getBlendColor=()=>[0,0,0,0];
+ Sprite.prototype.isMoving=()=>false;Sprite.prototype.isEffecting=()=>false;Sprite.prototype.refreshMotion=()=>{};Sprite.prototype.startMotion=()=>{};Sprite.prototype.isAnimationPlaying=()=>false;
+ const user={isActor:()=>true,actorId:()=>1,isEnemy:()=>false,isDead:()=>false},target={isActor:()=>false,enemyId:()=>11,isEnemy:()=>true,isDead:()=>false};
+ const userSprite=new Sprite(),targetSprite=new Sprite();targetSprite._homeX=480;targetSprite.x=480;targetSprite.y=487;
+ const ss={_animationSprites:[],_effectsContainer:{},_battleField:{},findTargetSprite:b=>b===user?userSprite:b===target?targetSprite:null};
+ const scope={ReactorBattleData:B,Sprite,Sprite_Base:Sprite,Sprite_Battler:Sprite,Spriteset_Base:function(){},Spriteset_Battle:function(){},Window_BattleLog:function(){},Scene_Battle:function(){},PluginManager:{_scripts:[],registerCommand(){}},DataManager:{isDatabaseLoaded:()=>true,isSkill:()=>true},BattleManager:{_spriteset:ss,_subject:user,_targets:[target],_logWindow:{_methods:[],displayActionResults(){}},invokeAction(){}},SceneManager:{_scene:{_spriteset:ss}},$dataAnimations:[null],$gameTemp:{_animationQueue:[],requestAnimation(){}},Date};
+ vm.runInNewContext(updatePosSrc,scope);vm.runInNewContext(runtimeSource('reactor_battle_presentation.js'),scope);
+ // Chained float -> fall -> concurrent jump + move -> impact -> cleanup
+ const seq={version:1,steps:[B.step('float',{role:'user',height:8,duration:25,easing:'linear'}),B.step('fall',{role:'user',height:0,duration:20,easing:'linear'}),B.step('jump',{role:'user',height:2.67,duration:10,easing:'linear',concurrent:true}),B.step('move',{role:'user',anchor:'home',x:0,y:0,duration:5}),B.step('wait',{role:'user',duration:0,waitFor:'jump'}),B.step('impact')]};
+ const p=new B.Player(seq,scope.ReactorBattlePresentation.adapter(scope.BattleManager,user,[target]));
+ const seen={};
+ for(let f=0;f<70&&!p.done;f++){
+  p.update(1);userSprite.updatePosition();
+  if([24,34,44,49,54].includes(f))seen[f]={y:userSprite.y,offsetY:userSprite._offsetY,lift:userSprite._rrLift};
+ }
+ assert.equal(seen[24].lift,8);assert.equal(seen[24].offsetY,-384);assert.equal(seen[24].y,103);
+ assert.ok(Math.abs(seen[34].lift-4)<1e-6);assert.equal(seen[34].y,487-seen[34].lift*48);
+ assert.equal(seen[44].lift,0);assert.equal(seen[44].y,487);
+ assert.ok(Math.abs(seen[49].lift-2.67)<1e-6);assert.ok(Math.abs(seen[49].y-(487-2.67*48))<1e-6);
+ assert.equal(userSprite._rrLift,0);assert.equal(userSprite._offsetY,0);assert.equal(userSprite.y,487);
+ // Leap preserves external _offsetY and restores cleanly after completion
+ userSprite._offsetY=12;userSprite.updatePosition();
+ const pLeap=new B.Player({version:1,steps:[B.step('leap',{role:'user',x:100,y:0,height:4,duration:10}),B.step('impact')]},scope.ReactorBattlePresentation.adapter(scope.BattleManager,user,[target]));
+ pLeap.update(5);userSprite.updatePosition();assert.ok(userSprite._rrLift>0);const lift=userSprite._rrLift;assert.equal(userSprite._offsetY,12-lift*48);assert.equal(userSprite.y,487+12-lift*48);
+ pLeap.update(20);pLeap.update(5);userSprite.updatePosition();assert.equal(pLeap.done,true);assert.equal(userSprite._rrLift,0);assert.equal(userSprite._offsetY,12);assert.equal(userSprite.y,499);
+});

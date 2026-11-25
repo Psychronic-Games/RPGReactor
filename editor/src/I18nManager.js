@@ -9133,6 +9133,68 @@ const RR_QUICK_EVENT_TEXT = {
         ko: '캐릭터 그래픽을 선택하세요.', ar: 'اختر صورة شخصية.', it: 'Scegli una grafica personaggio.',
         pl: 'Wybierz grafikę postaci.', id: 'Pilih grafis karakter.', vi: 'Chọn hình nhân vật.',
         th: 'เลือกกราฟิกตัวละคร', tr: 'Bir karakter grafiği seçin.'
+    },
+    'Check Inventory Space:': {
+        ja: '所持数の空きを確認:', es: 'Comprobar espacio en inventario:', 'zh-Hant': '檢查持有空間:',
+        'zh-Hans': '检查持有空间:', ru: 'Проверять место в инвентаре:', pt: 'Verificar espaço no inventário:',
+        de: 'Inventarplatz prüfen:', fr: 'Vérifier la place dans l’inventaire :', el: 'Έλεγχος χώρου αποθέματος:',
+        ko: '소지 공간 확인:', ar: 'التحقق من مساحة المخزون:', it: 'Controlla spazio inventario:',
+        pl: 'Sprawdź miejsce w ekwipunku:', id: 'Periksa ruang inventaris:', vi: 'Kiểm tra chỗ trống túi đồ:',
+        th: 'ตรวจสอบพื้นที่เก็บของ:', tr: 'Envanter alanını denetle:'
+    },
+    'Failure Message:': {
+        ja: '失敗時のメッセージ:', es: 'Mensaje de fallo:', 'zh-Hant': '失敗訊息:',
+        'zh-Hans': '失败消息:', ru: 'Сообщение при неудаче:', pt: 'Mensagem de falha:',
+        de: 'Fehlermeldung:', fr: 'Message d’échec :', el: 'Μήνυμα αποτυχίας:',
+        ko: '실패 메시지:', ar: 'رسالة الفشل:', it: 'Messaggio di fallimento:',
+        pl: 'Komunikat niepowodzenia:', id: 'Pesan gagal:', vi: 'Thông báo thất bại:',
+        th: 'ข้อความเมื่อล้มเหลว:', tr: 'Başarısızlık mesajı:'
+    },
+    'You cannot carry all of this item. Make room and try again.': {
+        ja: 'これ以上持ちきれない。空きを作ってからもう一度試そう。',
+        es: 'No puedes llevar todo esto. Haz sitio e inténtalo de nuevo.',
+        'zh-Hant': '無法全部帶走。請騰出空間後再試一次。', 'zh-Hans': '无法全部带走。请腾出空间后再试一次。',
+        ru: 'Вы не можете унести всё. Освободите место и попробуйте снова.',
+        pt: 'Você não consegue carregar tudo isso. Libere espaço e tente novamente.',
+        de: 'Du kannst nicht alles davon tragen. Schaffe Platz und versuche es erneut.',
+        fr: 'Vous ne pouvez pas tout porter. Faites de la place et réessayez.',
+        el: 'Δεν μπορείτε να τα κουβαλήσετε όλα. Κάντε χώρο και δοκιμάστε ξανά.',
+        ko: '전부 가질 수 없다. 공간을 비운 뒤 다시 시도하자.',
+        ar: 'لا يمكنك حمل كل هذا. أفرغ مساحة وحاول مرة أخرى.',
+        it: 'Non puoi portare tutto questo. Fai spazio e riprova.',
+        pl: 'Nie możesz unieść tego wszystkiego. Zrób miejsce i spróbuj ponownie.',
+        id: 'Kamu tidak bisa membawa semuanya. Kosongkan ruang lalu coba lagi.',
+        vi: 'Bạn không thể mang hết những thứ này. Hãy dọn chỗ rồi thử lại.',
+        th: 'ถือไปทั้งหมดไม่ได้ เคลียร์พื้นที่แล้วลองอีกครั้ง',
+        tr: 'Bunların hepsini taşıyamazsın. Yer aç ve tekrar dene.'
+    },
+    // Conditional Branch › Reactor: the Can Receive row and its event-list label.
+    'Can Receive': {
+        ja: '受け取り可能', es: 'Puede recibir', 'zh-Hant': '可接收', 'zh-Hans': '可接收',
+        ru: 'Можно получить', pt: 'Pode receber', de: 'Kann erhalten', fr: 'Peut recevoir',
+        el: 'Μπορεί να λάβει', ko: '받을 수 있음', ar: 'يمكن الاستلام', it: 'Può ricevere',
+        pl: 'Można otrzymać', id: 'Dapat menerima', vi: 'Có thể nhận', th: 'รับได้', tr: 'Alınabilir'
+    },
+    'Can Receive Item': {
+        ja: 'アイテムを受け取り可能', es: 'Puede recibir objeto', 'zh-Hant': '可接收物品', 'zh-Hans': '可接收物品',
+        ru: 'Можно получить предмет', pt: 'Pode receber item', de: 'Kann Gegenstand erhalten',
+        fr: 'Peut recevoir l’objet', el: 'Μπορεί να λάβει αντικείμενο', ko: '아이템을 받을 수 있음',
+        ar: 'يمكن استلام العنصر', it: 'Può ricevere oggetto', pl: 'Można otrzymać przedmiot',
+        id: 'Dapat menerima item', vi: 'Có thể nhận vật phẩm', th: 'รับไอเทมได้', tr: 'Eşya alınabilir'
+    },
+    'Can Receive Weapon': {
+        ja: '武器を受け取り可能', es: 'Puede recibir arma', 'zh-Hant': '可接收武器', 'zh-Hans': '可接收武器',
+        ru: 'Можно получить оружие', pt: 'Pode receber arma', de: 'Kann Waffe erhalten',
+        fr: 'Peut recevoir l’arme', el: 'Μπορεί να λάβει όπλο', ko: '무기를 받을 수 있음',
+        ar: 'يمكن استلام السلاح', it: 'Può ricevere arma', pl: 'Można otrzymać broń',
+        id: 'Dapat menerima senjata', vi: 'Có thể nhận vũ khí', th: 'รับอาวุธได้', tr: 'Silah alınabilir'
+    },
+    'Can Receive Armor': {
+        ja: '防具を受け取り可能', es: 'Puede recibir armadura', 'zh-Hant': '可接收防具', 'zh-Hans': '可接收防具',
+        ru: 'Можно получить броню', pt: 'Pode receber armadura', de: 'Kann Rüstung erhalten',
+        fr: 'Peut recevoir l’armure', el: 'Μπορεί να λάβει πανοπλία', ko: '방어구를 받을 수 있음',
+        ar: 'يمكن استلام الدرع', it: 'Può ricevere armatura', pl: 'Można otrzymać pancerz',
+        id: 'Dapat menerima zirah', vi: 'Có thể nhận giáp', th: 'รับชุดเกราะได้', tr: 'Zırh alınabilir'
     }
 };
 for (const [source, translations] of Object.entries(RR_QUICK_EVENT_TEXT)) {

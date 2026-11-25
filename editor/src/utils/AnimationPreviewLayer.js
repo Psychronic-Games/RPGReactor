@@ -399,7 +399,7 @@
             else {
                 fx.ctx = effekseer.createContext();
                 if (!fx.ctx) return false;
-                fx.ctx.init(fx.gl);
+                fx.ctx.init(fx.gl, (typeof RREffekseerContextSettings !== 'undefined' ? RREffekseerContextSettings : undefined));
             }
             // This context is Effekseer's alone: restore state once, and
             // again only after a focus/visibility change (see the guard).
@@ -570,7 +570,7 @@
                     };
                     // An HDR effect draws into a light buffer the size of the
                     // full view, so its bloom is not cut at the box's edge.
-                    if (hdr && drawn) RRHdrPreview.draw(gl, hdr, this._hdrView(), drawHandle);
+                    if (hdr && drawn) RRHdrPreview.draw(gl, hdr, { ...this._hdrView(), frame: ticks * (animation.speed || 100) / 100 }, drawHandle);
                     else drawHandle();
                     // Where the picture ends is learned from the first two
                     // plays; the readback that finds it stalls the GPU, so

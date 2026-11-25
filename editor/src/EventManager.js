@@ -1555,13 +1555,21 @@ class EventManager {
         return { id, name, note: '', pages, x, y };
     }
 
-    quickEventMoveRoute(characterId, commands) {
+    quickEventMoveRoute(characterId, commands, indent = 0) {
         const list = commands.concat({ code: 0 });
         const route = { list, repeat: false, skippable: false, wait: true };
         return [
-            { code: 205, indent: 0, parameters: [characterId, route] },
-            ...commands.map(command => ({ code: 505, indent: 0, parameters: [command] }))
+            { code: 205, indent, parameters: [characterId, route] },
+            ...commands.map(command => ({ code: 505, indent, parameters: [command] }))
         ];
+    }
+
+    // The Can Receive condition text, built by the Conditional Branch editor
+    // that also reopens it, so a generated chest's branch edits like any other.
+    quickEventCapacityCondition(rewardKind, rewardId, amount) {
+        const Editor = typeof ConditionalBranchEditor !== 'undefined'
+            ? ConditionalBranchEditor : require('./event/commands/ConditionalBranchEditor.js');
+        return Editor.createItemCapacityText({ type: rewardKind, id: rewardId, amount });
     }
 
     // The page keeps Direction Fix on so the closed graphic cannot turn toward the player,
@@ -1614,8 +1622,8 @@ class EventManager {
 
         if (kind === 'treasure') {
             const rewardKind = config.rewardKind || 'item';
-            const rewardId = Math.max(1, Number(config.rewardId) || 1);
-            const amount = Math.max(1, Number(config.amount) || 1);
+            const rewardId = Math.max(1, Math.floor(Number(config.rewardId)) || 1);
+            const amount = Math.max(1, Math.floor(Number(config.amount)) || 1);
             const rewardCodes = { item: 126, weapon: 127, armor: 128 };
             const reward = rewardKind === 'gold'
                 ? { code: 125, indent: 0, parameters: [0, 0, amount] }
@@ -1624,14 +1632,31 @@ class EventManager {
                         ? [rewardId, 0, 0, amount]
                         : [rewardId, 0, 0, amount, false] };
             const routeCommands = this.quickEventOpenRoute(config.se);
+            // Item, weapon and armor chests check for room first (gold has no cap here).
+            // A full party gets the failure text and nothing else: no opening, no
+            // reward, no self switch, so the chest stays closed for another try.
+            const checkSpace = rewardKind !== 'gold' && config.checkSpace !== false;
+            const at = checkSpace ? 1 : 0;
+            const claim = [
+                ...this.quickEventMoveRoute(0, routeCommands, at), { ...reward, indent: at },
+                { code: 101, indent: at, parameters: ['', 0, 0, 2, ''] },
+                { code: 401, indent: at, parameters: [config.message || 'You found treasure!'] },
+                { code: 123, indent: at, parameters: ['A', 0] }
+            ];
+            const list = checkSpace ? [
+                { code: 111, indent: 0, parameters: [12,
+                    this.quickEventCapacityCondition(
+                        { 127: 'weapon', 128: 'armor' }[reward.code] || 'item', rewardId, amount)] },
+                ...claim, { code: 0, indent: 1, parameters: [] },
+                { code: 411, indent: 0, parameters: [] },
+                { code: 101, indent: 1, parameters: ['', 0, 0, 2, ''] },
+                { code: 401, indent: 1, parameters: [config.failMessage ||
+                    'You cannot carry all of this item. Make room and try again.'] },
+                { code: 0, indent: 1, parameters: [] },
+                { code: 412, indent: 0, parameters: [] }, end
+            ] : [...claim, end];
             const page1 = this.makeDefaultEventPage({
-                image: { ...image, pattern: 1, direction: 2 }, directionFix: true,
-                list: [
-                    ...this.quickEventMoveRoute(0, routeCommands), reward,
-                    { code: 101, indent: 0, parameters: ['', 0, 0, 2, ''] },
-                    { code: 401, indent: 0, parameters: [config.message || 'You found treasure!'] },
-                    { code: 123, indent: 0, parameters: ['A', 0] }, end
-                ]
+                image: { ...image, pattern: 1, direction: 2 }, directionFix: true, list
             });
             const page2 = this.makeDefaultEventPage({
                 conditions: { selfSwitchCh: 'A', selfSwitchValid: true },
@@ -1841,10 +1866,20 @@ class EventManager {
             const rewardData = select([]);
             const amount = input('number', 1, 1);
             const message = input('text', tt('You found treasure!'));
+            const checkSpace = input('checkbox', '');
+            checkSpace.checked = true;
+            checkSpace.style.justifySelf = 'start';
+            const failMessage = input('text', tt('You cannot carry all of this item. Make room and try again.'));
+            // The fields open on translated text, so the event gets that text even untouched.
+            config.message = message.value;
+            config.checkSpace = true;
+            config.failMessage = failMessage.value;
             const populateRewards = () => {
                 config.rewardKind = rewardType.value;
                 rewardData.innerHTML = '';
                 rewardData.disabled = config.rewardKind === 'gold';
+                checkSpace.disabled = config.rewardKind === 'gold';
+                failMessage.disabled = config.rewardKind === 'gold' || !checkSpace.checked;
                 const getter = { item: 'getItems', weapon: 'getWeapons', armor: 'getArmors' }[config.rewardKind];
                 for (const entry of getter ? (this.databaseManager[getter]?.() || []) : []) {
                     if (!entry?.id) continue;
@@ -1859,10 +1894,17 @@ class EventManager {
             rewardData.addEventListener('change', () => { config.rewardId = Number(rewardData.value) || 1; });
             amount.addEventListener('input', () => { config.amount = Math.max(1, Number(amount.value) || 1); });
             message.addEventListener('input', () => { config.message = message.value; });
+            checkSpace.addEventListener('change', () => {
+                config.checkSpace = checkSpace.checked;
+                failMessage.disabled = !checkSpace.checked;
+            });
+            failMessage.addEventListener('input', () => { config.failMessage = failMessage.value; });
             row(tt('Reward Type:'), rewardType);
             row(tt('Reward:'), rewardData);
             row(tt('Amount:'), amount);
             row(tt('Message:'), message);
+            row(tt('Check Inventory Space:'), checkSpace);
+            row(tt('Failure Message:'), failMessage);
             populateRewards();
         }
 

@@ -621,7 +621,7 @@ class AnimationPicker {
                 console.error('Failed to create Effekseer context');
                 return;
             }
-            effekseerContext.init(gl);
+            effekseerContext.init(gl, (typeof RREffekseerContextSettings !== 'undefined' ? RREffekseerContextSettings : undefined));
             if (typeof RREffekseerStateGuard !== 'undefined') RREffekseerStateGuard.attach(effekseerContext, gl.canvas);
             else effekseerContext.setRestorationOfStatesFlag(true);
             this._effekseerContext = effekseerContext;
@@ -721,8 +721,9 @@ class AnimationPicker {
 
             const hdr = effect && effect.rrHdr;
             if (hdr && handle && handle.exists) {
+                const frame = currentFrame * (animation.speed || 100) / 100;
                 RRHdrPreview.draw(gl, hdr, { width: canvas.width, height: canvas.height,
-                    bloomWidth: RRHdrPreview.bloomWidth(canvas.height) }, () => {
+                    bloomWidth: RRHdrPreview.bloomWidth(canvas.height), frame }, () => {
                     effekseerContext.beginDraw();
                     effekseerContext.drawHandle(handle);
                     effekseerContext.endDraw();

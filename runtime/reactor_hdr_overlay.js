@@ -17,19 +17,55 @@
         "void main(){ gl_FragColor = 0.25 * (texture2D(uTex, vUv + uTexel * vec2(-0.5,-0.5)) + texture2D(uTex, vUv + uTexel * vec2(0.5,-0.5))" +
         " + texture2D(uTex, vUv + uTexel * vec2(-0.5,0.5)) + texture2D(uTex, vUv + uTexel * vec2(0.5,0.5))); }";
     // the first downsample with UE 4's bloom setup threshold (PostProcessBloomSetup): light below the threshold in
-    // luminance does not bloom, ramping to full over 2 units above it
+    // luminance does not bloom, ramping to full over 2 units above it. With uUnity, Unity post-processing's bloom
+    // prefilter instead: each channel clamped to uClampMax, then a soft-knee threshold on the brightest channel
     const FS_SETUP = "precision highp float; varying vec2 vUv; uniform sampler2D uTex; uniform vec2 uTexel; uniform float uThreshold;" +
+        "uniform float uUnity; uniform float uKnee; uniform float uClampMax;" +
         "void main(){ vec4 c = 0.25 * (texture2D(uTex, vUv + uTexel * vec2(-0.5,-0.5)) + texture2D(uTex, vUv + uTexel * vec2(0.5,-0.5))" +
         " + texture2D(uTex, vUv + uTexel * vec2(-0.5,0.5)) + texture2D(uTex, vUv + uTexel * vec2(0.5,0.5)));" +
-        " float lum = dot(c.rgb, vec3(0.3, 0.59, 0.11)); c.rgb *= clamp((lum - uThreshold) * 0.5, 0.0, 1.0);" +
+        " if (uUnity > 0.5) { c.rgb = min(c.rgb, vec3(uClampMax)); float br = max(c.r, max(c.g, c.b));" +
+        " float sf = clamp(br - uThreshold + uKnee, 0.0, 2.0 * uKnee); sf = sf * sf / (4.0 * uKnee + 0.0001);" +
+        " c.rgb *= max(br - uThreshold, sf) / max(br, 0.0001); }" +
+        " else { float lum = dot(c.rgb, vec3(0.3, 0.59, 0.11)); c.rgb *= clamp((lum - uThreshold) * 0.5, 0.0, 1.0); }" +
         " gl_FragColor = c; }";
+    // Unity post-processing's bloom prefilter, when a sidecar gives one
+    function prefilterOf(p) {
+        return p ? {threshold: p.threshold, knee: p.knee, clamp: p.clamp === undefined ? 65472 : p.clamp} : null;
+    }
     // separable Gaussian, sigma in texels (<= ~5), +-3 sigma
     const FS_BLUR = "precision highp float; varying vec2 vUv; uniform sampler2D uTex; uniform vec2 uStep; uniform float uSigma;" +
         "void main(){ vec4 s = vec4(0.0); float w = 0.0; for (int i = -16; i <= 16; i++) { float x = float(i);" +
         " if (abs(x) > 3.0 * uSigma + 0.5) continue; float k = exp(-0.5 * x * x / (uSigma * uSigma));" +
         " s += k * texture2D(uTex, vUv + uStep * x); w += k; } gl_FragColor = s / w; }";
 
-    function valid(s) {
+    // bloom.intensityKeys: [[frame, intensity], ...] on the effect's own clock (60 frames a second at speed 100),
+    // frames increasing, played as straight lines between keys and held before the first and after the last
+    function keysValid(k) {
+        return Array.isArray(k) && k.length > 0 && k.every((key, i) => Array.isArray(key) && key.length === 2 &&
+            Number.isFinite(key[0]) && Number.isFinite(key[1]) && key[1] >= 0 && (i === 0 || key[0] > k[i - 1][0]));
+    }
+    // The bloom intensity at an effect frame: the keys when the sidecar has them, bloom.intensity otherwise.
+    function bloomIntensity(bloom, frame) {
+        const k = bloom.intensityKeys;
+        return k ? keyedValue(k, frame) : bloom.intensity;
+    }
+    // gradeB + gradeKeys: a second grade over part of the effect, the sidecar's `grade` at weight 0 and `gradeB` at
+    // weight 1, [[frame, weight 0..1], ...] on the same clock as bloom.intensityKeys. Without gradeKeys `grade` plays.
+    function gradeMix(sc, frame) {
+        return sc && sc.gradeKeys ? Math.min(1, Math.max(0, keyedValue(sc.gradeKeys, frame))) : 0;
+    }
+    function keyedValue(k, frame) {
+        const f = Number.isFinite(frame) ? frame : 0;
+        if (f <= k[0][0]) return k[0][1];
+        for (let i = 1; i < k.length; i++) {
+            if (f > k[i][0]) continue;
+            const [f0, v0] = k[i - 1], [f1, v1] = k[i];
+            return v0 + (v1 - v0) * (f - f0) / (f1 - f0);
+        }
+        return k[k.length - 1][1];
+    }
+
+    function valid(s, effectName) {
         if (!s || s.version !== 1 || s.gradeInput !== "hdr" || typeof s.grade !== "string" ||
             !/\bhdr\b/.test(s.grade) || !/\btmOut\b/.test(s.grade) || typeof s.fallback !== "string" || !s.fallback ||
             !s.bloom || !Array.isArray(s.bloom.sizes) || !Array.isArray(s.bloom.tints) ||
@@ -38,7 +74,18 @@
             !s.bloom.tints.every(x => Number.isFinite(x) && x >= 0) ||
             !Number.isFinite(s.bloom.intensity) || s.bloom.intensity < 0 ||
             !Number.isFinite(s.bloom.radiusScale) || s.bloom.radiusScale <= 0 ||
-            (s.bloom.threshold !== undefined && !Number.isFinite(s.bloom.threshold))) throw Error("invalid HDR sidecar");
+            (s.bloom.threshold !== undefined && !Number.isFinite(s.bloom.threshold)) ||
+            (s.bloom.intensityKeys !== undefined && !keysValid(s.bloom.intensityKeys)) ||
+            (s.gradeB !== undefined && (typeof s.gradeB !== "string" || !/\bhdr\b/.test(s.gradeB) || !/\btmOut\b/.test(s.gradeB) ||
+                !keysValid(s.gradeKeys) || !s.gradeKeys.every(k => k[1] <= 1))) ||
+            (s.gradeKeys !== undefined && s.gradeB === undefined) ||
+            (s.bloom.prefilter !== undefined && (!s.bloom.prefilter || typeof s.bloom.prefilter !== "object" ||
+                !Number.isFinite(s.bloom.prefilter.threshold) || !Number.isFinite(s.bloom.prefilter.knee) || s.bloom.prefilter.knee < 0 ||
+                (s.bloom.prefilter.clamp !== undefined && !(Number.isFinite(s.bloom.prefilter.clamp) && s.bloom.prefilter.clamp > 0)))))
+            throw Error("invalid HDR sidecar");
+        if (s.companion !== undefined && (typeof s.companion !== "string" || !s.companion.trim() || /\.efkefc$/i.test(s.companion) || s.companion === s.fallback)) throw Error("invalid HDR companion");
+        if (s.companionOccludes !== undefined && typeof s.companionOccludes !== "boolean") throw Error("invalid companionOccludes");
+        if (effectName && s.companion && (resolveName(effectName, s.companion) === effectName || resolveName(effectName, s.companion) === resolveName(effectName, s.fallback))) throw Error("HDR companion must differ from effect and fallback");
         return s;
     }
 
@@ -86,15 +133,20 @@
             } catch (e) { gl.deleteProgram(p); throw e; }
             finally { for (const shader of shaders) gl.deleteShader(shader); }
         }
-        function gradeProgram(grade) {
-            if (H.programs.has(grade)) return H.programs.get(grade);
+        function gradeProgram(grade, gradeB) {
+            const id = gradeB ? grade + "\n/*gradeB*/\n" + gradeB : grade;
+            if (H.programs.has(id)) return H.programs.get(id);
+            // Two grades: each in its own function (both declare tmOut and their temporaries), mixed by uGradeMix
+            const twoGrades = gradeB ? "vec3 rr_gradeA(vec3 hdr){\n" + grade + "\nreturn tmOut; }\n" +
+                "vec3 rr_gradeB(vec3 hdr){\n" + gradeB + "\nreturn tmOut; }\nuniform float uGradeMix;\n" : "";
+            const body = gradeB ? "vec3 tmOut = mix(rr_gradeA(hdr), rr_gradeB(hdr), uGradeMix);" : grade;
             const fs = "precision highp float; varying vec2 vUv; uniform sampler2D uHdr; uniform sampler2D uG0; uniform sampler2D uG1;" +
             "uniform sampler2D uG2; uniform sampler2D uG3; uniform sampler2D uG4; uniform sampler2D uG5; uniform float uW[6];" +
-            "uniform float uDebug; uniform float uAlphaFromColor;" +
+            "uniform float uDebug; uniform float uAlphaFromColor;" + twoGrades +
             "void main(){ vec3 hdr = texture2D(uHdr, vUv).rgb;" +
             " hdr += uW[0] * texture2D(uG0, vUv).rgb + uW[1] * texture2D(uG1, vUv).rgb + uW[2] * texture2D(uG2, vUv).rgb" +
             " + uW[3] * texture2D(uG3, vUv).rgb + uW[4] * texture2D(uG4, vUv).rgb + uW[5] * texture2D(uG5, vUv).rgb;" +
-            " hdr = max(hdr, vec3(0.0));" + "\n" + grade + "\n" +
+            " hdr = max(hdr, vec3(0.0));" + "\n" + body + "\n" +
             // Alpha from colour: for a premultiplied canvas the page blends
             // over what lies behind it, with no backdrop in this buffer. The
             // screen the game does ignores coverage, so dark quads stay clear.
@@ -103,7 +155,7 @@
             " gl_FragColor = uDebug > 0.0 ? vec4(clamp(texture2D(uHdr, vUv).rgb / uDebug, 0.0, 1.0), 1.0) : vec4(rr_o, rr_a); }";
 
             const program = compile(VS, fs);
-            H.programs.set(grade, program);
+            H.programs.set(id, program);
             return program;
         }
         function tex(w, h, type) {
@@ -246,7 +298,7 @@
             gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
         }
         // Bloom the light buffer, grade it once, and screen it over the default
-        // framebuffer, or s.framebuffer. `s` is { bloom, bloomScale, threshold, coverage,
+        // framebuffer, or s.framebuffer. `s` is { bloom, bloomScale, threshold, prefilter, coverage,
         // debugScale, measureGpu, alphaFromColor, bloomWidth, pixelScale, framebuffer };
         // the overlay sets none of the last four.
         function post(s, sc, out) {
@@ -254,7 +306,7 @@
             if (s.measureGpu) gl.finish();
             const start = performance.now();
             const SIZES = sc.bloom.sizes, TINTS = sc.bloom.tints;
-            H.comp = gradeProgram(sc.grade);
+            H.comp = gradeProgram(sc.grade, sc.gradeB);
             gl.disable(gl.DEPTH_TEST); gl.disable(gl.CULL_FACE); gl.disable(gl.SCISSOR_TEST); gl.disable(gl.STENCIL_TEST);
             gl.colorMask(true, true, true, true);
             gl.disable(gl.BLEND);
@@ -270,9 +322,18 @@
                 // The threshold acts at the game's bloom setup resolution, half its screen. An effect drawn radiusScale
                 // times larger than in the game covers that pixel with radiusScale of ours: level log2(radiusScale).
                 // Every Gaussian reads that level or a coarser one, so all of the bloom is thresholded. A preview
-                // draws a game pixel as pixelScale of its own, which moves the level with it.
-                const setupLevel = Number.isFinite(s.threshold) ?
+                // draws a game pixel as pixelScale of its own, which moves the level with it. A Unity prefilter
+                // (s.prefilter, or the sidecar's own when a caller does not pass one) takes the threshold's place.
+                const pf = prefilterOf(s.prefilter !== undefined ? s.prefilter : sc.bloom && sc.bloom.prefilter);
+                const setupLevel = Number.isFinite(s.threshold) || pf ?
                     Math.min(H.levels.length - 1, Math.max(0, Math.round(Math.log2(s.bloomScale * (s.pixelScale > 0 ? s.pixelScale : 1))))) : -1;
+                const setupUniforms = () => {
+                    gl.uniform1f(H.setup.u.uUnity, pf ? 1 : 0);
+                    if (!pf) { gl.uniform1f(H.setup.u.uThreshold, s.threshold); return; }
+                    gl.uniform1f(H.setup.u.uThreshold, pf.threshold);
+                    gl.uniform1f(H.setup.u.uKnee, pf.knee);
+                    gl.uniform1f(H.setup.u.uClampMax, pf.clamp);
+                };
                 let base = H.main;
                 if (setupLevel === 0) {
                     if (!H.pre) H.pre = target(H.w, H.h, H.type, false);
@@ -280,7 +341,7 @@
                     gl.useProgram(H.setup.p);
                     bind(0, H.main.t, H.setup.u.uTex);
                     gl.uniform2f(H.setup.u.uTexel, 0, 0);
-                    gl.uniform1f(H.setup.u.uThreshold, s.threshold);
+                    setupUniforms();
                     quad(H.setup, H.pre);
                     base = H.pre;
                 }
@@ -291,7 +352,7 @@
                     gl.useProgram(prog.p);
                     bind(0, src.t, prog.u.uTex);
                     gl.uniform2f(prog.u.uTexel, 1 / src.w, 1 / src.h);
-                    if (prog === H.setup) gl.uniform1f(prog.u.uThreshold, s.threshold);
+                    if (prog === H.setup) setupUniforms();
                     quad(prog, H.levels[l]);
                 }
                 // six Gaussians, each blurred at the level where its sigma is 2-4 texels (never finer than the setup)
@@ -336,6 +397,7 @@
             gl.uniform1fv(H.comp.u.uW, weights.length ? weights : [0,0,0,0,0,0]);
             gl.uniform1f(H.comp.u.uDebug, s.debugScale || 0);
             gl.uniform1f(H.comp.u.uAlphaFromColor, s.alphaFromColor ? 1 : 0);
+            if (sc.gradeB) gl.uniform1f(H.comp.u.uGradeMix, s.gradeMix || 0);
             gl.enable(gl.BLEND);
             gl.blendEquation(gl.FUNC_ADD);
             gl.blendFunc(gl.ONE, s.coverage ? gl.ONE_MINUS_SRC_ALPHA : gl.ONE_MINUS_SRC_COLOR);
@@ -376,7 +438,7 @@
             get size() { return [H.w, H.h]; }
         };
     }
-    window.ReactorHdrRenderer = { create: createRenderer, valid };
+    window.ReactorHdrRenderer = { create: createRenderer, valid, bloomIntensity, gradeMix };
 
     // ---- The game's adapter ------------------------------------------------
     const params = {};
@@ -386,9 +448,12 @@
     const api = window.ReactorHdrOverlay = { native: true, cache, stats: { groups: 0, draws: 0, postMs: 0 },
         // Testing overrides still require a grade and a safe twin.
         overrides: Object.create(null) };
-    function settings(sidecar) {
-        return Object.assign({ bloom: Number(params.bloomIntensity ?? sidecar.bloom.intensity),
+    // A sprite's settings at its effect frame (Sprite_Animation's _effectFrame).
+    function settings(sidecar, frame) {
+        return Object.assign({ bloom: Number(params.bloomIntensity ?? bloomIntensity(sidecar.bloom, frame)),
+            gradeMix: gradeMix(sidecar, frame),
             bloomScale: Number(params.bloomRadiusScale ?? sidecar.bloom.radiusScale), threshold: sidecar.bloom.threshold,
+            prefilter: sidecar.bloom.prefilter,
             debug: (params.debug === true || params.debug === "true") },
             window.REACTOR_HDR || {});
     }
@@ -418,7 +483,7 @@
         const timer = setTimeout(() => controller.abort(), 15000);
         entry.promise = fetch(url, {signal: controller.signal})
             .then(r => { if (r.status === 404) return null; if (!r.ok) throw Error("sidecar HTTP " + r.status); return r.json(); })
-            .then(s => { entry.sidecar = s && valid(s); })
+            .then(s => { entry.sidecar = s && valid(s, name); })
             .catch(e => { entry.error = String(e); console.warn("[ReactorHdrOverlay] " + name + ": " + e); })
             .finally(() => { clearTimeout(timer); entry.ready = true; });
         return entry;
@@ -432,16 +497,52 @@
         const a = sprite._animation || {}, e = sprite._hdrEntry;
         return e && e.sidecar || (forced(sprite) && api.overrides[a.effectName]) || null;
     }
-    // The context an effect is loaded into: the scene's for an in-scene sprite, the overlay's otherwise.
-    function load(sprite, name) {
-        return sprite._effekseerInScene ? Sprite_Animation.SceneLayer.load(name) : EffectManager.load(name);
+    // The context an effect is loaded into: the one the sprite plays in.
+    function load(sprite, name, onError) {
+        if (sprite._effekseerInScene) return Sprite_Animation.SceneLayer.load(name, onError);
+        return sprite._effectContext ? Reactor3D.GpuEffects.load(sprite._effectContext, name) : EffectManager.load(name, onError);
     }
-    function fallbackName(sprite, sc) {
-        const name = sprite._animation.effectName;
-        return sc.fallback.includes('/') ? sc.fallback : name.slice(0, name.lastIndexOf('/') + 1) + sc.fallback;
+    function resolveName(name, other) {
+        return other.includes('/') ? other : name.slice(0, name.lastIndexOf('/') + 1) + other;
+    }
+    function fallbackName(sprite, sc) { return resolveName(sprite._animation.effectName, sc.fallback); }
+    api.stopCompanion = function(sprite) {
+        try { sprite._companionHandle?.stop(); } catch (error) { /* lost WASM context */ } finally { sprite._companionHandle = null; sprite._companionEffect = null; }
+    };
+    function companionFailure(sprite, reason) {
+        // A timed-out soft load must not strand a later scene in isReady().
+        const effect = sprite._companionEffect, sc = sidecarFor(sprite);
+        if (effect && !effect.isLoaded && sc?.companion) {
+            const name = resolveName(sprite._animation.effectName, sc.companion);
+            if (sprite._effekseerInScene) {
+                const cache = Sprite_Animation.SceneLayer.cache;
+                if (cache?.get(name) === effect) cache.delete(name);
+            } else {
+                const url = EffectManager.makeUrl(name);
+                if (EffectManager._cache?.[url] === effect) delete EffectManager._cache[url];
+            }
+        }
+        if (!sprite._companionWarned) {
+            sprite._companionWarned = true;
+            console.warn("[ReactorHdrOverlay] " + sprite._animation.effectName + ": companion unavailable (" + reason + "); selecting twin");
+        }
+        scene.fallBack(sprite);
+        sprite._hdrSelected = true;
+    }
+    function companionReady(sprite) {
+        if (!sprite._hdrActive || !sprite._companionEffect) return true;
+        if (sprite._companionLoadError) { companionFailure(sprite, sprite._companionLoadError); return true; }
+        const entry = sprite._companionEntry;
+        if (!entry.ready) return false;
+        if (entry.sidecar || entry.error) { companionFailure(sprite, "companion has HDR metadata"); return true; }
+        if (sprite._companionEffect.isLoaded) return true;
+        if (performance.now() >= sprite._companionDeadline) {
+            companionFailure(sprite, "load failed or timed out"); return true;
+        }
+        return false;
     }
     api.setup = function(sprite, animation) {
-        if ((!sprite._effectContext || sprite._effekseerInScene) && animation.effectName) {
+        if (animation.effectName) {
             sprite._hdrEntry = request(animation.effectName);
             sprite._hdrSelected = false;
         }
@@ -453,32 +554,48 @@
         if (this._hdrEntry && !this._hdrSelected) {
             if (!this._hdrEntry.ready) return false;
             const inScene = !!this._effekseerInScene;
-            if ((inScene ? scene.gl() : Graphics._effekseerGL)?.isContextLost()) return false;
+            // Drawn by the 3D scene (an effect anchored on a model), which has no HDR path: its twin plays.
+            const sceneOwned = !!this._reactorInScene || (!!this._effectContext && !inScene);
+            if ((inScene || this._effectContext ? scene.gl() : Graphics._effekseerGL)?.isContextLost()) return false;
             let sc = sidecarFor(this);
             try {
-                if (sc) sc = valid(sc);
+                if (sc) sc = valid(sc, this._animation.effectName);
                 if ((forced(this) || /-hdr$/i.test(this._animation.effectName)) && !sc) throw Error("HDR effect requires a sidecar or ReactorHdrOverlay.overrides entry");
             } catch (e) {
-                console.warn("[ReactorHdrOverlay] " + e.message); this._playing = false; return false;
+                console.warn("[ReactorHdrOverlay] " + e.message); this._playing = false; this._hdrRefused = true; return false;
             }
             if (this._hdrEntry.error && !sc) {
                 // Malformed metadata cannot safely identify an HDR asset or its fallback. Fail closed.
-                this._playing = false; return false;
+                this._playing = false; this._hdrRefused = true; return false;
             }
-            if (inScene) {
+            if (sceneOwned) {
+                this._hdrActive = false;
+            } else if (inScene) {
                 this._hdrActive = !!(sc && scene.ready(sc));
             } else {
                 const gl = Graphics._effekseerGL, canvas = Graphics._effekseerCanvas;
                 this._hdrActive = !!(sc && gl && canvas && !gl.isContextLost() && ensure(gl, canvas.width, canvas.height));
                 if (this._hdrActive) {
-                    try { R.gradeProgram(sc.grade); } catch (e) { this._hdrActive = false; console.warn("[ReactorHdrOverlay] " + e); }
+                    try { R.gradeProgram(sc.grade, sc.gradeB); } catch (e) { this._hdrActive = false; console.warn("[ReactorHdrOverlay] " + e); }
                 }
             }
             if (sc && !this._hdrActive) this._effect = load(this, fallbackName(this, sc));
+            if (this._hdrActive && sc.companion) {
+                const name = resolveName(this._animation.effectName, sc.companion);
+                if (typeof Utils !== "undefined" && Utils.localAssetExists && Utils.localAssetExists(EffectManager.makeUrl(name)) === false) {
+                    companionFailure(this, "missing " + name);
+                } else {
+                    this._companionEntry = request(name);
+                    this._companionDeadline = performance.now() + 15000;
+                    try { this._companionEffect = load(this, name, (message, url) => { this._companionLoadError = String(message) + " " + url; }); }
+                    catch (error) { companionFailure(this, String(error)); }
+                    if (!this._companionEffect && this._hdrActive) companionFailure(this, "load returned no effect");
+                }
+            }
             if (this._hdrActive) active.add(this);
             this._hdrSelected = true;
         }
-        return true;
+        return companionReady(this);
     }
     api.contextLost = function() {
         // Old WASM handles cannot be resumed in the replacement Effekseer context.
@@ -487,13 +604,14 @@
         for (const sprite of active) {
             if (sprite._effekseerInScene) continue;
             sprite._handle?.stop();
+            api.stopCompanion(sprite);
             sprite._hdrActive = false; sprite._playing = false; sprite._started = false;
             active.delete(sprite);
         }
         R?.lost();
     };
     api.contextRestored = function() { R?.restored(); };
-    api.release = function(sprite) { active.delete(sprite); };
+    api.release = function(sprite) { active.delete(sprite); api.stopCompanion(sprite); };
     api.configure = function(options) {
         Object.assign(params, options);
     };
@@ -503,20 +621,31 @@
         if (gl?.isContextLost()) { api.contextLost(); return; }
         if (!gl || !ensure(gl, canvas.width, canvas.height)) {
             // Never draw HDR light into the display buffer. Existing effects are stopped on loss by the engine.
-            for (const sprite of draws) { sprite._handle.stop(); sprite._started = false;
+            for (const sprite of draws) { api.stopCompanion(sprite); sprite._handle.stop(); sprite._started = false;
                 active.delete(sprite);
                 sprite._hdrActive = false; sprite._effect = EffectManager.load(fallbackName(sprite, sidecarFor(sprite))); }
             return;
         }
+        // One pass per grade, bloom intensity and grade weight: keyed intensities differ between animations at different frames.
         const groups = new Map();
         for (const sprite of draws) {
-            const sc = sidecarFor(sprite);
-            if (!groups.has(sc.grade)) groups.set(sc.grade, { sc, sprites: [] });
-            groups.get(sc.grade).sprites.push(sprite);
+            const sc = sidecarFor(sprite), frame = sprite._effectFrame, key = sc.grade + "\u0000" + (sc.gradeB || "") + "\u0000" + bloomIntensity(sc.bloom, frame) + "\u0000" + gradeMix(sc, frame);
+            if (!groups.has(key)) groups.set(key, { sc, frame, sprites: [] });
+            groups.get(key).sprites.push(sprite);
         }
         try {
             for (const group of groups.values()) {
                 R.begin();
+                try {
+                    gl.colorMask(false, false, false, false);
+                    gl.depthMask(true);
+                    for (const sprite of group.sprites) if (sprite._companionHandle?.exists && sidecarFor(sprite).companionOccludes !== false) {
+                        sprite.setProjectionMatrix(renderer); sprite.setCameraMatrix(renderer); sprite.setViewport(renderer);
+                        const efx = Graphics.effekseer;
+                        efx.beginDraw(); efx.drawHandle(sprite._companionHandle); efx.endDraw();
+                        Graphics.settleEffekseerState();
+                    }
+                } finally { gl.colorMask(true, true, true, true); }
                 for (const sprite of group.sprites) {
                     sprite.setProjectionMatrix(renderer); sprite.setCameraMatrix(renderer); sprite.setViewport(renderer);
                     const efx = Graphics.effekseer;
@@ -524,7 +653,7 @@
                     Graphics.settleEffekseerState();
                     api.stats.draws++;
                 }
-                const config = settings(group.sc);
+                const config = settings(group.sc, group.frame);
                 if (config.probeScale && (!config.probeFrame || group.sprites.some(x => x._frameIndex === config.probeFrame))) R.probe(config.probeScale);
                 R.post(config, group.sc);
             }
@@ -533,6 +662,7 @@
             R.fail();
             for (const sprite of draws) {
                 active.delete(sprite);
+                api.stopCompanion(sprite);
                 sprite._handle.stop(); sprite._started = false; sprite._hdrActive = false;
                 sprite._effect = EffectManager.load(fallbackName(sprite, sidecarFor(sprite)));
             }
@@ -568,7 +698,7 @@
                 return !!layer.guard(gl => {
                     const R = scene.renderer(gl);
                     if (!R.ensure(Math.max(1, Graphics.width | 0), Math.max(1, Graphics.height | 0))) return false;
-                    R.gradeProgram(sc.grade);
+                    R.gradeProgram(sc.grade, sc.gradeB);
                     return true;
                 });
             } catch (e) {
@@ -578,15 +708,20 @@
         },
         sidecar: sidecarFor,
         settings,
+        // The bloom intensity an in-scene sprite draws with now: sprites of one grade share a pass only when it agrees.
+        intensity(sprite) { return bloomIntensity(sidecarFor(sprite).bloom, sprite._effectFrame); },
+        // Likewise the weight of the sidecar's second grade (gradeB, gradeKeys).
+        gradeMix(sprite) { return gradeMix(sidecarFor(sprite), sprite._effectFrame); },
         // A pass that failed: this sprite plays its twin from here on.
         fallBack(sprite) {
             active.delete(sprite);
+            api.stopCompanion(sprite);
             try { sprite._handle?.stop(); } catch (e) { /* a lost context */ }
             sprite._started = false; sprite._hdrActive = false;
             sprite._effect = load(sprite, fallbackName(sprite, sidecarFor(sprite)));
         },
         lost() {
-            for (const sprite of active) if (sprite._effekseerInScene) active.delete(sprite);
+            for (const sprite of active) if (sprite._effekseerInScene) { api.stopCompanion(sprite); active.delete(sprite); }
             RS?.lost();
         },
         restored() { RS?.restored(); }

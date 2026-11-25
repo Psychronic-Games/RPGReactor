@@ -1,140 +1,65 @@
 # Effekseer effects in the scene
 
-From runtime revision **20261027.3**, a screen animation (an Effekseer animation
-shown on a battler, a character or the screen) is drawn inside PIXI's scene on
-PIXI 8's WebGL2 renderer, at its place in the scene graph. Until then every one
-was drawn on a separate transparent canvas layered over the game canvas (the
-Effekseer overlay). That overlay remains, as the fallback and for the effects a
-3D map anchors in its world.
+RPG Reactor draws screen animations (Effekseer animations shown on a battler, a character or the screen) inside PIXI's scene, at their place among the game's sprites, as RPG Maker MZ layers them. This page covers what that changes for a game, when it applies, how to turn it off, and what plugins need to know.
 
-## What a game sees
+Effects that cannot be drawn in the scene play on the **Effekseer overlay**: a separate transparent canvas laid over the game canvas.
 
-- **Windows sit above effects.** An effect is drawn where its animation sits in
-  the spriteset: under the message, status, command and time windows, as in
-  RPG Maker MZ. On the overlay it was drawn over every window.
-- **Screen tint, flashes and the spriteset's filters apply to effects.** In
-  battle the effects container sits inside three colour filters (its own
-  container, the spriteset and the scene); a tint now colours the effect with
-  the battle. On the overlay an effect kept its own colours under any tint.
-- **Distortion reads the scene beneath the effect.** A layer that samples the
-  background (refraction, heat haze, darkening; most stock MZ effects have one,
-  Fire All 1 among them) captures exactly what PIXI has drawn under the effect so
-  far. The overlay copied the whole composited scene into its own canvas every
-  frame an effect played to give it the same thing.
-- **Everything else is the same.** In a battle test without a tint, frames drawn
-  in the scene match the overlay's outside the windows. The one difference is
-  antialiasing on the edges of mesh layers (ribbons, rings): the overlay's
-  canvas is multisampled and PIXI's is not, so those edges are not smoothed.
-  Measured: at most 0.1 % of the screen's pixels differ by more than 8 levels.
+## What changes in a game
+
+- **Windows are drawn over effects.** An effect sits under the message, status, command and time windows, as in RPG Maker MZ. On the overlay, effects are drawn over every window.
+- **Screen tint, flashes and the spriteset's filters colour effects.** In battle, a tint colours the effect along with the battle. On the overlay, an effect keeps its own colours under any tint.
+- **Distortion reads the scene under the effect.** Layers that sample the background (refraction, heat haze, darkening, as in Fire All 1 and most stock MZ effects) see exactly what has been drawn beneath the effect. Where a layer bends samples past the edge of the screen, they repeat the screen's edge pixels.
+- **Mesh edges are not antialiased.** The edges of mesh layers such as ribbons and rings look slightly harder than on the overlay, whose canvas is multisampled. Everything else looks the same.
 
 ## When it applies
 
-All of the following:
+An animation is drawn in the scene when all of these are true:
 
-- PIXI renders with WebGL2 (its default; not WebGPU, not WebGL1);
+- PIXI renders with WebGL2 (its default; not WebGPU or WebGL1);
 - `Graphics.effekseerInScene` is not `false`;
-- the context is not lost;
-- the animation is a screen animation, not one a 3D map anchors in its world
-  (those draw in the 3D scene through `Reactor3D.EffekseerScene` and
-  `Reactor3D.GpuEffects`, as before).
+- the WebGL context is not lost;
+- the animation is a screen animation. An effect a 3D map anchors in its world is drawn by the 3D scene (`Reactor3D.EffekseerScene` and `Reactor3D.GpuEffects`).
 
-Anything else plays on the overlay exactly as it did. To keep the overlay for a
-whole game, set it before the first animation, for example in a plugin:
+Any other animation plays on the overlay.
+
+## Keeping the overlay
+
+To draw every animation on the overlay, set this before the first animation plays, for example in a plugin:
 
 ```js
 Graphics.effekseerInScene = false;
 ```
 
-## How it works
-
-`Sprite_Animation.SceneLayer` (`runtime/reactor_sprites.js`) owns it.
-
-- **A context of its own.** The layer runs an Effekseer context on PIXI's WebGL2
-  context, as `Reactor3D.GpuEffects` already does, with its own effect cache.
-  `Sprite_Animation.setup` hands it a screen animation; the animation plays in
-  that context through `_effectContext`. `EffectManager` keeps loading into the
-  overlay's context for everything else, and sends a map's preloads to the layer
-  while the layer is in use (`EffectManager.sceneLayer()`), so the scene still
-  waits for them behind the loading fade.
-- **Drawn during PIXI's render.** Each animation has a `PIXI.RenderContainer`
-  child. PIXI executes it in scene order while it renders, with the sprite batch
-  broken before it, so the effect draws into whatever PIXI is drawing to at that
-  point: the canvas, or a filter's texture. Effekseer drew nothing on PIXI's
-  context only when it was called from `onRender`, which PIXI 8 runs before its
-  own draws; the old comment in `reactor_core.js` said otherwise and is corrected.
-- **Placed in any target.** PIXI's current projection and offset
-  (`renderer.globalUniforms`) and viewport give where a global point lands in
-  the target's pixels. A filter's texture is stored upside down; the effect's
-  projection is flipped to match, with its winding.
-- **Depth.** Effekseer's depth-tested layers get a depth buffer cleared once per
-  target per frame, as the overlay's was. The canvas has one; a filter's texture
-  is lent one for the draw and given it back.
-- **PIXI's state.** The layer never reads GL state back (a query waits for the
-  GPU; it cost 1.4 ms a draw on a busy map). It reads what PIXI has bound from
-  PIXI's own records, puts the framebuffer, viewport, scissor and stencil back,
-  and resets only the caches a draw changes (state, textures, program, vertex
-  arrays, buffers, colour mask). PIXI's full `resetState()` would also forget
-  the render target it is drawing to.
-- **Slow motion.** The layer's context steps with the overlay context's update,
-  so a battle's slowed time (`reactor_fight_camera.js`) reaches it too.
-
 ## HDR effects
 
-An HDR animation in the scene draws its light through its own
-`ReactorHdrRenderer` on PIXI's context (RGBA16F targets, the light buffer
-multisampled 4x where the format allows), at the game's own size as the overlay
-does. Its bloom and grade are applied, and the result is screened into the
-target where the animation sits. HDR animations of one grade in one container
-share one light pass at the first one's place. When the context cannot draw HDR
-(no float targets, a grade that does not compile, a pass that fails), the
-sidecar's twin plays in the scene instead. See [HDR-EFFECT-OVERLAY.md](HDR-EFFECT-OVERLAY.md).
+An HDR animation in the scene draws its light through its own `ReactorHdrRenderer` on PIXI's context, at the game's resolution, with the sidecar's bloom and grade. The result is screened into the scene where the animation sits. HDR animations that share a grade in the same container share one light pass, at the place of the first one.
 
-## Context loss
+A sidecar's [companion](HDR-EFFECT-OVERLAY.md#adding-a-companion-effect) plays in the layer's context with the HDR effect, from the same random seed. The companions of a light pass draw into the scene before it, and, unless `companionOccludes` is `false`, write their depth into the light buffer so their opaque parts hide the HDR light behind them.
 
-When PIXI's context is lost, the layer's animations end (a battle does not wait
-on a stranded handle) and its context and effects are released. New animations
-play on the overlay until the context is restored, and in the scene again after.
-This is verified in a battle test by losing and restoring the context with
-`WEBGL_lose_context`.
+When the context cannot draw HDR (no floating-point render targets, a grade that does not compile, or a pass that fails), or the companion fails to load, the sidecar's normally graded twin plays in the scene instead, without the companion. See [HDR effects](HDR-EFFECT-OVERLAY.md).
 
-## For plugins
+## Lost WebGL context
 
-- An in-scene animation never reaches `Sprite_Animation.renderActive`,
-  `_doEffekseerDraw` or the overlay canvas. A plugin that reads the overlay
-  canvas's pixels, or draws on `Graphics._effekseerGL` expecting to be over
-  every effect, sees only overlay animations.
-- `Sprite_Animation.prototype.setProjectionMatrix`, `setCameraMatrix` and
-  `setViewport` set up the overlay's draw; the layer does not call them.
-  Wrapping them changes overlay animations only.
+When PIXI's context is lost, the animations drawn in the scene end, so a battle does not wait on them, and their resources are released. New animations play on the overlay until the context is restored, and in the scene again after that.
+
+## For plugin developers
+
+- An animation drawn in the scene never reaches `Sprite_Animation.renderActive`, `_doEffekseerDraw` or the overlay canvas. A plugin that reads the overlay canvas's pixels, or draws on `Graphics._effekseerGL` expecting to be over every effect, sees only overlay animations.
+- `Sprite_Animation.prototype.setProjectionMatrix`, `setCameraMatrix` and `setViewport` set up the overlay's draw. The scene path does not call them, so wrapping them changes overlay animations only.
 - An animation's `_effekseerInScene` says which path draws it.
 
-## Performance
+### How the scene path works
 
-Measured on this machine at 1920x1080 (one effect looping, seeded so both paths
-draw the same frames):
+`Sprite_Animation.SceneLayer` in `runtime/reactor_sprites.js` owns it.
 
-| Battle test, per rendered frame with `gl.finish()` | Overlay | In the scene |
-|---|---|---|
-| Nothing playing | 1.31 ms | |
-| Fire All 1 | 1.65 ms | 1.46 ms |
-| Wind All 2 | 1.97 ms | 1.89 ms |
-| Neutral All 2 | 1.64 ms | 1.51 ms |
-| One True Magic (HDR) | 1.91 ms | 1.67 ms |
+- **Its own Effekseer context.** The layer runs an Effekseer context on PIXI's WebGL2 context, with its own effect cache. `Sprite_Animation.setup` hands it each screen animation, which plays through `_effectContext`. `EffectManager` keeps loading into the overlay's context for everything else. While the layer is in use, a map's preloads go to the layer (`EffectManager.sceneLayer()`), so the scene still waits for them behind the loading fade.
+- **Drawn during PIXI's render.** Each animation has a `PIXI.RenderContainer` child. PIXI runs it in scene order, with the sprite batch broken before it, so the effect draws into whatever PIXI is drawing to at that point: the canvas or a filter's texture.
+- **Placement in any target.** The effect is placed using PIXI's current projection, offset (`renderer.globalUniforms`) and viewport. A filter's texture is stored upside down, so the effect's projection and winding are flipped to match.
+- **Depth.** Effekseer's depth-tested layers get a depth buffer, cleared once per target per frame. A filter's texture is lent one for the draw.
+- **PIXI's state.** The layer never reads GL state back from the GPU. It reads what PIXI has bound from PIXI's own records, restores the framebuffer, viewport, scissor and stencil, and resets only the caches a draw changes (state, textures, program, vertex arrays, buffers and colour mask). It does not call PIXI's `resetState()`, which would also forget the render target.
+- **Slow motion.** The layer's context steps with the overlay context's update, so a battle's slowed time (`reactor_fight_camera.js`) reaches it too.
 
-On a 2D map (the Demo's Deck Drill), `ReactorProfiler`'s CPU average per tick
-was 1.11 to 1.17 ms on the overlay and 1.09 to 1.15 ms in the scene, 1.04 ms
-with nothing playing. Not measured: what the browser spends blending the
-overlay canvas over the game, which the scene path does not use.
+## Limits
 
-## Verification
-
-`editor/tests/effekseer-in-scene.test.cjs` holds the mapping, which animations
-the layer takes, the GL calls of a draw and what is put back, HDR groups,
-context loss, loading and preloads, slow motion, and the setup routing.
-`hdr-overlay.test.cjs` holds the HDR choices for an in-scene animation and the
-composite's framebuffer. On screen, in the real runtime: frames compared with
-the overlay's (battle, untinted and tinted), the windows' layering in battle
-and on a map, a message window over both, and context loss and restore. Not
-verified: WebGPU (it keeps the overlay), PIXI multisampled render textures
-(a distortion capture cannot read one; PIXI's filters do not use them), and
-GPUs other than this machine's.
+- WebGPU keeps the overlay.
+- A distortion layer cannot read a PIXI multisampled render texture. PIXI's own filters do not use them.

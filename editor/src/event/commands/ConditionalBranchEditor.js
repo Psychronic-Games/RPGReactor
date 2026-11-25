@@ -69,6 +69,11 @@ class ConditionalBranchEditor {
         this.pointerValueType = 'constant';
         this.pointerValue = 0;
 
+        // Editor-only Can Receive condition (serialized as Script).
+        this.capacityType = 'item';
+        this.capacityItemId = 1;
+        this.capacityAmount = 1;
+
         // Vehicle condition: 0=boat, 1=ship, 2=airship
         this.vehicleType = 0;
 
@@ -112,7 +117,8 @@ class ConditionalBranchEditor {
         this.resetToDefaults();
         this.conditionType = params[0] ?? 0;
 
-        if (this.conditionType === 12 && this._parseAdvancedInput(params[1])) {
+        if (this.conditionType === 12 &&
+            (this._parseAdvancedInput(params[1]) || this._parseItemCapacity(params[1]))) {
             this.originalParameters = params.slice();
             this.originalState = this.conditionState();
             return;
@@ -216,6 +222,9 @@ class ConditionalBranchEditor {
         this.pointerComparison = '==';
         this.pointerValueType = 'constant';
         this.pointerValue = 0;
+        this.capacityType = 'item';
+        this.capacityItemId = 1;
+        this.capacityAmount = 1;
         this.vehicleType = 0;
         this.originalParameters = null;
         this.originalState = null;
@@ -242,6 +251,7 @@ class ConditionalBranchEditor {
             case 16: return [16, this.wheelDirection];
             case 17: return [17, this.pointerAxis, this.pointerComparison,
                 this.pointerValueType, this.pointerValue];
+            case 18: return [18, this.capacityType, this.capacityItemId, this.capacityAmount];
             default: return [this.conditionType];
         }
     }
@@ -250,8 +260,8 @@ class ConditionalBranchEditor {
      * RPG Maker's Conditional Branch layout: four numbered tabs of
      * radio-selected conditions with every control on screen and only the
      * chosen condition's controls enabled. A fifth tab holds the Reactor-only
-     * input conditions (keyboard/mouse/wheel/pointer), which still serialize
-     * as a Script condition the runtime and RPG Maker both accept.
+     * conditions (keyboard/mouse/wheel/pointer input, and Can Receive), which
+     * still serialize as a Script condition the runtime and RPG Maker both accept.
      */
     static get TABS() {
         return [
@@ -259,7 +269,7 @@ class ConditionalBranchEditor {
             { label: '2', types: [4] },
             { label: '3', types: [5, 6, 13] },
             { label: '4', types: [7, 8, 9, 10, 11, 12] },
-            { label: 'Reactor', types: [14, 15, 16, 17] }
+            { label: 'Reactor', types: [14, 15, 16, 17, 18] }
         ];
     }
 
@@ -881,6 +891,84 @@ class ConditionalBranchEditor {
             () => { this.pointerValueType = 'variable'; if (!(this.pointerValue >= 1)) this.pointerValue = 1; }, [
                 this._reference('variable', Math.max(1, this.pointerValue), id => { this.pointerValue = id; })
             ]));
+
+        // Can Receive: whether the party has room for the whole amount, under
+        // whatever cap $gameParty.maxItems reports when the event runs.
+        const capacityGetter = ConditionalBranchEditor.CAPACITY_TYPES[this.capacityType].getter;
+        page.appendChild(this._conditionRow(18, this._tt('Can Receive'), [
+            this._select([
+                { value: 'item', label: this._tt('Item') },
+                { value: 'weapon', label: this._tt('Weapon') },
+                { value: 'armor', label: this._tt('Armor') }
+            ], this.capacityType, v => {
+                this.capacityType = v;
+                this.capacityItemId = 1;
+                this.renderContent();
+            }, true),
+            this._databaseSelect(capacityGetter, this.capacityItemId, v => { this.capacityItemId = v; }),
+            this._word('×'),
+            this._number(this.capacityAmount, v => { this.capacityAmount = Math.max(1, v); },
+                { min: 1, narrow: true })
+        ]));
+    }
+
+    /** Database table and editor getter for each Can Receive reward type. */
+    static get CAPACITY_TYPES() {
+        return {
+            item: { table: '$dataItems', getter: 'getItems' },
+            weapon: { table: '$dataWeapons', getter: 'getWeapons' },
+            armor: { table: '$dataArmors', getter: 'getArmors' }
+        };
+    }
+
+    static isValidItemCapacityData(data) {
+        return !!data && typeof data === 'object' && !Array.isArray(data) &&
+            Object.keys(data).length === 3 &&
+            Object.prototype.hasOwnProperty.call(ConditionalBranchEditor.CAPACITY_TYPES, data.type) &&
+            Number.isInteger(data.id) && data.id > 0 &&
+            Number.isInteger(data.amount) && data.amount > 0;
+    }
+
+    /**
+     * True when the party can take the whole amount without passing the cap.
+     * It asks the live Game_Party, so plugin limits (VisuStella's <Max: x>)
+     * and Reactor's own apply; a missing database entry answers false.
+     */
+    static itemCapacityExpression(data) {
+        const table = ConditionalBranchEditor.CAPACITY_TYPES[data.type].table;
+        return `(function(item){return !!item&&$gameParty.numItems(item)+${data.amount}<=` +
+            `$gameParty.maxItems(item);})(${table}[${data.id}])`;
+    }
+
+    /** The Script condition text (codec header + expression) for Can Receive. */
+    static createItemCapacityText(data, codec = ConditionalBranchEditor._codecClass()) {
+        if (!codec) throw new Error('ReactorEventCommandCodec is unavailable');
+        if (!ConditionalBranchEditor.isValidItemCapacityData(data)) {
+            throw new TypeError('Can Receive needs an item, weapon or armor id and a positive amount');
+        }
+        const canonical = { type: data.type, id: data.id, amount: data.amount };
+        return codec.createText('itemCapacityCondition', canonical,
+            ConditionalBranchEditor.itemCapacityExpression(canonical));
+    }
+
+    _parseItemCapacity(text) {
+        const codec = this._codec();
+        if (!codec || typeof text !== 'string') return false;
+        let parsed;
+        try {
+            parsed = codec.parseText(text, 'itemCapacityCondition');
+        } catch (e) {
+            return false;
+        }
+        const data = parsed && parsed.data;
+        if (!ConditionalBranchEditor.isValidItemCapacityData(data)) return false;
+        // A hand-edited body is the author's script now: reopen it as one.
+        if (parsed.body !== ConditionalBranchEditor.itemCapacityExpression(data)) return false;
+        this.conditionType = 18;
+        this.capacityType = data.type;
+        this.capacityItemId = data.id;
+        this.capacityAmount = data.amount;
+        return true;
     }
 
     _tt(text) {
@@ -984,6 +1072,11 @@ class ConditionalBranchEditor {
             case 16: // Mouse Wheel
             case 17: // Pointer Position
                 parameters = [12, this._buildAdvancedInputText()];
+                break;
+            case 18: // Can Receive
+                parameters = [12, ConditionalBranchEditor.createItemCapacityText({
+                    type: this.capacityType, id: this.capacityItemId, amount: this.capacityAmount
+                }, this._codec())];
                 break;
             default:
                 parameters = [this.conditionType];
@@ -1121,6 +1214,10 @@ class ConditionalBranchEditor {
     }
 
     _codec() {
+        return ConditionalBranchEditor._codecClass();
+    }
+
+    static _codecClass() {
         if (typeof globalThis !== 'undefined' && globalThis.ReactorEventCommandCodec) {
             return globalThis.ReactorEventCommandCodec;
         }

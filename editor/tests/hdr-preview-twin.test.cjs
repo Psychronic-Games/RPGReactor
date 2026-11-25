@@ -130,6 +130,15 @@ test('the editor accepts exactly the sidecars the runtime accepts', async () => 
         { ...sidecar, bloom: { ...sidecar.bloom, threshold: 0.15 } },
         { ...sidecar, bloom: { ...sidecar.bloom, threshold: -0.8 } },
         { ...sidecar, bloom: { ...sidecar.bloom, threshold: '0.15' } },
+        { ...sidecar, bloom: { ...sidecar.bloom, intensityKeys: [[0, 1.374], [66.4, 2], [147.3, 0.122]] } },
+        { ...sidecar, bloom: { ...sidecar.bloom, intensityKeys: [[10, 0]] } },
+        { ...sidecar, bloom: { ...sidecar.bloom, intensityKeys: [] } },
+        { ...sidecar, bloom: { ...sidecar.bloom, intensityKeys: [[0, 1], [0, 2]] } },
+        { ...sidecar, bloom: { ...sidecar.bloom, intensityKeys: [[5, 1], [2, 2]] } },
+        { ...sidecar, bloom: { ...sidecar.bloom, intensityKeys: [[0, -1]] } },
+        { ...sidecar, bloom: { ...sidecar.bloom, intensityKeys: [[0, '1']] } },
+        { ...sidecar, bloom: { ...sidecar.bloom, intensityKeys: [[0, 1, 2]] } },
+        { ...sidecar, bloom: { ...sidecar.bloom, intensityKeys: { 0: 1 } } },
         { ...sidecar, bloom: undefined },
         {}
     ];
